@@ -1,9 +1,55 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { RouteDirection, BookingData, BookingSelection, Schedule } from '../types';
 import { Select } from './Select';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getAvailableTimeSlotsForCity, getAvailableStopsForCityAndTime, getScheduleForSelection } from '../data/mockRoutes';
+
+// Badge component - defined outside to avoid recreation on each render
+const Badge = ({ type, children }: { type: 'employee' | 'student' | 'full'; children: React.ReactNode }) => {
+    const colors = {
+        employee: 'bg-blue-500',
+        student: 'bg-green-500',
+        full: 'bg-red-500'
+    };
+    return (
+        <span className={cn("px-2 py-0.5 text-white text-[0.65rem] rounded-full font-medium", colors[type])}>
+            {children}
+        </span>
+    );
+};
+
+// Availability component - defined outside
+const Availability = ({ isFull, tickets }: { isFull: boolean; tickets?: number }) => (
+    <span className={cn("font-semibold text-sm", isFull ? "text-red-500" : "text-primary")}>
+        {isFull ? "Sold Out" : `${tickets} Left`}
+    </span>
+);
+
+// TicketSelect component - defined outside
+const TicketSelect = ({ 
+    ticketCount, 
+    setTicketCount, 
+    isStudent, 
+    maxTickets 
+}: { 
+    ticketCount: number; 
+    setTicketCount: (n: number) => void; 
+    isStudent: boolean; 
+    maxTickets: number;
+}) => (
+    <select
+        className="border border-gray-300 rounded-lg px-2 py-2.5 bg-white focus:ring-2 focus:ring-primary text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+        value={ticketCount}
+        onChange={(e) => setTicketCount(Number(e.target.value))}
+        disabled={isStudent || maxTickets <= 0}
+        title={isStudent ? "Students can only book 1 ticket" : undefined}
+    >
+        {[1, 2, 3].map(n => (
+            <option key={n} value={n} disabled={n > maxTickets}>{n}</option>
+        ))}
+    </select>
+);
 
 interface BookingCardProps {
     direction: RouteDirection;
@@ -36,10 +82,26 @@ export const BookingCard = ({ direction, bookingData, onBook }: BookingCardProps
         return getScheduleForSelection(selectedCityId, selectedTimeSlotId, selectedStopId, schedules);
     }, [selectedCityId, selectedTimeSlotId, selectedStopId, schedules]);
 
-    // Reset dependent selections when parent changes
-    useEffect(() => { setSelectedTimeSlotId(null); setSelectedStopId(null); setTicketCount(1); }, [selectedCityId]);
-    useEffect(() => { setSelectedStopId(null); setTicketCount(1); }, [selectedTimeSlotId]);
-    useEffect(() => { setTicketCount(1); }, [selectedStopId]);
+    // Handle city change - reset dependent selections
+    const handleCityChange = (cityId: string | null) => {
+        setSelectedCityId(cityId);
+        setSelectedTimeSlotId(null);
+        setSelectedStopId(null);
+        setTicketCount(1);
+    };
+
+    // Handle time slot change - reset dependent selections
+    const handleTimeSlotChange = (timeSlotId: string | null) => {
+        setSelectedTimeSlotId(timeSlotId);
+        setSelectedStopId(null);
+        setTicketCount(1);
+    };
+
+    // Handle stop change - reset ticket count
+    const handleStopChange = (stopId: string | null) => {
+        setSelectedStopId(stopId);
+        setTicketCount(1);
+    };
 
     // Handle booking
     const handleBook = () => {
@@ -65,45 +127,9 @@ export const BookingCard = ({ direction, bookingData, onBook }: BookingCardProps
     const timeOptions = availableTimeSlots.map(t => ({ value: t.id, label: `${t.date} - ${t.time}` }));
     const stopOptions = availableStops.map(s => ({ value: s.id, label: s.name }));
 
-    // Inline Badge component
-    const Badge = ({ type, children }: { type: 'employee' | 'student' | 'full'; children: React.ReactNode }) => {
-        const colors = {
-            employee: 'bg-blue-500',
-            student: 'bg-green-500',
-            full: 'bg-red-500'
-        };
-        return (
-            <span className={cn("px-2 py-0.5 text-white text-[0.65rem] rounded-full font-medium", colors[type])}>
-                {children}
-            </span>
-        );
-    };
-
-    // Inline Availability component
-    const Availability = () => (
-        <span className={cn("font-semibold text-sm", isFull ? "text-red-500" : "text-primary")}>
-            {isFull ? "Sold Out" : `${currentSchedule?.tickets} Left`}
-        </span>
-    );
-
-    // Inline Ticket Counter
-    const TicketSelect = () => {
-        const isStudent = currentSchedule?.bus_type === 'Student';
-        const maxTickets = Math.min(3, currentSchedule?.tickets || 0);
-        return (
-            <select
-                className="border border-gray-300 rounded-lg px-2 py-2.5 bg-white focus:ring-2 focus:ring-primary text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
-                value={ticketCount}
-                onChange={(e) => setTicketCount(Number(e.target.value))}
-                disabled={isStudent || (currentSchedule?.tickets || 0) <= 0}
-                title={isStudent ? "Students can only book 1 ticket" : undefined}
-            >
-                {[1, 2, 3].map(n => (
-                    <option key={n} value={n} disabled={n > maxTickets}>{n}</option>
-                ))}
-            </select>
-        );
-    };
+    // Computed values for TicketSelect
+    const isStudent = currentSchedule?.bus_type === 'Student';
+    const maxTickets = Math.min(3, currentSchedule?.tickets || 0);
 
     return (
         <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300">
@@ -112,14 +138,14 @@ export const BookingCard = ({ direction, bookingData, onBook }: BookingCardProps
                 <Select
                     options={cityOptions}
                     value={selectedCityId}
-                    onChange={setSelectedCityId}
+                    onChange={handleCityChange}
                     placeholder="Select City"
                     label="City"
                 />
                 <Select
                     options={timeOptions}
                     value={selectedTimeSlotId}
-                    onChange={setSelectedTimeSlotId}
+                    onChange={handleTimeSlotChange}
                     placeholder="Select Time"
                     disabledPlaceholder="Select city first"
                     label="Date & Time"
@@ -128,7 +154,7 @@ export const BookingCard = ({ direction, bookingData, onBook }: BookingCardProps
                 <Select
                     options={stopOptions}
                     value={selectedStopId}
-                    onChange={setSelectedStopId}
+                    onChange={handleStopChange}
                     placeholder="Select Stop"
                     disabledPlaceholder="Select time first"
                     label={stopLabel}
@@ -144,10 +170,15 @@ export const BookingCard = ({ direction, bookingData, onBook }: BookingCardProps
                                 </Badge>
                                 {isFull && <Badge type="full">Full</Badge>}
                             </div>
-                            <Availability />
+                            <Availability isFull={isFull} tickets={currentSchedule?.tickets} />
                         </div>
                         <div className="flex gap-3 items-center">
-                            <TicketSelect />
+                            <TicketSelect 
+                                ticketCount={ticketCount}
+                                setTicketCount={setTicketCount}
+                                isStudent={isStudent}
+                                maxTickets={maxTickets}
+                            />
                             <Button
                                 className="flex-1 font-semibold"
                                 disabled={isFull && !isHeld}
@@ -173,7 +204,7 @@ export const BookingCard = ({ direction, bookingData, onBook }: BookingCardProps
                     <Select
                         options={cityOptions}
                         value={selectedCityId}
-                        onChange={setSelectedCityId}
+                        onChange={handleCityChange}
                         placeholder="Select City"
                         showLabel={false}
                     />
@@ -183,7 +214,7 @@ export const BookingCard = ({ direction, bookingData, onBook }: BookingCardProps
                     <Select
                         options={timeOptions}
                         value={selectedTimeSlotId}
-                        onChange={setSelectedTimeSlotId}
+                        onChange={handleTimeSlotChange}
                         placeholder="Select Time"
                         disabledPlaceholder="Select city first"
                         disabled={!selectedCityId}
@@ -195,7 +226,7 @@ export const BookingCard = ({ direction, bookingData, onBook }: BookingCardProps
                     <Select
                         options={stopOptions}
                         value={selectedStopId}
-                        onChange={setSelectedStopId}
+                        onChange={handleStopChange}
                         placeholder="Select Stop"
                         disabledPlaceholder="Select time first"
                         disabled={!selectedTimeSlotId}
@@ -217,11 +248,24 @@ export const BookingCard = ({ direction, bookingData, onBook }: BookingCardProps
                 </div>
 
                 <div className="w-[10%] text-center">
-                    {hasCompleteSelection ? <Availability /> : <span className="text-xs text-gray-400">--</span>}
+                    {hasCompleteSelection ? (
+                        <Availability isFull={isFull} tickets={currentSchedule?.tickets} />
+                    ) : (
+                        <span className="text-xs text-gray-400">--</span>
+                    )}
                 </div>
 
                 <div className="w-[8%] flex justify-center">
-                    {hasCompleteSelection ? <TicketSelect /> : <span className="text-xs text-gray-400">--</span>}
+                    {hasCompleteSelection ? (
+                        <TicketSelect 
+                            ticketCount={ticketCount}
+                            setTicketCount={setTicketCount}
+                            isStudent={isStudent}
+                            maxTickets={maxTickets}
+                        />
+                    ) : (
+                        <span className="text-xs text-gray-400">--</span>
+                    )}
                 </div>
 
                 <div className="w-[16%]">

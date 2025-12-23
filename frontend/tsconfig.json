@@ -4,6 +4,15 @@
     "paths": {
       "@/*": ["./src/*"]
     },
-    "jsx": "react-jsx"
-  }
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ES2020",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "include": ["src", "vite.config.ts"]
 }
