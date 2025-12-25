@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Modal } from '@/components/ui/Modal';
 import { cn } from '@/lib/utils';
+import { getCityName, getTimeSlot, validateCNIC } from '../../utils/bookingHelpers';
+import { PassengerForm } from '../shared';
 
 type SavedSelection = {
     cityId: string | null;
@@ -72,20 +74,6 @@ export const EmployeeBookingConfirmationModal = ({
         }
     }, [isOpen, selections, employeeTicketInfo]);
 
-    if (!isOpen) return null;
-
-    const getCityName = (cityId: string | null) => {
-        return cities.find(c => c.id === cityId)?.name || 'N/A';
-    };
-
-    const getTimeSlot = (timeSlotId: string | null) => {
-        const slot = timeSlots.find(t => t.id === timeSlotId);
-        return slot ? `${slot.date} - ${slot.time}` : 'N/A';
-    };
-
-    const getStopName = (stopId: string | null) => {
-        return stops.find(s => s.id === stopId)?.name || 'N/A';
-    };
 
     const getMaxTickets = (index: number) => {
         const selection = selections[index];
@@ -136,25 +124,6 @@ export const EmployeeBookingConfirmationModal = ({
         setPassengers(newPassengers);
     };
 
-    const validateCNIC = (cnic: string): boolean => {
-        // CNIC format: 12345-1234567-1 (14 characters with dashes)
-        const cnicPattern = /^\d{5}-\d{7}-\d{1}$/;
-        return cnicPattern.test(cnic);
-    };
-
-    const formatCNIC = (value: string): string => {
-        // Remove all non-digits
-        const digits = value.replace(/\D/g, '');
-        
-        // Format as 12345-1234567-1
-        if (digits.length <= 5) {
-            return digits;
-        } else if (digits.length <= 12) {
-            return `${digits.slice(0, 5)}-${digits.slice(5)}`;
-        } else {
-            return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12, 13)}`;
-        }
-    };
 
     const handleEmployeeTravelChange = (index: number, checked: boolean) => {
         const newEmployeeTraveling = [...isEmployeeTraveling];
@@ -231,42 +200,31 @@ export const EmployeeBookingConfirmationModal = ({
     const totalTickets = totalFamilyTickets + totalEmployeeTickets;
 
     return (
-        <div className={cn(
-            "fixed inset-0 z-50 transition-all duration-300",
-            isOpen ? "visible" : "invisible delay-300"
-        )}>
-            {/* Backdrop */}
-            <div
-                className={cn(
-                    "absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300",
-                    isOpen ? "opacity-100" : "opacity-0"
-                )}
-                onClick={onClose}
-            />
-
-            {/* Modal Content */}
-            <div className={cn(
-                "absolute inset-0 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 w-full md:w-[600px] md:max-h-[90vh] bg-white rounded-t-3xl md:rounded-2xl shadow-xl transition-transform duration-300 ease-in-out flex flex-col",
-                isOpen ? "translate-y-0" : "translate-y-full md:translate-y-0 md:scale-95"
-            )}>
-                {/* Header */}
-                <div className="flex justify-between items-center p-6 border-b border-gray-200">
-                    <h2 className="text-xl font-bold text-gray-900">Confirm Booking</h2>
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title="Confirm Booking"
+            size="lg"
+            footer={
+                <div className="flex gap-3">
                     <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg h-8 w-8"
+                        variant="outline"
                         onClick={onClose}
-                        aria-label="Close"
+                        className="flex-1"
                     >
-                        <X className="h-4 w-4" />
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleConfirm}
+                        className="flex-1 font-semibold"
+                    >
+                        Confirm Booking
                     </Button>
                 </div>
-
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto p-6">
-                    <div className="space-y-6">
-                        {selections.map((selection, tripIndex) => {
+            }
+        >
+            <div className="space-y-6">
+                {selections.map((selection, tripIndex) => {
                             const maxTickets = getMaxTickets(tripIndex);
                             const currentCount = ticketCounts[tripIndex] || selection.ticketCount;
                             
@@ -280,7 +238,7 @@ export const EmployeeBookingConfirmationModal = ({
                                                 : 'Trip Details'}
                                         </h3>
                                         <div className="text-sm text-gray-600">
-                                            {getCityName(selection.cityId)} • {getTimeSlot(selection.timeSlotId)}
+                                            {getCityName(selection.cityId, cities)} • {getTimeSlot(selection.timeSlotId, timeSlots)}
                                         </div>
                                     </div>
 
@@ -345,75 +303,27 @@ export const EmployeeBookingConfirmationModal = ({
 
                                     {/* Passenger Forms */}
                                     {passengers[tripIndex]?.map((passenger, passengerIndex) => (
-                                        <div key={passengerIndex} className="bg-gray-50 rounded-lg p-4 space-y-3">
-                                            <p className="text-sm font-medium text-gray-700">Passenger {passengerIndex + 1}</p>
-                                            
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                                <input
-                                                    type="text"
-                                                    value={passenger.name}
-                                                    onChange={(e) => handlePassengerChange(tripIndex, passengerIndex, 'name', e.target.value)}
-                                                    placeholder="Full Name *"
-                                                    className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-primary text-sm"
-                                                    required
-                                                />
-                                                <select
-                                                    value={passenger.relation}
-                                                    onChange={(e) => handlePassengerChange(tripIndex, passengerIndex, 'relation', e.target.value)}
-                                                    className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-primary text-sm"
-                                                    required
-                                                >
-                                                    <option value="">Relation *</option>
-                                                    <option value="Child">Child</option>
-                                                    <option value="Spouse">Spouse</option>
-                                                    <option value="Parent">Parent</option>
-                                                </select>
-                                                <input
-                                                    type="text"
-                                                    value={passenger.cnic}
-                                                    onChange={(e) => {
-                                                        const formatted = formatCNIC(e.target.value);
-                                                        handlePassengerChange(tripIndex, passengerIndex, 'cnic', formatted);
-                                                    }}
-                                                    placeholder="CNIC (optional)"
-                                                    maxLength={15}
-                                                    className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-primary text-sm"
-                                                />
-                                            </div>
-                                        </div>
+                                        <PassengerForm
+                                            key={passengerIndex}
+                                            passenger={passenger}
+                                            passengerIndex={passengerIndex}
+                                            tripIndex={tripIndex}
+                                            onPassengerChange={handlePassengerChange}
+                                        />
                                     ))}
                                 </div>
                             );
-                        })}
-                    </div>
+                })}
 
-                    {/* Summary */}
-                    <div className="mt-6 pt-4 border-t">
-                        <div className="flex justify-between items-center">
-                            <span className="font-semibold text-gray-900">Total Tickets:</span>
-                            <span className="text-xl font-bold text-primary">{totalTickets}</span>
-                        </div>
+                {/* Summary */}
+                <div className="mt-6 pt-4 border-t">
+                    <div className="flex justify-between items-center">
+                        <span className="font-semibold text-gray-900">Total Tickets:</span>
+                        <span className="text-xl font-bold text-primary">{totalTickets}</span>
                     </div>
-                </div>
-
-                {/* Footer */}
-                <div className="p-6 border-t border-gray-200 flex gap-3">
-                    <Button
-                        variant="outline"
-                        onClick={onClose}
-                        className="flex-1"
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={handleConfirm}
-                        className="flex-1 font-semibold"
-                    >
-                        Confirm Booking
-                    </Button>
                 </div>
             </div>
-        </div>
+        </Modal>
     );
 };
 
