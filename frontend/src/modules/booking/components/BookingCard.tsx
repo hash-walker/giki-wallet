@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useState, useMemo } from 'react';
 import { RouteDirection, BookingData, BookingSelection, Schedule } from '../types';
-import { Select } from './Select';
+import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getAvailableTimeSlotsForCity, getAvailableStopsForCityAndTime, getScheduleForSelection } from '../data/mockRoutes';
@@ -75,6 +75,7 @@ interface BookingCardProps {
     mode?: 'immediate' | 'collect';
     onSaveSelection?: (selection: SelectionPayload) => void;
     onSelectionReset?: () => void;
+    sharedCityId?: string | null; // For round trip - shared city selection
 }
 
 export const BookingCard = ({
@@ -83,12 +84,14 @@ export const BookingCard = ({
     onBook,
     mode = 'immediate',
     onSaveSelection,
-    onSelectionReset
+    onSelectionReset,
+    sharedCityId
 }: BookingCardProps) => {
     const { cities, timeSlots, stops, schedules } = bookingData;
 
-    // Selection state
-    const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
+    // Selection state - use shared city if provided, otherwise local state
+    const [localCityId, setLocalCityId] = useState<string | null>(null);
+    const selectedCityId = sharedCityId !== undefined ? sharedCityId : localCityId;
     const [selectedTimeSlotId, setSelectedTimeSlotId] = useState<string | null>(null);
     const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
     const [ticketCount, setTicketCount] = useState(1);
@@ -112,7 +115,10 @@ export const BookingCard = ({
     // Handle city change - reset dependent selections
     const handleCityChange = (cityId: string | null) => {
         if (mode === 'collect') onSelectionReset?.();
-        setSelectedCityId(cityId);
+        // Only update local city if not using shared city
+        if (sharedCityId === undefined) {
+            setLocalCityId(cityId);
+        }
         setSelectedTimeSlotId(null);
         setSelectedStopId(null);
         setTicketCount(1);
@@ -181,13 +187,15 @@ export const BookingCard = ({
         <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300">
             {/* Mobile View */}
             <div className="block md:hidden p-4 space-y-3">
-                <Select
-                    options={cityOptions}
-                    value={selectedCityId}
-                    onChange={handleCityChange}
-                    placeholder="Select City"
-                    label="City"
-                />
+                {sharedCityId === undefined && (
+                    <Select
+                        options={cityOptions}
+                        value={selectedCityId}
+                        onChange={handleCityChange}
+                        placeholder="Select City"
+                        label="City"
+                    />
+                )}
                 <Select
                     options={timeOptions}
                     value={selectedTimeSlotId}
@@ -256,29 +264,31 @@ export const BookingCard = ({
 
             {/* Desktop View */}
             <div className="hidden md:flex py-6 px-5 items-center gap-4">
-                <div className="w-[18%]">
-                    <Select
-                        options={cityOptions}
-                        value={selectedCityId}
-                        onChange={handleCityChange}
-                        placeholder="Select City"
-                        showLabel={false}
-                    />
-                </div>
+                {sharedCityId === undefined && (
+                    <div className="w-[18%]">
+                        <Select
+                            options={cityOptions}
+                            value={selectedCityId}
+                            onChange={handleCityChange}
+                            placeholder="Select City"
+                            showLabel={false}
+                        />
+                    </div>
+                )}
 
-                <div className="w-[18%]">
+                <div className={sharedCityId === undefined ? "w-[18%]" : "w-[24%]"}>
                     <Select
                         options={timeOptions}
                         value={selectedTimeSlotId}
                         onChange={handleTimeSlotChange}
                         placeholder="Select Time"
-                        disabledPlaceholder="Select city first"
+                        disabledPlaceholder={sharedCityId ? "Select time" : "Select city first"}
                         disabled={!selectedCityId}
                         showLabel={false}
                     />
                 </div>
 
-                <div className="w-[18%]">
+                <div className={sharedCityId === undefined ? "w-[18%]" : "w-[24%]"}>
                     <Select
                         options={stopOptions}
                         value={selectedStopId}
@@ -290,7 +300,7 @@ export const BookingCard = ({
                     />
                 </div>
 
-                <div className="w-[12%] flex justify-center">
+                <div className={cn(sharedCityId === undefined ? "w-[12%]" : "w-[13%]", "flex justify-center")}>
                     {hasCompleteSelection ? (
                         <div className="flex items-center gap-1.5 flex-wrap justify-center">
                             <Badge type={currentSchedule.bus_type === 'Student' ? 'student' : 'employee'}>
@@ -303,7 +313,7 @@ export const BookingCard = ({
                     )}
                 </div>
 
-                <div className="w-[10%] text-center">
+                <div className={cn(sharedCityId === undefined ? "w-[10%]" : "w-[11%]", "text-center")}>
                     {hasCompleteSelection ? (
                         <Availability isFull={isFull} tickets={currentSchedule?.tickets} />
                     ) : (
@@ -311,7 +321,7 @@ export const BookingCard = ({
                     )}
                 </div>
 
-                <div className="w-[8%] flex justify-center">
+                <div className={cn(sharedCityId === undefined ? "w-[8%]" : "w-[9%]", "flex justify-center")}>
                     {hasCompleteSelection ? (
                         <TicketSelect 
                             ticketCount={ticketCount}
@@ -326,7 +336,7 @@ export const BookingCard = ({
                     )}
                 </div>
 
-                <div className="w-[16%]">
+                <div className={sharedCityId === undefined ? "w-[16%]" : "w-[19%]"}>
                     <Button
                         className="w-full font-semibold shadow-sm"
                         disabled={!hasCompleteSelection || isFull}
