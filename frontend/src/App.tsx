@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
+import { Toaster } from '@/components/ui/sonner';
 import {BookingPage} from "@/modules/booking/pages/BookingPage";
 import { WalletPage } from "@/modules/wallet/pages/WalletPage";
 import { TopUpModal, TransferModal, TransactionHistory } from "@/modules/wallet/components/modals";
@@ -89,6 +90,9 @@ function App() {
                 isOpen={isMyAccountOpen}
                 onClose={() => setIsMyAccountOpen(false)}
             />
+            
+            {/* Toast Notifications */}
+            <Toaster />
         </div>
     );
 }

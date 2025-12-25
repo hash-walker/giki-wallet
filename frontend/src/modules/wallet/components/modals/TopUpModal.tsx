@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { PaymentMethodSelector } from '../shared';
+import { toast } from '@/lib/toast';
 
 type PaymentMethod = 'jazzcash' | 'card';
 
@@ -20,12 +21,12 @@ export const TopUpModal = ({ isOpen, onClose }: TopUpModalProps) => {
 
     const handleJazzcashPayment = async () => {
         if (!amount || !mobileNumber || !cnicLastSix) {
-            alert('Please fill in all fields');
+            toast.error('Please fill in all fields');
             return;
         }
         
         if (cnicLastSix.length !== 6) {
-            alert('CNIC last 6 digits must be exactly 6 digits');
+            toast.error('CNIC last 6 digits must be exactly 6 digits');
             return;
         }
 
@@ -39,7 +40,7 @@ export const TopUpModal = ({ isOpen, onClose }: TopUpModalProps) => {
             });
             // Simulate API call
             await new Promise(resolve => setTimeout(resolve, 1000));
-            alert('Payment request sent to Jazzcash');
+            toast.success('Payment request sent to Jazzcash');
             // Close modal on success
             onClose();
             // Reset form
@@ -48,7 +49,7 @@ export const TopUpModal = ({ isOpen, onClose }: TopUpModalProps) => {
             setCnicLastSix('');
         } catch (error) {
             console.error('Payment error:', error);
-            alert('Payment failed. Please try again.');
+            toast.error('Payment failed. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -56,12 +57,12 @@ export const TopUpModal = ({ isOpen, onClose }: TopUpModalProps) => {
 
     const handleCardPayment = () => {
         if (!amount) {
-            alert('Please enter an amount');
+            toast.error('Please enter an amount');
             return;
         }
         // TODO: Redirect to external payment gateway
         console.log('Redirecting to payment gateway with amount:', amount);
-        alert('Redirecting to payment gateway...');
+        toast.info('Redirecting to payment gateway...');
         onClose();
     };
 
