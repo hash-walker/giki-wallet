@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { AdminNavbar } from '@/shared/components/layout';
-import { LayoutDashboard, Bus, Users, Settings, Clock } from 'lucide-react';
+import { LayoutDashboard, Bus, Users, Settings, Clock, Receipt } from 'lucide-react';
 
 interface AdminLayoutProps {
     children: ReactNode;
@@ -11,6 +11,7 @@ const adminNavItems = [
     { path: '/admin/routes', label: 'Routes', icon: Bus },
     { path: '/admin/time-slots', label: 'Time Slots', icon: Clock },
     { path: '/admin/users', label: 'Users', icon: Users },
+    { path: '/admin/transactions', label: 'Transactions', icon: Receipt },
     { path: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
