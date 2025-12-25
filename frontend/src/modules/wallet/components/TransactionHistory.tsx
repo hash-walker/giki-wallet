@@ -142,10 +142,27 @@ export const TransactionHistory = ({
     const groupedTransactions = groupTransactionsByDate(transactions);
 
     return (
-        <div className="mt-6 bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200">
-            <div className="p-4 md:p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-bold text-gray-900">Transaction History</h2>
+        <div className={cn(
+            "fixed inset-0 z-50 transition-all duration-300",
+            isOpen ? "visible" : "invisible delay-300"
+        )}>
+            {/* Backdrop */}
+            <div
+                className={cn(
+                    "absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300",
+                    isOpen ? "opacity-100" : "opacity-0"
+                )}
+                onClick={onClose}
+            />
+
+            {/* Modal Content */}
+            <div className={cn(
+                "absolute inset-0 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 w-full md:w-[600px] md:max-h-[90vh] bg-white rounded-t-3xl md:rounded-2xl shadow-xl transition-transform duration-300 ease-in-out flex flex-col",
+                isOpen ? "translate-y-0" : "translate-y-full md:translate-y-0 md:scale-95"
+            )}>
+                {/* Header */}
+                <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                    <h2 className="text-xl font-bold text-gray-900">Transaction History</h2>
                     <Button
                         variant="ghost"
                         size="icon"
@@ -157,7 +174,8 @@ export const TransactionHistory = ({
                     </Button>
                 </div>
                 
-                <div className="max-h-[600px] overflow-y-auto">
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto p-6">
                     <div className="space-y-6">
                         {groupedTransactions.map(({ date, transactions: dateTransactions }) => (
                             <div key={date}>

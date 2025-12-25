@@ -3,6 +3,7 @@ import { PageHeader } from '../components/PageHeader';
 import { BookingSection } from '../components/BookingSection';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { BookingConfirmationModal } from '../components/BookingConfirmationModal';
 import { getBookingData } from '../data/mockRoutes';
 import { ArrowRightIcon, ArrowLeftIcon } from 'lucide-react';
 import { BookingSelection } from '../types';
@@ -23,14 +24,34 @@ export const BookingPage = () => {
     const [isRoundTrip, setIsRoundTrip] = useState(false);
     const [fromSelection, setFromSelection] = useState<SavedSelection | null>(null);
     const [toSelection, setToSelection] = useState<SavedSelection | null>(null);
+    const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+    const [pendingBooking, setPendingBooking] = useState<SavedSelection[]>([]);
+    
+    // TODO: Get this from user context/auth
+    const isStudentUser = true; // For now, set to true to test student bookings
+    const isEmployeeUser = !isStudentUser;
 
     // Get booking data for each direction
     const fromGikiData = getBookingData('from-giki');
     const toGikiData = getBookingData('to-giki');
 
     const handleBook = (selection: SavedSelection) => {
-        console.log('Booking:', selection);
-        // TODO: Implement booking logic with API call
+        // Check if user is a student and booking a student bus
+        const isStudentBus = selection.busType === 'Student';
+        
+        if (isStudentUser && isStudentBus) {
+            // Show confirmation modal for students
+            setPendingBooking([selection]);
+            setShowConfirmationModal(true);
+        } else if (isEmployeeUser && selection.busType === 'Employee') {
+            // Show confirmation modal for employees booking employee buses
+            setPendingBooking([selection]);
+            setShowConfirmationModal(true);
+        } else {
+            // Direct booking for other cases
+            console.log('Booking:', selection);
+            // TODO: Implement booking logic with API call
+        }
     };
 
     const handleSaveSelection = (direction: 'from-giki' | 'to-giki') => (selection: SavedSelection) => {
@@ -61,9 +82,71 @@ export const BookingPage = () => {
 
     const handleConfirmRoundTrip = () => {
         if (fromSelection && toSelection) {
-            console.log('Round trip booking:', { outbound: fromSelection, inbound: toSelection });
-            // TODO: call booking API with both legs
+            // Check if user is a student and booking student buses
+            const hasStudentBus = fromSelection.busType === 'Student' || toSelection.busType === 'Student';
+            const hasEmployeeBus = fromSelection.busType === 'Employee' || toSelection.busType === 'Employee';
+            
+            if (isStudentUser && hasStudentBus) {
+                // Show confirmation modal for students
+                setPendingBooking([fromSelection, toSelection]);
+                setShowConfirmationModal(true);
+            } else if (isEmployeeUser && hasEmployeeBus) {
+                // Show confirmation modal for employees
+                setPendingBooking([fromSelection, toSelection]);
+                setShowConfirmationModal(true);
+            } else {
+                // Direct booking for other cases
+                console.log('Round trip booking:', { outbound: fromSelection, inbound: toSelection });
+                // TODO: call booking API with both legs
+            }
         }
+    };
+
+    const handleConfirmBooking = (data?: { selections: SavedSelection[]; passengers: Array<Array<{ name: string; cnic?: string; relation?: string }>>; isEmployeeTraveling?: boolean[] }) => {
+        // Close modal and proceed with booking
+        setShowConfirmationModal(false);
+        
+        if (data) {
+            // Employee booking with passenger data
+            if (data.selections.length === 1) {
+                console.log('Confirmed booking:', {
+                    selection: data.selections[0],
+                    passengers: data.passengers[0],
+                    isEmployeeTraveling: data.isEmployeeTraveling?.[0] || false
+                });
+                // TODO: Implement booking logic with API call
+            } else if (data.selections.length === 2) {
+                console.log('Confirmed round trip booking:', {
+                    outbound: {
+                        selection: data.selections[0],
+                        passengers: data.passengers[0],
+                        isEmployeeTraveling: data.isEmployeeTraveling?.[0] || false
+                    },
+                    inbound: {
+                        selection: data.selections[1],
+                        passengers: data.passengers[1],
+                        isEmployeeTraveling: data.isEmployeeTraveling?.[1] || false
+                    }
+                });
+                // TODO: call booking API with both legs
+            }
+        } else {
+            // Student booking (no passenger data needed)
+            if (pendingBooking.length === 1) {
+                console.log('Confirmed booking:', pendingBooking[0]);
+                // TODO: Implement booking logic with API call
+            } else if (pendingBooking.length === 2) {
+                console.log('Confirmed round trip booking:', { outbound: pendingBooking[0], inbound: pendingBooking[1] });
+                // TODO: call booking API with both legs
+            }
+        }
+        
+        setPendingBooking([]);
+    };
+
+    const handleCloseModal = () => {
+        setShowConfirmationModal(false);
+        setPendingBooking([]);
     };
 
     const hasBothSelections = Boolean(fromSelection && toSelection);
@@ -190,6 +273,19 @@ export const BookingPage = () => {
                     </div>
                 </div>
             )}
+
+            {/* Booking Confirmation Modal */}
+            <BookingConfirmationModal
+                isOpen={showConfirmationModal}
+                onClose={handleCloseModal}
+                onConfirm={handleConfirmBooking}
+                selections={pendingBooking}
+                cities={fromGikiData.cities}
+                timeSlots={fromGikiData.timeSlots}
+                stops={fromGikiData.stops}
+                isRoundTrip={pendingBooking.length === 2}
+                isEmployee={isEmployeeUser}
+            />
         </div>
     );
 };
