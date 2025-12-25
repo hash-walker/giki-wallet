@@ -1,99 +1,24 @@
-import { useState } from 'react';
-import { Navbar } from '@/components/layout/Navbar';
-import { Footer } from '@/components/layout/Footer';
-import { Toaster } from '@/components/ui/sonner';
-import {BookingPage} from "@/modules/booking/pages/BookingPage";
-import { WalletPage } from "@/modules/wallet/pages/WalletPage";
-import { TopUpModal, TransferModal, TransactionHistory } from "@/modules/wallet/components/modals";
-import { MyTicketsModal } from "@/modules/booking/components/modals";
-import { SignInModal, MyAccountModal } from "@/modules/auth";
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { ClientLayout } from '@/client/layout/ClientLayout';
+import { AdminLayout, AdminDashboard, RoutesPage, TimeSlotsPage, UsersPage, SettingsPage } from '@/admin';
+import { HomePage } from '@/client/pages/HomePage';
 
 function App() {
-    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-    const [isTopUpOpen, setIsTopUpOpen] = useState(false);
-    const [isTransferOpen, setIsTransferOpen] = useState(false);
-    const [isMyTicketsOpen, setIsMyTicketsOpen] = useState(false);
-    const [isSignInOpen, setIsSignInOpen] = useState(false);
-    const [isMyAccountOpen, setIsMyAccountOpen] = useState(false);
-
-    const handleHistoryClick = () => {
-        setIsHistoryOpen(true);
-    };
-
-    const handleCloseHistory = () => {
-        setIsHistoryOpen(false);
-    };
-
-    const handleTopUpClick = () => {
-        setIsTopUpOpen(true);
-    };
-
-    const handleTransferClick = () => {
-        setIsTransferOpen(true);
-    };
-
-    const handleMyTicketsClick = () => {
-        setIsMyTicketsOpen(true);
-    };
-
-    const handleSignInClick = () => {
-        setIsSignInOpen(true);
-    };
-
-    const handleSignInSuccess = () => {
-        setIsMyAccountOpen(true);
-    };
-
     return (
-        <div className="min-h-screen flex flex-col bg-light-background font-inter">
-            <Navbar 
-                onMyBookingsClick={handleMyTicketsClick}
-                onSignInClick={handleSignInClick}
-            />
+        <Routes>
+            {/* Client Routes */}
+            <Route path="/" element={<ClientLayout><HomePage /></ClientLayout>} />
 
-            <main className="flex-1 flex flex-col container mx-auto px-4 py-8 md:py-12">
-                <div className="mt-8">
-                    <WalletPage 
-                        onHistoryClick={handleHistoryClick}
-                        onTopUpClick={handleTopUpClick}
-                        onTransferClick={handleTransferClick}
-                    />
-                </div>
-                <BookingPage />
-            </main>
+            {/* Admin Routes */}
+            <Route path="/admin" element={<AdminLayout><AdminDashboard /></AdminLayout>} />
+            <Route path="/admin/routes" element={<AdminLayout><RoutesPage /></AdminLayout>} />
+            <Route path="/admin/time-slots" element={<AdminLayout><TimeSlotsPage /></AdminLayout>} />
+            <Route path="/admin/users" element={<AdminLayout><UsersPage /></AdminLayout>} />
+            <Route path="/admin/settings" element={<AdminLayout><SettingsPage /></AdminLayout>} />
 
-            <Footer />
-
-            {/* Wallet Modals */}
-            <TransactionHistory
-                isOpen={isHistoryOpen}
-                onClose={handleCloseHistory}
-            />
-            <TopUpModal 
-                isOpen={isTopUpOpen}
-                onClose={() => setIsTopUpOpen(false)}
-            />
-            <TransferModal 
-                isOpen={isTransferOpen}
-                onClose={() => setIsTransferOpen(false)}
-            />
-            <MyTicketsModal 
-                isOpen={isMyTicketsOpen}
-                onClose={() => setIsMyTicketsOpen(false)}
-            />
-            <SignInModal 
-                isOpen={isSignInOpen}
-                onClose={() => setIsSignInOpen(false)}
-                onSignInSuccess={handleSignInSuccess}
-            />
-            <MyAccountModal 
-                isOpen={isMyAccountOpen}
-                onClose={() => setIsMyAccountOpen(false)}
-            />
-            
-            {/* Toast Notifications */}
-            <Toaster />
-        </div>
+            {/* Redirect unknown routes to home */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
     );
 }
 
