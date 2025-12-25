@@ -53,7 +53,7 @@ export const Navbar = () => {
                 {/* Backdrop */}
                 <div
                     className={cn(
-                        "absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300",
+                        "absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300",
                         isMobileMenuOpen ? "opacity-100" : "opacity-0"
                     )}
                     onClick={() => setIsMobileMenuOpen(false)}
@@ -61,45 +61,43 @@ export const Navbar = () => {
 
                 {/* Drawer */}
                 <nav className={cn(
-                    "absolute right-0 top-0 h-full w-64 bg-white p-6 shadow-xl transition-transform duration-300 ease-in-out",
+                    "absolute right-0 top-0 h-full w-72 bg-white shadow-xl transition-transform duration-300 ease-in-out flex flex-col",
                     isMobileMenuOpen ? "translate-x-0" : "translate-x-full"
                 )}>
-                    {/* Close Button */}
-                    <div className="flex justify-between items-center mb-8">
-                        <span className="font-semibold text-primary text-lg">Menu</span>
+                    {/* Header */}
+                    <div className="flex justify-between items-center p-4 border-b border-gray-200">
+                        <span className="font-bold text-primary text-lg">Menu</span>
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="text-gray-500 hover:bg-gray-100"
+                            className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
                             onClick={() => setIsMobileMenuOpen(false)}
                         >
                             <X className="h-5 w-5" />
                         </Button>
                     </div>
 
-                    <div className="flex flex-col gap-2">
-                        <a 
-                            href="#" 
+                    {/* Nav Links */}
+                    <div className="flex-1 p-4">
+                        <div className="space-y-1">
+                            <a 
+                                href="#" 
+                                onClick={() => setIsMobileMenuOpen(false)}
+                                className="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-xl font-medium transition-colors"
+                            >
+                                My Bookings
+                            </a>
+                        </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="p-4 border-t border-gray-200">
+                        <Button
+                            className="w-full font-semibold"
                             onClick={() => setIsMobileMenuOpen(false)}
-                            className="px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg font-medium transition-colors"
-                        >
-                            My Bookings
-                        </a>
-                        <a 
-                            href="#" 
-                            onClick={() => setIsMobileMenuOpen(false)}
-                            className="px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg font-medium transition-colors"
                         >
                             Sign In
-                        </a>
-                        <div className="border-t border-gray-100 my-2" />
-                        <a 
-                            href="#" 
-                            onClick={() => setIsMobileMenuOpen(false)}
-                            className="px-4 py-3 text-red-500 hover:bg-red-50 rounded-lg font-medium transition-colors"
-                        >
-                            Logout
-                        </a>
+                        </Button>
                     </div>
                 </nav>
             </div>

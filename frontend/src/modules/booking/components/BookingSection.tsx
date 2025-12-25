@@ -1,12 +1,24 @@
 import { BookingCard } from './BookingCard';
 import { RouteDirection, BookingData, BookingSelection } from '../types';
 
+type SelectionPayload = BookingSelection & {
+    scheduleId: number;
+    isFull: boolean;
+    ticketsLeft: number;
+    status?: string;
+    busType?: string;
+    isHeld?: boolean;
+};
+
 interface BookingSectionProps {
     title: string;
     direction: RouteDirection;
     bookingData: BookingData;
     icon: React.ReactNode;
-    onBook?: (selection: BookingSelection & { scheduleId: number }) => void;
+    onBook?: (selection: SelectionPayload) => void;
+    mode?: 'immediate' | 'collect';
+    onSaveSelection?: (selection: SelectionPayload) => void;
+    onSelectionReset?: () => void;
 }
 
 export const BookingSection = ({
@@ -14,7 +26,10 @@ export const BookingSection = ({
     direction,
     bookingData,
     icon,
-    onBook
+    onBook,
+    mode = 'immediate',
+    onSaveSelection,
+    onSelectionReset
 }: BookingSectionProps) => {
     const isFromGIKI = direction === 'from-giki';
     const locationLabel = isFromGIKI ? "Drop Location" : "Pickup Point";
@@ -44,7 +59,10 @@ export const BookingSection = ({
             <BookingCard
                 direction={direction}
                 bookingData={bookingData}
+                mode={mode}
                 onBook={onBook}
+                onSaveSelection={onSaveSelection}
+                onSelectionReset={onSelectionReset}
             />
         </section>
     );

@@ -1,8 +1,8 @@
 FROM postgres:17.0
 
 # bootstrap.sh will initialise the database by:
-# - Creating a 'transport_system' user, with password 'transport_system_localdev'
-# - Creating a 'transport_system_localdev' database, owned by this user
+# - Creating a 'transport_system' user, with password 'transport_localdev'
+# - Creating a 'transport_localdev' database, owned by this user
 RUN apt-get update && apt-get install -y gosu && rm -rf /var/lib/apt/lists/*
 COPY scripts/bootstrap.sh .
 COPY scripts/bootstrap.sql .

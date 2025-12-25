@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { useState, useMemo } from 'react';
 import { RouteDirection, BookingData, BookingSelection, Schedule } from '../types';
 import { Select } from './Select';
@@ -31,17 +32,24 @@ const TicketSelect = ({
     ticketCount, 
     setTicketCount, 
     isStudent, 
-    maxTickets 
+    maxTickets,
+    mode,
+    onSelectionReset
 }: { 
     ticketCount: number; 
     setTicketCount: (n: number) => void; 
     isStudent: boolean; 
     maxTickets: number;
+    mode: 'immediate' | 'collect';
+    onSelectionReset?: () => void;
 }) => (
     <select
         className="border border-gray-300 rounded-lg px-2 py-2.5 bg-white focus:ring-2 focus:ring-primary text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
         value={ticketCount}
-        onChange={(e) => setTicketCount(Number(e.target.value))}
+        onChange={(e) => {
+            if (mode === 'collect') onSelectionReset?.();
+            setTicketCount(Number(e.target.value));
+        }}
         disabled={isStudent || maxTickets <= 0}
         title={isStudent ? "Students can only book 1 ticket" : undefined}
     >
@@ -51,13 +59,32 @@ const TicketSelect = ({
     </select>
 );
 
+type SelectionPayload = BookingSelection & {
+    scheduleId: number;
+    isFull: boolean;
+    ticketsLeft: number;
+    status?: string;
+    busType?: string;
+    isHeld?: boolean;
+};
+
 interface BookingCardProps {
     direction: RouteDirection;
     bookingData: BookingData;
-    onBook?: (selection: BookingSelection & { scheduleId: number }) => void;
+    onBook?: (selection: SelectionPayload) => void;
+    mode?: 'immediate' | 'collect';
+    onSaveSelection?: (selection: SelectionPayload) => void;
+    onSelectionReset?: () => void;
 }
 
-export const BookingCard = ({ direction, bookingData, onBook }: BookingCardProps) => {
+export const BookingCard = ({
+    direction,
+    bookingData,
+    onBook,
+    mode = 'immediate',
+    onSaveSelection,
+    onSelectionReset
+}: BookingCardProps) => {
     const { cities, timeSlots, stops, schedules } = bookingData;
 
     // Selection state
@@ -84,6 +111,7 @@ export const BookingCard = ({ direction, bookingData, onBook }: BookingCardProps
 
     // Handle city change - reset dependent selections
     const handleCityChange = (cityId: string | null) => {
+        if (mode === 'collect') onSelectionReset?.();
         setSelectedCityId(cityId);
         setSelectedTimeSlotId(null);
         setSelectedStopId(null);
@@ -92,6 +120,7 @@ export const BookingCard = ({ direction, bookingData, onBook }: BookingCardProps
 
     // Handle time slot change - reset dependent selections
     const handleTimeSlotChange = (timeSlotId: string | null) => {
+        if (mode === 'collect') onSelectionReset?.();
         setSelectedTimeSlotId(timeSlotId);
         setSelectedStopId(null);
         setTicketCount(1);
@@ -99,21 +128,38 @@ export const BookingCard = ({ direction, bookingData, onBook }: BookingCardProps
 
     // Handle stop change - reset ticket count
     const handleStopChange = (stopId: string | null) => {
+        if (mode === 'collect') onSelectionReset?.();
         setSelectedStopId(stopId);
         setTicketCount(1);
     };
 
-    // Handle booking
+    // Handle booking or save selection (for round trip)
     const handleBook = () => {
-        if (onBook && currentSchedule) {
-            onBook({
-                cityId: selectedCityId,
-                timeSlotId: selectedTimeSlotId,
-                stopId: selectedStopId,
-                ticketCount,
-                scheduleId: currentSchedule.id
-            });
+        if (!currentSchedule) return;
+        if (mode === 'collect' && isFull) {
+            // never allow saving sold-out legs (even if held)
+            onSelectionReset?.();
+            return;
         }
+        const payload: SelectionPayload = {
+            cityId: selectedCityId,
+            timeSlotId: selectedTimeSlotId,
+            stopId: selectedStopId,
+            ticketCount,
+            scheduleId: currentSchedule.id,
+            isFull,
+            ticketsLeft: currentSchedule.tickets,
+            status: currentSchedule.status,
+            busType: currentSchedule.bus_type,
+            isHeld
+        };
+
+        if (mode === 'collect') {
+            onSaveSelection?.(payload);
+            return;
+        }
+
+        onBook?.(payload);
     };
 
     const isFull = currentSchedule ? (currentSchedule.tickets <= 0 || currentSchedule.status === 'full') : false;
@@ -178,14 +224,24 @@ export const BookingCard = ({ direction, bookingData, onBook }: BookingCardProps
                                 setTicketCount={setTicketCount}
                                 isStudent={isStudent}
                                 maxTickets={maxTickets}
+                                mode={mode}
+                                onSelectionReset={onSelectionReset}
                             />
                             <Button
                                 className="flex-1 font-semibold"
-                                disabled={isFull && !isHeld}
-                                variant={isFull && !isHeld ? "secondary" : "default"}
+                                disabled={isFull}
+                                variant={isFull ? "secondary" : "default"}
                                 onClick={handleBook}
                             >
-                                {isHeld ? "Resume" : isFull ? "Full" : "Book"}
+                                {mode === 'collect'
+                                    ? isFull
+                                        ? "Sold Out"
+                                        : "Save Selection"
+                                    : isHeld
+                                        ? "Resume"
+                                        : isFull
+                                            ? "Full"
+                                            : "Book"}
                             </Button>
                         </div>
                     </div>
@@ -262,6 +318,8 @@ export const BookingCard = ({ direction, bookingData, onBook }: BookingCardProps
                             setTicketCount={setTicketCount}
                             isStudent={isStudent}
                             maxTickets={maxTickets}
+                            mode={mode}
+                            onSelectionReset={onSelectionReset}
                         />
                     ) : (
                         <span className="text-xs text-gray-400">--</span>
@@ -271,11 +329,19 @@ export const BookingCard = ({ direction, bookingData, onBook }: BookingCardProps
                 <div className="w-[16%]">
                     <Button
                         className="w-full font-semibold shadow-sm"
-                        disabled={!hasCompleteSelection || (isFull && !isHeld)}
-                        variant={!hasCompleteSelection || (isFull && !isHeld) ? "secondary" : "default"}
+                        disabled={!hasCompleteSelection || isFull}
+                        variant={!hasCompleteSelection || isFull ? "secondary" : "default"}
                         onClick={handleBook}
                     >
-                        {isHeld ? "Resume" : isFull ? "Waitlist" : "Book Now"}
+                        {mode === 'collect'
+                            ? isFull
+                                ? "Sold Out"
+                                : "Save Selection"
+                            : isHeld
+                                ? "Resume"
+                                : isFull
+                                    ? "Waitlist"
+                                    : "Book Now"}
                     </Button>
                 </div>
             </div>

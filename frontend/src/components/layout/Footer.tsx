@@ -32,7 +32,7 @@ export const Footer = () => {
             {/* Copyright Bar */}
             <div className="bg-primary/90 border-t border-white/10 py-3">
                 <p className="text-center text-xs text-white/60">
-                    © {new Date().getFullYear()} GIKI Transport Department. All Rights Reserved.
+                    © {new Date().getFullYear()} Microsoft Club GIKI. All Rights Reserved.
                 </p>
             </div>
         </footer>
