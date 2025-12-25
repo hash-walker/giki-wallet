@@ -2,7 +2,7 @@ import { Ticket } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal';
 import { formatDate, groupTransactionsByDate } from '../../utils/walletHelpers';
 import { Transaction } from '../../utils/transactionHelpers';
-import { TransactionCard } from '../shared';
+import { TransactionCard } from './TransactionCard';
 
 interface TransactionHistoryProps {
     isOpen: boolean;

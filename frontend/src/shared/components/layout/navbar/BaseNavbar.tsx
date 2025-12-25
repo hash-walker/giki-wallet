@@ -28,18 +28,18 @@ export const BaseNavbar = ({
         <>
             <header className="bg-primary text-white sticky top-0 z-50">
                 <div className={cn(
-                    "mx-auto px-4 md:px-6 flex justify-between items-center h-14 md:h-16",
+                    "mx-auto px-4 lg:px-6 flex justify-between items-center h-14 lg:h-16 gap-2",
                     maxWidth === 'wide' ? 'max-w-7xl' : 'max-w-5xl'
                 )}>
                     {/* LOGO */}
-                    <Link to={logoLink} className="flex items-center gap-3">
+                    <Link to={logoLink} className="flex items-center gap-2 lg:gap-3 min-w-0 flex-shrink-0">
                         <img
                             src={logo}
                             alt="GIKI Logo"
-                            className="h-10 md:h-12 w-auto object-contain"
+                            className="h-8 lg:h-10 xl:h-12 w-auto object-contain flex-shrink-0"
                         />
                         {logoText && (
-                            <span className="font-semibold text-lg">{logoText}</span>
+                            <span className="font-semibold text-sm lg:text-base xl:text-lg truncate hidden xl:inline">{logoText}</span>
                         )}
                     </Link>
 
@@ -48,7 +48,7 @@ export const BaseNavbar = ({
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="md:hidden text-white hover:bg-white/10"
+                            className="lg:hidden text-white hover:bg-white/10"
                             onClick={onMobileMenuToggle}
                         >
                             <Menu className="h-5 w-5" />
@@ -57,14 +57,14 @@ export const BaseNavbar = ({
 
                     {/* DESKTOP NAV */}
                     {navContent && (
-                        <nav className="hidden md:flex items-center gap-1">
+                        <nav className="hidden lg:flex items-center gap-1">
                             {navContent}
                         </nav>
                     )}
 
                     {/* Right Side Actions */}
                     {rightActions && (
-                        <div className="hidden md:flex items-center">
+                        <div className="hidden lg:flex items-center">
                             {rightActions}
                         </div>
                     )}

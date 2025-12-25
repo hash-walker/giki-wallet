@@ -1,10 +1,8 @@
 import { useState, useMemo } from 'react';
-import { PageHeader, TableWrapper } from '../../shared';
+import { PageHeader, TableWrapper, WeekSelector, getWeekStart, getWeekEnd, formatWeekRange, isDateInWeek } from '../../../shared';
 import { TicketsTable } from '../components/TicketsTable';
 import { TicketFilters } from '../components/TicketFilters';
-import { WeekSelector } from '../components/WeekSelector';
 import { AdminTicket } from '../types';
-import { getWeekStart, getWeekEnd, getWeekDates, formatWeekRange, isDateInWeek } from '../utils/weekHelpers';
 import { Ticket, Download } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 
@@ -16,109 +14,112 @@ export const TicketsPage = () => {
     const [busType, setBusType] = useState<string>('all');
 
     // Mock data - replace with API calls
-    const [tickets] = useState<AdminTicket[]>([
-        {
-            id: '1',
-            serialNumber: 1,
-            ticketNumber: '1234',
-            userId: 1,
-            userName: 'John Doe',
-            userEmail: 'john@example.com',
-            routeId: 1,
-            routeName: 'GIKI to Peshawar',
-            direction: 'to-giki',
-            cityId: 'peshawar',
-            cityName: 'Peshawar',
-            stopId: 'pes_stop1',
-            stopName: 'University Stop',
-            travelDate: new Date().toISOString().split('T')[0],
-            time: '9:00 AM',
-            status: 'confirmed',
-            busType: 'Employee',
-            ticketCategory: 'employee',
-            isSelf: true,
-            passengerName: 'John Doe',
-            passengerCNIC: '12345-1234567-1',
-            price: 200,
-            bookedAt: new Date(Date.now() - 86400000).toISOString(),
-        },
-        {
-            id: '2',
-            serialNumber: 2,
-            ticketNumber: '5678',
-            userId: 1,
-            userName: 'John Doe',
-            userEmail: 'john@example.com',
-            routeId: 2,
-            routeName: 'GIKI to Islamabad',
-            direction: 'to-giki',
-            cityId: 'islamabad',
-            cityName: 'Islamabad',
-            stopId: 'isl_stop1',
-            stopName: 'F-6 Markaz',
-            travelDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
-            time: '2:00 PM',
-            status: 'confirmed',
-            busType: 'Employee',
-            ticketCategory: 'family',
-            isSelf: false,
-            passengerName: 'Jane Doe',
-            passengerCNIC: '12345-7654321-1',
-            relation: 'Spouse',
-            price: 200,
-            bookedAt: new Date(Date.now() - 3600000).toISOString(),
-        },
-        {
-            id: '3',
-            serialNumber: 3,
-            ticketNumber: '9012',
-            userId: 2,
-            userName: 'Alice Smith',
-            userEmail: 'alice@example.com',
-            routeId: 3,
-            routeName: 'GIKI to Lahore',
-            direction: 'from-giki',
-            cityId: 'lahore',
-            cityName: 'Lahore',
-            stopId: 'lah_stop1',
-            stopName: 'Model Town',
-            travelDate: new Date(Date.now() + 172800000).toISOString().split('T')[0],
-            time: '5:00 PM',
-            status: 'pending',
-            busType: 'Student',
-            ticketCategory: 'student',
-            isSelf: true,
-            passengerName: 'Alice Smith',
-            price: 200,
-            bookedAt: new Date(Date.now() - 7200000).toISOString(),
-        },
-        {
-            id: '4',
-            serialNumber: 4,
-            ticketNumber: '3456',
-            userId: 3,
-            userName: 'Bob Johnson',
-            userEmail: 'bob@example.com',
-            routeId: 1,
-            routeName: 'GIKI to Peshawar',
-            direction: 'to-giki',
-            cityId: 'peshawar',
-            cityName: 'Peshawar',
-            stopId: 'pes_stop2',
-            stopName: 'Hayatabad',
-            travelDate: new Date(Date.now() - 86400000).toISOString().split('T')[0],
-            time: '8:00 AM',
-            status: 'cancelled',
-            busType: 'Student',
-            ticketCategory: 'student',
-            isSelf: true,
-            passengerName: 'Bob Johnson',
-            price: 200,
-            refundAmount: 150,
-            bookedAt: new Date(Date.now() - 172800000).toISOString(),
-            cancelledAt: new Date(Date.now() - 43200000).toISOString(),
-        },
-    ]);
+    const [tickets] = useState<AdminTicket[]>(() => {
+        const now = Date.now();
+        return [
+            {
+                id: '1',
+                serialNumber: 1,
+                ticketNumber: '1234',
+                userId: 1,
+                userName: 'John Doe',
+                userEmail: 'john@example.com',
+                routeId: 1,
+                routeName: 'GIKI to Peshawar',
+                direction: 'to-giki',
+                cityId: 'peshawar',
+                cityName: 'Peshawar',
+                stopId: 'pes_stop1',
+                stopName: 'University Stop',
+                travelDate: new Date(now).toISOString().split('T')[0],
+                time: '9:00 AM',
+                status: 'confirmed',
+                busType: 'Employee',
+                ticketCategory: 'employee',
+                isSelf: true,
+                passengerName: 'John Doe',
+                passengerCNIC: '12345-1234567-1',
+                price: 200,
+                bookedAt: new Date(now - 86400000).toISOString(),
+            },
+            {
+                id: '2',
+                serialNumber: 2,
+                ticketNumber: '5678',
+                userId: 1,
+                userName: 'John Doe',
+                userEmail: 'john@example.com',
+                routeId: 2,
+                routeName: 'GIKI to Islamabad',
+                direction: 'to-giki',
+                cityId: 'islamabad',
+                cityName: 'Islamabad',
+                stopId: 'isl_stop1',
+                stopName: 'F-6 Markaz',
+                travelDate: new Date(now + 86400000).toISOString().split('T')[0],
+                time: '2:00 PM',
+                status: 'confirmed',
+                busType: 'Employee',
+                ticketCategory: 'family',
+                isSelf: false,
+                passengerName: 'Jane Doe',
+                passengerCNIC: '12345-7654321-1',
+                relation: 'Spouse',
+                price: 200,
+                bookedAt: new Date(now - 3600000).toISOString(),
+            },
+            {
+                id: '3',
+                serialNumber: 3,
+                ticketNumber: '9012',
+                userId: 2,
+                userName: 'Alice Smith',
+                userEmail: 'alice@example.com',
+                routeId: 3,
+                routeName: 'GIKI to Lahore',
+                direction: 'from-giki',
+                cityId: 'lahore',
+                cityName: 'Lahore',
+                stopId: 'lah_stop1',
+                stopName: 'Model Town',
+                travelDate: new Date(now + 172800000).toISOString().split('T')[0],
+                time: '5:00 PM',
+                status: 'pending',
+                busType: 'Student',
+                ticketCategory: 'student',
+                isSelf: true,
+                passengerName: 'Alice Smith',
+                price: 200,
+                bookedAt: new Date(now - 7200000).toISOString(),
+            },
+            {
+                id: '4',
+                serialNumber: 4,
+                ticketNumber: '3456',
+                userId: 3,
+                userName: 'Bob Johnson',
+                userEmail: 'bob@example.com',
+                routeId: 1,
+                routeName: 'GIKI to Peshawar',
+                direction: 'to-giki',
+                cityId: 'peshawar',
+                cityName: 'Peshawar',
+                stopId: 'pes_stop2',
+                stopName: 'Hayatabad',
+                travelDate: new Date(now - 86400000).toISOString().split('T')[0],
+                time: '8:00 AM',
+                status: 'cancelled',
+                busType: 'Student',
+                ticketCategory: 'student',
+                isSelf: true,
+                passengerName: 'Bob Johnson',
+                price: 200,
+                refundAmount: 150,
+                bookedAt: new Date(now - 172800000).toISOString(),
+                cancelledAt: new Date(now - 43200000).toISOString(),
+            },
+        ];
+    });
 
     const weekStart = getWeekStart(currentWeek);
     const weekEnd = getWeekEnd(currentWeek);
@@ -271,13 +272,13 @@ const SummaryCard = ({
     };
 
     return (
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
             <div className="flex items-center justify-between">
-                <div>
-                    <p className="text-sm text-gray-600">{title}</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+                <div className="min-w-0 flex-1">
+                    <p className="text-xs sm:text-sm text-gray-600">{title}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1 truncate">{value}</p>
                 </div>
-                <div className={`p-3 rounded-lg ${bgColors[variant]}`}>
+                <div className={`p-2 sm:p-3 rounded-lg flex-shrink-0 ${bgColors[variant]}`}>
                     <div className={iconColors[variant]}>{icon}</div>
                 </div>
             </div>

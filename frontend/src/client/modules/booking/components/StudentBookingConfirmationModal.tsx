@@ -1,6 +1,6 @@
 import { Button } from '@/shared/components/ui/button';
 import { Modal } from '@/shared/components/ui/Modal';
-import { TripDetailsCard } from '../shared';
+import { TripDetailsCard } from './TripDetailsCard';
 
 type SavedSelection = {
     cityId: string | null;

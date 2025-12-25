@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/shared/components/ui/button';
 import { Modal } from '@/shared/components/ui/Modal';
 import { Input } from '@/shared/components/ui/Input';
-import { PaymentMethodSelector } from '../shared';
+import { PaymentMethodSelector } from './PaymentMethodSelector';
 import { toast } from '@/lib/toast';
 
 type PaymentMethod = 'jazzcash' | 'card';

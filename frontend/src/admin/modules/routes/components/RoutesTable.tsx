@@ -1,8 +1,7 @@
 import { Route } from '../types';
 import { TimeSlot } from '../../time-slots/types';
 import { Clock, Eye, EyeOff } from 'lucide-react';
-import { Table } from '../../shared/Table';
-import { ActionButtons } from '../../shared/ActionButtons';
+import { Table, ActionButtons } from '../../../shared';
 
 interface RoutesTableProps {
     routes: Route[];

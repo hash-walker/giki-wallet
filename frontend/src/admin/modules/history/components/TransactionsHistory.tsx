@@ -1,14 +1,24 @@
 import { useState, useMemo } from 'react';
-import { Table, TableWrapper } from '../../shared';
+import { Table, TableWrapper, getWeekStart, getWeekEnd, isDateInWeek } from '../../../shared';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
 import { Badge } from './HistoryBadge';
 import { formatDate, formatTime, formatCurrency } from '../utils/formatting';
 import { Transaction } from '../../transactions/types';
 
-export const TransactionsHistory = () => {
-    // Mock data - all transactions from previous weeks (replace with API calls)
-    const [transactions] = useState<Transaction[]>([
+interface TransactionsHistoryProps {
+    selectedWeek: Date;
+}
+
+// Helper to create transaction data outside component render
+const getMockTransactionsData = (): Transaction[] => {
+    const now = Date.now();
+    const twoWeeksAgo = now - 604800000 * 2;
+    const oneWeekAgo = now - 604800000;
+    const threeWeeksAgo = now - 604800000 * 3;
+    const fourWeeksAgo = now - 604800000 * 4;
+    
+    return [
         {
             id: '1',
             category: 'wallet',
@@ -17,7 +27,7 @@ export const TransactionsHistory = () => {
             userName: 'John Doe',
             userEmail: 'john@example.com',
             amount: 500,
-            timestamp: new Date(Date.now() - 604800000 * 2).toISOString(), // 2 weeks ago
+            timestamp: new Date(twoWeeksAgo).toISOString(),
             status: 'completed',
             paymentMethod: 'jazzcash',
         },
@@ -29,7 +39,7 @@ export const TransactionsHistory = () => {
             userName: 'John Doe',
             userEmail: 'john@example.com',
             amount: -200,
-            timestamp: new Date(Date.now() - 604800000).toISOString(), // 1 week ago
+            timestamp: new Date(oneWeekAgo).toISOString(),
             status: 'completed',
             recipientId: 2,
             recipientName: 'Jane Smith',
@@ -43,7 +53,7 @@ export const TransactionsHistory = () => {
             userName: 'Alice Smith',
             userEmail: 'alice@example.com',
             amount: -200,
-            timestamp: new Date(Date.now() - 604800000 * 3).toISOString(), // 3 weeks ago
+            timestamp: new Date(threeWeeksAgo).toISOString(),
             status: 'completed',
             ticketId: 'T001',
             ticketNumber: '1234',
@@ -52,7 +62,7 @@ export const TransactionsHistory = () => {
             direction: 'to-giki',
             cityId: 'peshawar',
             cityName: 'Peshawar',
-            travelDate: new Date(Date.now() - 604800000 * 3).toISOString().split('T')[0],
+            travelDate: new Date(threeWeeksAgo).toISOString().split('T')[0],
         },
         {
             id: '4',
@@ -62,22 +72,36 @@ export const TransactionsHistory = () => {
             userName: 'Bob Johnson',
             userEmail: 'bob@example.com',
             amount: 150,
-            timestamp: new Date(Date.now() - 604800000 * 4).toISOString(), // 4 weeks ago
+            timestamp: new Date(fourWeeksAgo).toISOString(),
             status: 'completed',
             ticketId: 'T002',
             ticketNumber: '5678',
             originalTransactionId: '3',
             refundAmount: 150,
         },
-    ]);
+    ];
+};
+
+export const TransactionsHistory = ({ selectedWeek }: TransactionsHistoryProps) => {
+    // Mock data - all transactions from previous weeks (replace with API calls)
+    const [transactions] = useState<Transaction[]>(() => getMockTransactionsData());
 
     const [searchTerm, setSearchTerm] = useState('');
     const [filterCategory, setFilterCategory] = useState<string>('all');
     const [filterType, setFilterType] = useState<string>('all');
     const [filterStatus, setFilterStatus] = useState<string>('all');
 
+    const weekStart = getWeekStart(selectedWeek);
+    const weekEnd = getWeekEnd(selectedWeek);
+
     const filteredTransactions = useMemo(() => {
         return transactions.filter((transaction) => {
+            // Filter by selected week based on timestamp
+            const transactionDate = new Date(transaction.timestamp);
+            if (!isDateInWeek(transactionDate, weekStart, weekEnd)) {
+                return false;
+            }
+
             const matchesSearch =
                 transaction.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 transaction.userEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -90,7 +114,7 @@ export const TransactionsHistory = () => {
 
             return matchesSearch && matchesCategory && matchesType && matchesStatus;
         });
-    }, [transactions, searchTerm, filterCategory, filterType, filterStatus]);
+    }, [transactions, weekStart, weekEnd, searchTerm, filterCategory, filterType, filterStatus]);
 
     const headers = [
         { content: 'Date & Time', align: 'left' as const },

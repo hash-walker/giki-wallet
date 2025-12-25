@@ -1,5 +1,5 @@
 import { Transaction, TransactionCategory } from '../types';
-import { Table } from '../../shared/Table';
+import { Table } from '../../../shared';
 import { Badge } from './Badge';
 import { formatCurrency, formatDate, formatTime } from '../utils/formatting';
 

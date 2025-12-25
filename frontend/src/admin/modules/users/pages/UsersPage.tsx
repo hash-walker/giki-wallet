@@ -7,8 +7,7 @@ import { User } from '../types';
 import { toast } from '@/lib/toast';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
-import { PageHeader } from '../../shared/PageHeader';
-import { TableWrapper } from '../../shared/TableWrapper';
+import { PageHeader, TableWrapper } from '../../../shared';
 
 export const UsersPage = () => {
     // Mock data - replace with API calls

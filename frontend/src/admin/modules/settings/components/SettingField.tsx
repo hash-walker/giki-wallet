@@ -19,7 +19,7 @@ export const SettingField = ({ label, description, children, required }: Setting
                     <p className="text-sm text-gray-500 mt-1">{description}</p>
                 )}
             </div>
-            <div className="md:w-64">
+            <div className="w-full md:w-64">
                 {children}
             </div>
         </div>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/shared/components/ui/button';
 import { Plus, Edit, Trash2, Calendar, Clock } from 'lucide-react';
-import { Card } from '../../shared/Card';
+import { Card } from '../../../shared';
 import { Modal } from '@/shared/components/ui/Modal';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
@@ -18,20 +18,20 @@ const DAYS_OF_WEEK = [
     'Sunday',
 ];
 
-// Helper function to format time from HH:MM to 12-hour format
-const formatTime = (time: string): string => {
-    // If already in 12-hour format, return as is
-    if (time.includes('AM') || time.includes('PM')) {
-        return time;
-    }
-    
-    // Convert HH:MM to 12-hour format
-    const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const hour12 = hour % 12 || 12;
-    return `${hour12}:${minutes} ${ampm}`;
-};
+// Helper function to format time from HH:MM to 12-hour format (currently unused, kept for future use)
+// const formatTime = (time: string): string => {
+//     // If already in 12-hour format, return as is
+//     if (time.includes('AM') || time.includes('PM')) {
+//         return time;
+//     }
+//     
+//     // Convert HH:MM to 12-hour format
+//     const [hours, minutes] = time.split(':');
+//     const hour = parseInt(hours);
+//     const ampm = hour >= 12 ? 'PM' : 'AM';
+//     const hour12 = hour % 12 || 12;
+//     return `${hour12}:${minutes} ${ampm}`;
+// };
 
 export const TimeSlotsPage = () => {
     // Mock data - replace with API calls

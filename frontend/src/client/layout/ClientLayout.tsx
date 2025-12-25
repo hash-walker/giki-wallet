@@ -1,8 +1,10 @@
 import { ReactNode, useState } from 'react';
 import { ClientNavbar, Footer } from '@/shared/components/layout';
 import { Toaster } from '@/shared/components/ui/sonner';
-import { TopUpModal, TransferModal, TransactionHistory } from '@/client/modules/wallet/components/modals';
-import { MyTicketsModal } from '@/client/modules/booking/components/modals';
+import { TopUpModal } from '@/client/modules/wallet/components/TopUpModal';
+import { TransferModal } from '@/client/modules/wallet/components/TransferModal';
+import { TransactionHistory } from '@/client/modules/wallet/components/TransactionHistory';
+import { MyTicketsModal } from '@/client/modules/booking/components/MyTicketsModal';
 import { SignInModal, MyAccountModal } from '@/shared/modules/auth';
 import { WalletProvider } from '@/context/WalletContext';
 

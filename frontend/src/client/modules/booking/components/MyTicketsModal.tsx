@@ -2,7 +2,7 @@ import { Ticket, ArrowRight, ArrowLeft } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal';
 import { cn } from '@/lib/utils';
 import { TicketData, formatDate, groupTicketsByDirectionAndDate } from '../../utils/ticketHelpers';
-import { TicketCard } from '../shared';
+import { TicketCard } from './TicketCard';
 
 interface MyTicketsModalProps {
     isOpen: boolean;

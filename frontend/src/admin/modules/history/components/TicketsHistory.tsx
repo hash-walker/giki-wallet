@@ -1,14 +1,23 @@
 import { useState, useMemo } from 'react';
-import { Table, TableWrapper } from '../../shared';
+import { Table, TableWrapper, getWeekStart, getWeekEnd, isDateInWeek } from '../../../shared';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
 import { Badge } from './HistoryBadge';
 import { formatDate, formatCurrency } from '../utils/formatting';
 import { AdminTicket } from '../../tickets/types';
 
-export const TicketsHistory = () => {
-    // Mock data - all tickets from previous weeks (replace with API calls)
-    const [tickets] = useState<AdminTicket[]>([
+interface TicketsHistoryProps {
+    selectedWeek: Date;
+}
+
+// Helper to create ticket data outside component render
+const getMockTicketsData = (): AdminTicket[] => {
+    const now = Date.now();
+    const twoWeeksAgo = now - 604800000 * 2;
+    const oneWeekAgo = now - 604800000;
+    const threeWeeksAgo = now - 604800000 * 3;
+    
+    return [
         {
             id: '1',
             serialNumber: 1,
@@ -23,7 +32,7 @@ export const TicketsHistory = () => {
             cityName: 'Peshawar',
             stopId: 'pes_stop1',
             stopName: 'University Stop',
-            travelDate: new Date(Date.now() - 604800000 * 2).toISOString().split('T')[0], // 2 weeks ago
+            travelDate: new Date(twoWeeksAgo).toISOString().split('T')[0],
             time: '9:00 AM',
             status: 'confirmed',
             busType: 'Employee',
@@ -31,7 +40,7 @@ export const TicketsHistory = () => {
             isSelf: true,
             passengerName: 'John Doe',
             price: 200,
-            bookedAt: new Date(Date.now() - 604800000 * 2 - 86400000).toISOString(),
+            bookedAt: new Date(twoWeeksAgo - 86400000).toISOString(),
         },
         {
             id: '2',
@@ -47,7 +56,7 @@ export const TicketsHistory = () => {
             cityName: 'Islamabad',
             stopId: 'isl_stop1',
             stopName: 'F-6 Markaz',
-            travelDate: new Date(Date.now() - 604800000).toISOString().split('T')[0], // 1 week ago
+            travelDate: new Date(oneWeekAgo).toISOString().split('T')[0],
             time: '2:00 PM',
             status: 'confirmed',
             busType: 'Student',
@@ -55,7 +64,7 @@ export const TicketsHistory = () => {
             isSelf: true,
             passengerName: 'Alice Smith',
             price: 200,
-            bookedAt: new Date(Date.now() - 604800000 - 86400000).toISOString(),
+            bookedAt: new Date(oneWeekAgo - 86400000).toISOString(),
         },
         {
             id: '3',
@@ -71,7 +80,7 @@ export const TicketsHistory = () => {
             cityName: 'Lahore',
             stopId: 'lah_stop1',
             stopName: 'Model Town',
-            travelDate: new Date(Date.now() - 604800000 * 3).toISOString().split('T')[0], // 3 weeks ago
+            travelDate: new Date(threeWeeksAgo).toISOString().split('T')[0],
             time: '5:00 PM',
             status: 'cancelled',
             busType: 'Employee',
@@ -81,18 +90,32 @@ export const TicketsHistory = () => {
             relation: 'Spouse',
             price: 200,
             refundAmount: 150,
-            bookedAt: new Date(Date.now() - 604800000 * 3 - 86400000).toISOString(),
-            cancelledAt: new Date(Date.now() - 604800000 * 3 + 86400000).toISOString(),
+            bookedAt: new Date(threeWeeksAgo - 86400000).toISOString(),
+            cancelledAt: new Date(threeWeeksAgo + 86400000).toISOString(),
         },
-    ]);
+    ];
+};
+
+export const TicketsHistory = ({ selectedWeek }: TicketsHistoryProps) => {
+    // Mock data - all tickets from previous weeks (replace with API calls)
+    const [tickets] = useState<AdminTicket[]>(() => getMockTicketsData());
 
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState<string>('all');
     const [filterCategory, setFilterCategory] = useState<string>('all');
     const [filterBusType, setFilterBusType] = useState<string>('all');
 
+    const weekStart = getWeekStart(selectedWeek);
+    const weekEnd = getWeekEnd(selectedWeek);
+
     const filteredTickets = useMemo(() => {
         return tickets.filter((ticket) => {
+            // Filter by selected week based on travel date
+            const travelDate = new Date(ticket.travelDate);
+            if (!isDateInWeek(travelDate, weekStart, weekEnd)) {
+                return false;
+            }
+
             const matchesSearch =
                 ticket.ticketNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 ticket.passengerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -105,7 +128,7 @@ export const TicketsHistory = () => {
 
             return matchesSearch && matchesStatus && matchesCategory && matchesBusType;
         });
-    }, [tickets, searchTerm, filterStatus, filterCategory, filterBusType]);
+    }, [tickets, weekStart, weekEnd, searchTerm, filterStatus, filterCategory, filterBusType]);
 
     const headers = [
         { content: 'Travel Date', align: 'left' as const },

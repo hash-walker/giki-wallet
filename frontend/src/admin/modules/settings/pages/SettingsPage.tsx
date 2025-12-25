@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
-import { PageHeader } from '../../shared/PageHeader';
+import { PageHeader } from '../../../shared';
 import { SettingsSection } from '../components/SettingsSection';
 import { SettingField } from '../components/SettingField';
 import { SystemSettings } from '../types';

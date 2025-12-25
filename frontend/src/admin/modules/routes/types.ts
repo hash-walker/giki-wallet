@@ -6,6 +6,8 @@ export interface Route {
     capacity: number; // Total tickets available
     timeSlotIds: string[]; // Selected time slot IDs (default + custom)
     isHeld: boolean; // If true, route is not live yet
+    weekStart?: string; // ISO date string for the week start
+    weekEnd?: string; // ISO date string for the week end
     createdAt?: string;
     updatedAt?: string;
 }

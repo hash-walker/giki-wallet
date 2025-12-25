@@ -3,7 +3,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Modal } from '@/shared/components/ui/Modal';
 import { cn } from '@/lib/utils';
 import { getCityName, getTimeSlot, validateCNIC } from '../../utils/bookingHelpers';
-import { PassengerForm } from '../shared';
+import { PassengerForm } from './PassengerForm';
 import { toast } from '@/lib/toast';
 
 type SavedSelection = {

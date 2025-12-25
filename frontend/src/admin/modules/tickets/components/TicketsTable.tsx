@@ -1,7 +1,7 @@
 import { AdminTicket } from '../types';
-import { Table } from '../../shared/Table';
+import { Table } from '../../../shared';
 import { Badge } from './Badge';
-import { formatDate, formatTime, formatCurrency } from '../utils/formatting';
+import { formatDate, formatCurrency } from '../utils/formatting';
 
 interface TicketsTableProps {
     tickets: AdminTicket[];

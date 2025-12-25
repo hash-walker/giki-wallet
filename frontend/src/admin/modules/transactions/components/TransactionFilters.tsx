@@ -1,6 +1,6 @@
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
-import { TransactionCategory, TransactionType } from '../types';
+import { TransactionCategory } from '../types';
 
 interface TransactionFiltersProps {
     searchTerm: string;

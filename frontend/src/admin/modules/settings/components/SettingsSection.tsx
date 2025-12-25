@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Card } from '../../shared/Card';
+import { Card } from '../../../shared';
 
 interface SettingsSectionProps {
     title: string;

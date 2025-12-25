@@ -1,11 +1,13 @@
 import { useState, useMemo } from 'react';
-import { Table, PageHeader, TableWrapper } from '../../shared';
+import { Table, TableWrapper, getWeekStart, getWeekEnd } from '../../../shared';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
 import { Badge } from './HistoryBadge';
 import { formatDate } from '../utils/formatting';
-import { Download } from 'lucide-react';
-import { Button } from '@/shared/components/ui/button';
+
+interface RoutesHistoryProps {
+    selectedWeek: Date;
+}
 
 // Historical route data (routes from previous weeks)
 interface RouteHistory {
@@ -24,9 +26,13 @@ interface RouteHistory {
     updatedAt: string;
 }
 
-export const RoutesHistory = () => {
-    // Mock data - replace with API calls
-    const [routes] = useState<RouteHistory[]>([
+// Helper to create date strings outside component render
+const getMockRoutesData = (): RouteHistory[] => {
+    const now = Date.now();
+    const twoWeeksAgo = now - 604800000 * 2;
+    const oneWeekAgo = now - 604800000;
+    
+    return [
         {
             id: 1,
             routeName: 'GIKI to Peshawar',
@@ -37,10 +43,10 @@ export const RoutesHistory = () => {
             capacity: 40,
             timeSlots: ['14:00', '06:00'],
             isHeld: false,
-            weekStart: new Date(Date.now() - 604800000 * 2).toISOString().split('T')[0], // 2 weeks ago
-            weekEnd: new Date(Date.now() - 604800000 * 2 + 6 * 86400000).toISOString().split('T')[0],
-            createdAt: new Date(Date.now() - 604800000 * 2).toISOString(),
-            updatedAt: new Date(Date.now() - 604800000 * 2).toISOString(),
+            weekStart: new Date(twoWeeksAgo).toISOString().split('T')[0],
+            weekEnd: new Date(twoWeeksAgo + 6 * 86400000).toISOString().split('T')[0],
+            createdAt: new Date(twoWeeksAgo).toISOString(),
+            updatedAt: new Date(twoWeeksAgo).toISOString(),
         },
         {
             id: 2,
@@ -52,20 +58,34 @@ export const RoutesHistory = () => {
             capacity: 30,
             timeSlots: ['19:00'],
             isHeld: true,
-            weekStart: new Date(Date.now() - 604800000).toISOString().split('T')[0], // 1 week ago
-            weekEnd: new Date(Date.now() - 604800000 + 6 * 86400000).toISOString().split('T')[0],
-            createdAt: new Date(Date.now() - 604800000).toISOString(),
-            updatedAt: new Date(Date.now() - 604800000).toISOString(),
+            weekStart: new Date(oneWeekAgo).toISOString().split('T')[0],
+            weekEnd: new Date(oneWeekAgo + 6 * 86400000).toISOString().split('T')[0],
+            createdAt: new Date(oneWeekAgo).toISOString(),
+            updatedAt: new Date(oneWeekAgo).toISOString(),
         },
-    ]);
+    ];
+};
+
+export const RoutesHistory = ({ selectedWeek }: RoutesHistoryProps) => {
+    // Mock data - replace with API calls
+    const [routes] = useState<RouteHistory[]>(() => getMockRoutesData());
 
     const [searchTerm, setSearchTerm] = useState('');
     const [filterDirection, setFilterDirection] = useState<string>('all');
     const [filterBusType, setFilterBusType] = useState<string>('all');
-    const [filterCity, setFilterCity] = useState<string>('all');
+    const [filterCity] = useState<string>('all');
+
+    const weekStart = getWeekStart(selectedWeek);
+    const weekEnd = getWeekEnd(selectedWeek);
 
     const filteredRoutes = useMemo(() => {
         return routes.filter((route) => {
+            // Filter by selected week
+            const routeWeekStart = new Date(route.weekStart);
+            const routeWeekEnd = new Date(route.weekEnd);
+            const overlaps = (routeWeekStart <= weekEnd && routeWeekEnd >= weekStart);
+            if (!overlaps) return false;
+
             const matchesSearch =
                 route.cityName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 route.routeName.toLowerCase().includes(searchTerm.toLowerCase());
@@ -76,7 +96,7 @@ export const RoutesHistory = () => {
 
             return matchesSearch && matchesDirection && matchesBusType && matchesCity;
         });
-    }, [routes, searchTerm, filterDirection, filterBusType, filterCity]);
+    }, [routes, weekStart, weekEnd, searchTerm, filterDirection, filterBusType, filterCity]);
 
     const headers = [
         { content: 'Week', align: 'left' as const },

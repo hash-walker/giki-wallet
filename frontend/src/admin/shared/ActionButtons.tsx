@@ -21,7 +21,7 @@ export const ActionButtons = ({
     showToggle = false
 }: ActionButtonsProps) => {
     return (
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-1 sm:gap-2">
             {showToggle && onToggle && (
                 <Button
                     variant="ghost"

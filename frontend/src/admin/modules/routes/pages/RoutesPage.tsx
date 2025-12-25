@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/shared/components/ui/button';
 import { Plus } from 'lucide-react';
 import { RoutesTable } from '../components/RoutesTable';
@@ -9,10 +9,12 @@ import { CITIES, STOPS } from '@/client/modules/booking/data/mockRoutes';
 import { toast } from '@/lib/toast';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
-import { PageHeader } from '../../shared/PageHeader';
-import { TableWrapper } from '../../shared/TableWrapper';
+import { PageHeader, WeekSelector, getWeekStart, getWeekEnd, formatWeekRange, isDateInWeek, TableWrapper } from '../../../shared';
 
 export const RoutesPage = () => {
+    // Current week state - defaults to current week
+    const [currentWeek, setCurrentWeek] = useState<Date>(new Date());
+
     // Mock time slots - replace with API call
     const [timeSlots] = useState<TimeSlot[]>([
         {
@@ -38,28 +40,41 @@ export const RoutesPage = () => {
         },
     ]);
 
+    // Calculate current week range
+    const weekStart = getWeekStart(currentWeek);
+    const weekEnd = getWeekEnd(currentWeek);
+    const weekRange = formatWeekRange(currentWeek);
+
     // Mock data - replace with API calls
-    // Example routes for demonstration
-    const [routes, setRoutes] = useState<Route[]>([
-        {
-            id: 1,
-            direction: 'from-giki',
-            cityId: 'peshawar',
-            busType: 'Student',
-            capacity: 40,
-            timeSlotIds: ['ts1', 'ts2'],
-            isHeld: false,
-        },
-        {
-            id: 2,
-            direction: 'to-giki',
-            cityId: 'islamabad',
-            busType: 'Employee',
-            capacity: 30,
-            timeSlotIds: ['ts3'],
-            isHeld: true,
-        },
-    ]);
+    // Example routes for demonstration - set weekStart/weekEnd for current week
+    const [routes, setRoutes] = useState<Route[]>(() => {
+        const ws = getWeekStart(new Date());
+        const we = getWeekEnd(new Date());
+        return [
+            {
+                id: 1,
+                direction: 'from-giki',
+                cityId: 'peshawar',
+                busType: 'Student',
+                capacity: 40,
+                timeSlotIds: ['ts1', 'ts2'],
+                isHeld: false,
+                weekStart: ws.toISOString().split('T')[0],
+                weekEnd: we.toISOString().split('T')[0],
+            },
+            {
+                id: 2,
+                direction: 'to-giki',
+                cityId: 'islamabad',
+                busType: 'Employee',
+                capacity: 30,
+                timeSlotIds: ['ts3'],
+                isHeld: true,
+                weekStart: ws.toISOString().split('T')[0],
+                weekEnd: we.toISOString().split('T')[0],
+            },
+        ];
+    });
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingRoute, setEditingRoute] = useState<Route | undefined>();
@@ -94,18 +109,27 @@ export const RoutesPage = () => {
     };
 
     const handleSubmitRoute = (routeData: Omit<Route, 'id'>) => {
+        // Set weekStart and weekEnd for the route based on current week
+        const ws = getWeekStart(currentWeek);
+        const we = getWeekEnd(currentWeek);
+        const routeWithWeek = {
+            ...routeData,
+            weekStart: ws.toISOString().split('T')[0],
+            weekEnd: we.toISOString().split('T')[0],
+        };
+
         if (editingRoute) {
             // Update existing route
             setRoutes(routes.map(r => 
                 r.id === editingRoute.id 
-                    ? { ...routeData, id: editingRoute.id }
+                    ? { ...routeWithWeek, id: editingRoute.id }
                     : r
             ));
             toast.success('Route updated successfully');
         } else {
             // Add new route
             const newId = Math.max(...routes.map(r => r.id), 0) + 1;
-            setRoutes([...routes, { ...routeData, id: newId }]);
+            setRoutes([...routes, { ...routeWithWeek, id: newId }]);
             toast.success('Route added successfully');
         }
         setIsModalOpen(false);
@@ -117,17 +141,31 @@ export const RoutesPage = () => {
         return CITIES.find(c => c.id === cityId)?.name || cityId;
     };
 
-    // Filter routes
-    const filteredRoutes = routes.filter(route => {
-        const matchesSearch = 
-            getCityName(route.cityId).toLowerCase().includes(searchTerm.toLowerCase());
-        
-        const matchesDirection = filterDirection === 'all' || route.direction === filterDirection;
-        const matchesCity = filterCity === 'all' || route.cityId === filterCity;
-        const matchesBusType = filterBusType === 'all' || route.busType === filterBusType;
+    // Filter routes by current week and other filters
+    const filteredRoutes = useMemo(() => {
+        return routes.filter(route => {
+            // Week filter - only show routes for the selected week
+            if (route.weekStart && route.weekEnd) {
+                const routeWeekStart = new Date(route.weekStart);
+                const routeWeekEnd = new Date(route.weekEnd);
+                if (!isDateInWeek(routeWeekStart, weekStart, weekEnd) && 
+                    !isDateInWeek(routeWeekEnd, weekStart, weekEnd)) {
+                    // Check if routes overlap with current week
+                    const overlaps = (routeWeekStart <= weekEnd && routeWeekEnd >= weekStart);
+                    if (!overlaps) return false;
+                }
+            }
+            
+            const matchesSearch = 
+                getCityName(route.cityId).toLowerCase().includes(searchTerm.toLowerCase());
+            
+            const matchesDirection = filterDirection === 'all' || route.direction === filterDirection;
+            const matchesCity = filterCity === 'all' || route.cityId === filterCity;
+            const matchesBusType = filterBusType === 'all' || route.busType === filterBusType;
 
-        return matchesSearch && matchesDirection && matchesCity && matchesBusType;
-    });
+            return matchesSearch && matchesDirection && matchesCity && matchesBusType;
+        });
+    }, [routes, weekStart, weekEnd, searchTerm, filterDirection, filterCity, filterBusType]);
 
     return (
         <div className="space-y-6">
@@ -140,6 +178,13 @@ export const RoutesPage = () => {
                         Add Route
                     </Button>
                 }
+            />
+
+            {/* Week Selector */}
+            <WeekSelector
+                currentWeek={currentWeek}
+                onWeekChange={setCurrentWeek}
+                weekRange={weekRange}
             />
 
             {/* Filters */}

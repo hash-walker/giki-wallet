@@ -1,6 +1,5 @@
 import { User } from '../types';
-import { Table } from '../../shared/Table';
-import { ActionButtons } from '../../shared/ActionButtons';
+import { Table, ActionButtons } from '../../../shared';
 
 interface UsersTableProps {
     users: User[];

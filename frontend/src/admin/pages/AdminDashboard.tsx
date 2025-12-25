@@ -1,4 +1,4 @@
-import { Card } from '../modules/shared/Card';
+import { Card } from '../shared/Card';
 import { Users, Bus, Ticket, DollarSign } from 'lucide-react';
 
 export const AdminDashboard = () => {
@@ -11,10 +11,10 @@ export const AdminDashboard = () => {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
             <div>
-                <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-                <p className="text-gray-600 mt-1">Overview of your transport system</p>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Dashboard</h1>
+                <p className="text-sm sm:text-base text-gray-600 mt-1">Overview of your transport system</p>
             </div>
 
             {/* Stats Grid */}
