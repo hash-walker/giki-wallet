@@ -1,6 +1,6 @@
 import { Ticket } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { TicketData, getRefundBadge, getStatusColor, getTicketCategoryBadge } from '../../utils/ticketHelpers';
+import { TicketData, getRefundBadge, getStatusColor, getTicketCategoryBadge } from '../utils/ticketHelpers';
 
 interface TicketCardProps {
     ticket: TicketData;

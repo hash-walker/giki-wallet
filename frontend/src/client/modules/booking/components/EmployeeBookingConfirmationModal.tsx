@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/shared/components/ui/button';
 import { Modal } from '@/shared/components/ui/Modal';
 import { cn } from '@/lib/utils';
-import { getCityName, getTimeSlot, validateCNIC } from '../../utils/bookingHelpers';
+import { getCityName, getTimeSlot, validateCNIC } from '../utils/bookingHelpers';
 import { PassengerForm } from './PassengerForm';
 import { toast } from '@/lib/toast';
 
@@ -36,7 +36,6 @@ interface EmployeeBookingConfirmationModalProps {
     selections: SavedSelection[];
     cities: Array<{ id: string; name: string }>;
     timeSlots: Array<{ id: string; date: string; time: string }>;
-    stops: Array<{ id: string; name: string }>;
     isRoundTrip?: boolean;
     employeeTicketInfo?: EmployeeTicketInfo; // Employee-specific constraints
 }
@@ -48,7 +47,6 @@ export const EmployeeBookingConfirmationModal = ({
     selections,
     cities,
     timeSlots,
-    stops,
     isRoundTrip = false,
     employeeTicketInfo
 }: EmployeeBookingConfirmationModalProps) => {

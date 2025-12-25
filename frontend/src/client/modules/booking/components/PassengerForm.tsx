@@ -1,4 +1,4 @@
-import { formatCNIC } from '../../utils/bookingHelpers';
+import { formatCNIC } from '../utils/bookingHelpers';
 
 type PassengerData = {
     name: string;

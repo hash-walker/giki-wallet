@@ -1,7 +1,6 @@
-import { Ticket } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal';
-import { formatDate, groupTransactionsByDate } from '../../utils/walletHelpers';
-import { Transaction } from '../../utils/transactionHelpers';
+import { formatDate, groupTransactionsByDate } from '../utils/walletHelpers';
+import { Transaction } from '../utils/transactionHelpers';
 import { TransactionCard } from './TransactionCard';
 
 interface TransactionHistoryProps {
@@ -77,7 +76,7 @@ export const TransactionHistory = ({
             size="lg"
         >
             <div className="space-y-6">
-                        {groupedTransactions.map(({ date, transactions: dateTransactions }) => (
+                        {groupedTransactions.map(({ date, transactions: dateTransactions }: { date: string; transactions: Transaction[] }) => (
                             <div key={date}>
                                 {/* Date Header */}
                                 <div className="sticky top-0 bg-white py-2 mb-3 z-10">
@@ -88,7 +87,7 @@ export const TransactionHistory = ({
                                 
                                 {/* Transactions for this date */}
                                 <div className="space-y-3">
-                                    {dateTransactions.map((transaction) => (
+                                    {dateTransactions.map((transaction: Transaction) => (
                                         <TransactionCard key={transaction.id} transaction={transaction} />
                                     ))}
                                 </div>

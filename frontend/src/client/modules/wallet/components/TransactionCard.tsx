@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { Transaction, getTransactionIcon, getIconBackground } from '../../utils/transactionHelpers';
+import { Transaction, getTransactionIcon, getIconBackground } from '../utils/transactionHelpers';
 
 interface TransactionCardProps {
     transaction: Transaction;

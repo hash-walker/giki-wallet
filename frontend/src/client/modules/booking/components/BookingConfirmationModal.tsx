@@ -58,7 +58,6 @@ export const BookingConfirmationModal = ({
                 selections={selections}
                 cities={cities}
                 timeSlots={timeSlots}
-                stops={stops}
                 isRoundTrip={isRoundTrip}
                 employeeTicketInfo={employeeTicketInfo}
             />

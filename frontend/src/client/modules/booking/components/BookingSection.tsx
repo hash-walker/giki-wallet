@@ -34,7 +34,6 @@ export const BookingSection = ({
     sharedCityId
 }: BookingSectionProps) => {
     const isFromGIKI = direction === 'from-giki';
-    const locationLabel = isFromGIKI ? "Drop Location" : "Pickup Point";
 
     return (
         <section>

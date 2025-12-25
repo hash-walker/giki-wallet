@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { getCityName, getTimeSlot, getStopName } from '../../utils/bookingHelpers';
+import { getCityName, getTimeSlot, getStopName } from '../utils/bookingHelpers';
 
 type SavedSelection = {
     cityId: string | null;

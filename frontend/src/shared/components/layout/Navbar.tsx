@@ -1,5 +1,6 @@
 import { ClientNavbar } from './navbar/ClientNavbar';
 import { AdminNavbar } from './navbar/AdminNavbar';
+import { LucideIcon } from 'lucide-react';
 
 interface NavbarProps {
     variant?: 'client' | 'admin';
@@ -7,7 +8,7 @@ interface NavbarProps {
     onMyBookingsClick?: () => void;
     onSignInClick?: () => void;
     // Admin props
-    navItems?: Array<{ path: string; label: string; icon?: any }>;
+    navItems?: Array<{ path: string; label: string; icon?: LucideIcon }>;
     onLogout?: () => void;
 }
 

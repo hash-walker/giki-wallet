@@ -1,7 +1,7 @@
 import { Ticket, ArrowRight, ArrowLeft } from 'lucide-react';
 import { Modal } from '@/shared/components/ui/Modal';
 import { cn } from '@/lib/utils';
-import { TicketData, formatDate, groupTicketsByDirectionAndDate } from '../../utils/ticketHelpers';
+import { TicketData, formatDate, groupTicketsByDirectionAndDate } from '../utils/ticketHelpers';
 import { TicketCard } from './TicketCard';
 
 interface MyTicketsModalProps {
@@ -96,7 +96,7 @@ export const MyTicketsModal = ({
                 </div>
             ) : (
                 <div className="space-y-8">
-                    {groupedTickets.map(({ direction, dateGroups }) => (
+                    {groupedTickets.map(({ direction, dateGroups }: { direction: 'from-giki' | 'to-giki'; dateGroups: Array<{ date: string; tickets: TicketData[] }> }) => (
                         <div key={direction} className="space-y-6">
                             {/* Direction Header */}
                             <div className="flex items-center gap-2">
@@ -118,7 +118,7 @@ export const MyTicketsModal = ({
                             </div>
                             
                             {/* Date Groups */}
-                            {dateGroups.map(({ date, tickets: dateTickets }) => (
+                            {dateGroups.map(({ date, tickets: dateTickets }: { date: string; tickets: TicketData[] }) => (
                                 <div key={date} className="space-y-3">
                                     {/* Date Header */}
                                     <div className="sticky top-0 bg-white py-2 mb-3 z-10">
@@ -128,7 +128,7 @@ export const MyTicketsModal = ({
                                     </div>
                                     
                                     {/* Tickets for this date */}
-                                    {dateTickets.map((ticket) => (
+                                    {dateTickets.map((ticket: TicketData) => (
                                         <TicketCard key={ticket.id} ticket={ticket} />
                                     ))}
                                 </div>

@@ -1,4 +1,4 @@
-import { History, ArrowUpCircle, ArrowRightLeft, ChevronRight } from 'lucide-react';
+import { ArrowUpCircle, ArrowRightLeft, ChevronRight } from 'lucide-react';
 import { useWallet } from '@/context/WalletContext';
 
 interface WalletCardProps {

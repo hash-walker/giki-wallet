@@ -18,7 +18,7 @@ const getInitials = (name: string): string => {
 };
 
 export const Footer = () => {
-    const { data: contributors, isLoading, isError } = useGitHubContributors();
+    const { data: contributors, isLoading } = useGitHubContributors();
     
     // Use GitHub contributors if available, otherwise fallback
     const creators = contributors && contributors.length > 0
