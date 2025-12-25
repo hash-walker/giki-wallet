@@ -1,18 +1,14 @@
 import { History, ArrowUpCircle, ArrowRightLeft, ChevronRight } from 'lucide-react';
+import { useWallet } from '@/context/WalletContext';
 
 interface WalletCardProps {
     balance?: number;
-    onHistoryClick?: () => void;
-    onTopUpClick?: () => void;
-    onTransferClick?: () => void;
 }
 
 export const WalletCard = ({
-    balance = 1000,
-    onHistoryClick,
-    onTopUpClick,
-    onTransferClick
+    balance = 1000
 }: WalletCardProps) => {
+    const { onHistoryClick, onTopUpClick, onTransferClick } = useWallet();
     return (
         <div className="flex flex-row gap-4">
             {/* Main Wallet Card */}
