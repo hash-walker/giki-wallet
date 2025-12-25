@@ -4,8 +4,25 @@ import logo from '@/assets/gik-logo.svg';
 import { cn } from '@/lib/utils';
 import { Menu, X } from 'lucide-react';
 
-export const Navbar = () => {
+interface NavbarProps {
+    onMyBookingsClick?: () => void;
+    onSignInClick?: () => void;
+}
+
+export const Navbar = ({ onMyBookingsClick, onSignInClick }: NavbarProps) => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+    const handleMyBookingsClick = (e: React.MouseEvent) => {
+        e.preventDefault();
+        onMyBookingsClick?.();
+        setIsMobileMenuOpen(false);
+    };
+
+    const handleSignInClick = (e: React.MouseEvent) => {
+        e.preventDefault();
+        onSignInClick?.();
+        setIsMobileMenuOpen(false);
+    };
 
     return (
         <>
@@ -32,12 +49,17 @@ export const Navbar = () => {
 
                     {/* DESKTOP NAV */}
                     <nav className="hidden md:flex items-center gap-6">
-                        <a href="#" className="text-white/80 hover:text-white text-sm font-medium transition-colors">
+                        <a 
+                            href="#" 
+                            onClick={handleMyBookingsClick}
+                            className="text-white/80 hover:text-white text-sm font-medium transition-colors cursor-pointer"
+                        >
                             My Bookings
                         </a>
                         <Button
                             size="sm"
                             className="font-medium bg-white text-primary hover:bg-white/90"
+                            onClick={handleSignInClick}
                         >
                             Sign In
                         </Button>
@@ -82,7 +104,7 @@ export const Navbar = () => {
                         <div className="space-y-1">
                             <a 
                                 href="#" 
-                                onClick={() => setIsMobileMenuOpen(false)}
+                                onClick={handleMyBookingsClick}
                                 className="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-xl font-medium transition-colors"
                             >
                                 My Bookings
@@ -94,7 +116,7 @@ export const Navbar = () => {
                     <div className="p-4 border-t border-gray-200">
                         <Button
                             className="w-full font-semibold"
-                            onClick={() => setIsMobileMenuOpen(false)}
+                            onClick={handleSignInClick}
                         >
                             Sign In
                         </Button>
