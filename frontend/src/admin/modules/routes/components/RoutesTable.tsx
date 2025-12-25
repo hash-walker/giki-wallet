@@ -1,7 +1,7 @@
 import { Route } from '../types';
 import { TimeSlot } from '../../time-slots/types';
 import { Clock, Eye, EyeOff } from 'lucide-react';
-import { Card } from '../../shared/Card';
+import { Table } from '../../shared/Table';
 import { ActionButtons } from '../../shared/ActionButtons';
 
 interface RoutesTableProps {
@@ -67,109 +67,79 @@ export const RoutesTable = ({
         return { defaultCount, customCount, total: timeSlotIds.length };
     };
 
-    if (routes.length === 0) {
-        return (
-            <Card>
-                <div className="text-center py-12">
-                    <p className="text-gray-500">No routes found. Add your first route to get started.</p>
-                </div>
-            </Card>
-        );
-    }
+    const headers = [
+        { content: 'Route', align: 'left' as const },
+        { content: 'Bus Type', align: 'left' as const },
+        { content: 'Capacity', align: 'left' as const },
+        { content: 'Time Slots', align: 'left' as const },
+        { content: 'Stops', align: 'left' as const },
+        { content: 'Status', align: 'left' as const },
+        { content: 'Actions', align: 'right' as const },
+    ];
+
+    const rows = routes.map((route) => {
+        const slotInfo = getTimeSlotInfo(route.timeSlotIds);
+        const cityStops = getStopsForCity(route.cityId);
+
+        return {
+            key: route.id,
+            cells: [
+                <div key="route">
+                    <span className="text-sm font-medium text-gray-900">
+                        {route.direction === 'from-giki' ? 'From GIKI' : 'To GIKI'} → {getCityName(route.cityId)}
+                    </span>
+                </div>,
+                <span key="busType" className={`text-sm font-medium ${
+                    route.busType === 'Student' ? 'text-blue-600' : 'text-green-600'
+                }`}>
+                    {route.busType}
+                </span>,
+                <span key="capacity" className="text-sm text-gray-900">{route.capacity} tickets</span>,
+                <div key="timeSlots" className="flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-gray-400" />
+                    <span className="text-sm text-gray-600">
+                        {slotInfo.total} slot{slotInfo.total !== 1 ? 's' : ''}
+                        {slotInfo.customCount > 0 && (
+                            <span className="text-primary ml-1">
+                                ({slotInfo.customCount} custom)
+                            </span>
+                        )}
+                    </span>
+                </div>,
+                <span key="stops" className="text-sm text-gray-600" title={cityStops.map(s => s.name).join(', ')}>
+                    {cityStops.length} stop{cityStops.length !== 1 ? 's' : ''} (all)
+                </span>,
+                route.isHeld ? (
+                    <span key="status-held" className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                        <EyeOff className="w-3 h-3 mr-1" />
+                        Held
+                    </span>
+                ) : (
+                    <span key="status-live" className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <Eye className="w-3 h-3 mr-1" />
+                        Live
+                    </span>
+                ),
+                <ActionButtons
+                    key="actions"
+                    onEdit={() => onEdit(route)}
+                    onDelete={() => onDelete(route.id)}
+                    onToggle={() => onToggleHold(route.id)}
+                    isActive={!route.isHeld}
+                    showToggle={true}
+                    activeLabel="Hold Route"
+                    inactiveLabel="Make Live"
+                />,
+            ],
+        };
+    });
 
     return (
-        <Card>
-            <div className="overflow-x-auto">
-                <table className="w-full">
-                    <thead>
-                        <tr className="border-b border-gray-200">
-                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Route</th>
-                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Bus Type</th>
-                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Capacity</th>
-                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Time Slots</th>
-                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Stops</th>
-                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Status</th>
-                            <th className="text-right py-3 px-4 text-sm font-semibold text-gray-700">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {routes.map((route) => (
-                            <tr key={route.id} className="border-b border-gray-100 hover:bg-gray-50">
-                                <td className="py-3 px-4">
-                                    <div>
-                                        <span className="text-sm font-medium text-gray-900">
-                                            {route.direction === 'from-giki' ? 'From GIKI' : 'To GIKI'} → {getCityName(route.cityId)}
-                                        </span>
-                                    </div>
-                                </td>
-                                <td className="py-3 px-4">
-                                    <span className={`text-sm font-medium ${
-                                        route.busType === 'Student' ? 'text-blue-600' : 'text-green-600'
-                                    }`}>
-                                        {route.busType}
-                                    </span>
-                                </td>
-                                <td className="py-3 px-4">
-                                    <span className="text-sm text-gray-900">{route.capacity} tickets</span>
-                                </td>
-                                <td className="py-3 px-4">
-                                    {(() => {
-                                        const slotInfo = getTimeSlotInfo(route.timeSlotIds);
-                                        return (
-                                            <div className="flex items-center gap-1">
-                                                <Clock className="w-3 h-3 text-gray-400" />
-                                                <span className="text-sm text-gray-600">
-                                                    {slotInfo.total} slot{slotInfo.total !== 1 ? 's' : ''}
-                                                    {slotInfo.customCount > 0 && (
-                                                        <span className="text-primary ml-1">
-                                                            ({slotInfo.customCount} custom)
-                                                        </span>
-                                                    )}
-                                                </span>
-                                            </div>
-                                        );
-                                    })()}
-                                </td>
-                                <td className="py-3 px-4">
-                                    {(() => {
-                                        const cityStops = getStopsForCity(route.cityId);
-                                        return (
-                                            <span className="text-sm text-gray-600" title={cityStops.map(s => s.name).join(', ')}>
-                                                {cityStops.length} stop{cityStops.length !== 1 ? 's' : ''} (all)
-                                            </span>
-                                        );
-                                    })()}
-                                </td>
-                                <td className="py-3 px-4">
-                                    {route.isHeld ? (
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                            <EyeOff className="w-3 h-3 mr-1" />
-                                            Held
-                                        </span>
-                                    ) : (
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                            <Eye className="w-3 h-3 mr-1" />
-                                            Live
-                                        </span>
-                                    )}
-                                </td>
-                                <td className="py-3 px-4">
-                                    <ActionButtons
-                                        onEdit={() => onEdit(route)}
-                                        onDelete={() => onDelete(route.id)}
-                                        onToggle={() => onToggleHold(route.id)}
-                                        isActive={!route.isHeld}
-                                        showToggle={true}
-                                        activeLabel="Hold Route"
-                                        inactiveLabel="Make Live"
-                                    />
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </Card>
+        <Table
+            headers={headers}
+            rows={rows}
+            emptyMessage="No routes found. Add your first route to get started."
+        />
     );
 };
 
