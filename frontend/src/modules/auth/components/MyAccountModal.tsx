@@ -3,6 +3,7 @@ import { User, Mail, Phone, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
+import { toast } from '@/lib/toast';
 
 type UserType = 'student' | 'employee';
 
@@ -53,14 +54,14 @@ export const MyAccountModal = ({
 
     const handleSavePhone = async () => {
         if (!phoneNumber.trim()) {
-            alert('Please enter a valid phone number');
+            toast.error('Please enter a valid phone number');
             return;
         }
 
         // Validate phone number format (basic validation)
         const phoneRegex = /^[0-9]{10,11}$/;
         if (!phoneRegex.test(phoneNumber.replace(/[\s-]/g, ''))) {
-            alert('Please enter a valid phone number (10-11 digits)');
+            toast.error('Please enter a valid phone number (10-11 digits)');
             return;
         }
 
@@ -69,12 +70,13 @@ export const MyAccountModal = ({
             // TODO: API call to update phone number
             console.log('Updating phone number:', phoneNumber);
             await new Promise(resolve => setTimeout(resolve, 1000));
+            toast.success('Phone number updated successfully');
             setIsEditingPhone(false);
             // Update current user state
             setCurrentUser(prev => ({ ...prev, phoneNumber }));
         } catch (error) {
             console.error('Error updating phone number:', error);
-            alert('Failed to update phone number. Please try again.');
+            toast.error('Failed to update phone number. Please try again.');
         } finally {
             setIsSaving(false);
         }

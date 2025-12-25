@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/Modal';
+import { toast } from '@/lib/toast';
 
 interface SignInModalProps {
     isOpen: boolean;
@@ -21,7 +22,7 @@ export const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalPro
             onSignInSuccess?.();
         } catch (error) {
             console.error('Sign in error:', error);
-            alert('Sign in failed. Please try again.');
+            toast.error('Sign in failed. Please try again.');
         }
     };
 

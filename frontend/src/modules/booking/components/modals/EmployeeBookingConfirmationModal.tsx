@@ -4,6 +4,7 @@ import { Modal } from '@/components/ui/Modal';
 import { cn } from '@/lib/utils';
 import { getCityName, getTimeSlot, validateCNIC } from '../../utils/bookingHelpers';
 import { PassengerForm } from '../shared';
+import { toast } from '@/lib/toast';
 
 type SavedSelection = {
     cityId: string | null;
@@ -147,13 +148,13 @@ export const EmployeeBookingConfirmationModal = ({
     const handleConfirm = () => {
         // Check if route is already booked
         if (employeeTicketInfo?.routeAlreadyBooked) {
-            alert('You have already booked a ticket for this route. You cannot book multiple tickets for the same route.');
+            toast.error('You have already booked a ticket for this route. You cannot book multiple tickets for the same route.');
             return;
         }
 
         // Check if can book family tickets
         if (!employeeTicketInfo?.canBookFamily && ticketCounts.some((count, idx) => count > (isEmployeeTraveling[idx] ? 1 : 0))) {
-            alert('Family ticket slots are not available. Please try again later.');
+            toast.error('Family ticket slots are not available. Please try again later.');
             return;
         }
 
@@ -167,7 +168,7 @@ export const EmployeeBookingConfirmationModal = ({
         );
 
         if (!allFieldsFilled) {
-            alert('Please fill in all required fields. CNIC must be in format: 12345-1234567-1');
+            toast.error('Please fill in all required fields. CNIC must be in format: 12345-1234567-1');
             return;
         }
 
@@ -178,7 +179,7 @@ export const EmployeeBookingConfirmationModal = ({
         });
 
         if (exceedsLimits) {
-            alert('Ticket count exceeds allowed limits. Please adjust the number of tickets.');
+            toast.error('Ticket count exceeds allowed limits. Please adjust the number of tickets.');
             return;
         }
 
