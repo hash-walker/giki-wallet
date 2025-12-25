@@ -24,9 +24,9 @@ export const TicketCard = ({ ticket }: TicketCardProps) => {
             </div>
 
             {/* Ticket Details */}
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 overflow-hidden">
                 <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                         {/* Serial Number and Ticket Number - Prominent */}
                         <div className="flex items-center gap-4 mb-3 flex-wrap">
                             <div className="flex items-center gap-2">
@@ -104,16 +104,16 @@ export const TicketCard = ({ ticket }: TicketCardProps) => {
                             </div>
                         )}
                     </div>
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0 ml-2">
                         <span className={cn(
-                            "px-2.5 py-1 rounded-full text-xs font-medium border",
+                            "px-2.5 py-1 rounded-full text-xs font-medium border whitespace-nowrap",
                             getStatusColor(ticket.status)
                         )}>
                             {ticket.status}
                         </span>
                         {categoryBadge && (
                             <span className={cn(
-                                "px-2.5 py-1 rounded-full text-xs font-medium",
+                                "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap",
                                 categoryBadge.className
                             )}>
                                 {categoryBadge.label}
