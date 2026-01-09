@@ -19,7 +19,7 @@ vendor/
 go.work
 
 # Environment variables
-backend/.env
+.env
 .env.local
 
 # IDE

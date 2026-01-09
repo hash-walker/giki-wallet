@@ -21,7 +21,7 @@ const getMockTransactionsData = (): Transaction[] => {
     return [
         {
             id: '1',
-            category: 'wallet',
+            category: 'schema',
             type: 'topup',
             userId: 1,
             userName: 'John Doe',
@@ -33,7 +33,7 @@ const getMockTransactionsData = (): Transaction[] => {
         },
         {
             id: '2',
-            category: 'wallet',
+            category: 'schema',
             type: 'transfer',
             userId: 1,
             userName: 'John Doe',
@@ -130,7 +130,7 @@ export const TransactionsHistory = ({ selectedWeek }: TransactionsHistoryProps) 
         const amount = Math.abs(transaction.amount);
 
         let details: React.ReactNode = null;
-        if (transaction.category === 'wallet') {
+        if (transaction.category === 'schema') {
             if (transaction.type === 'topup') {
                 details = (
                     <div className="text-sm text-gray-600">
@@ -206,7 +206,7 @@ export const TransactionsHistory = ({ selectedWeek }: TransactionsHistoryProps) 
                         onChange={(value) => setFilterCategory(value)}
                         options={[
                             { value: 'all', label: 'All Categories' },
-                            { value: 'wallet', label: 'Wallet' },
+                            { value: 'schema', label: 'Wallet' },
                             { value: 'ticket', label: 'Ticket' },
                         ]}
                         placeholder="Category"
