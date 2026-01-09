@@ -1,4 +1,4 @@
-// Helper functions for wallet-related operations
+// Helper functions for schema-related operations
 
 // Email validation
 export const validateEmail = (email: string): boolean => {

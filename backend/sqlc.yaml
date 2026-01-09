@@ -2,15 +2,20 @@ version: "2"
 sql:
 #    ---- User Module ----
   - engine: "postgresql"
-    queries: "internal/modules/user/sql"
-    schema: "sql/migrations"
+    queries: "internal/user/sql"
+    schema: "sql/schema"
     gen:
       go:
-        package: "postgres"
-        out: "internal/modules/user/repository/postgres"
+        package: "user_db"
+        out: "internal/user/user_db"
         sql_package: "pgx/v5"
         emit_json_tags: true
         emit_prepared_queries: false
         emit_interface: true
         emit_exact_table_names: false
+        overrides:
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
 
