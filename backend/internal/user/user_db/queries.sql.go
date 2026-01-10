@@ -63,14 +63,15 @@ func (q *Queries) CreateStudent(ctx context.Context, arg CreateStudentParams) (G
 
 const createUser = `-- name: CreateUser :one
 
-INSERT INTO giki_wallet.users(name, email, auth_provider, password_hash, password_algo, is_active, is_verified, user_type)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO giki_wallet.users(name, email, phone_number, auth_provider, password_hash, password_algo, is_active, is_verified, user_type)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING id, name, email, phone_number, auth_provider, external_id, password_hash, password_algo, is_active, is_verified, user_type, created_at, updated_at
 `
 
 type CreateUserParams struct {
 	Name         string `json:"name"`
 	Email        string `json:"email"`
+	PhoneNumber  string `json:"phone_number"`
 	AuthProvider string `json:"auth_provider"`
 	PasswordHash string `json:"password_hash"`
 	PasswordAlgo string `json:"password_algo"`
@@ -83,6 +84,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (GikiWal
 	row := q.db.QueryRow(ctx, createUser,
 		arg.Name,
 		arg.Email,
+		arg.PhoneNumber,
 		arg.AuthProvider,
 		arg.PasswordHash,
 		arg.PasswordAlgo,

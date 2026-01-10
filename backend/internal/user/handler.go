@@ -21,11 +21,12 @@ func NewHandler(service *Service) *Handler {
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	type parameters struct {
-		Name     string `json:"name"`
-		Email    string `json:"email"`
-		UserType string `json:"user_type"`
-		Password string `json:"password"`
-		RegId    string `json:"reg_id"`
+		Name        string `json:"name"`
+		Email       string `json:"email"`
+		UserType    string `json:"user_type"`
+		RegID       string `json:"reg_id"`
+		Password    string `json:"password"`
+		PhoneNumber string `json:"phone_number"`
 	}
 
 	var params parameters
@@ -44,10 +45,11 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback(r.Context())
 
 	user, err := h.service.CreateUser(r.Context(), tx, CreateUserParams{
-		Name:     params.Name,
-		Email:    params.Email,
-		UserType: params.UserType,
-		Password: params.Password,
+		Name:        params.Name,
+		Email:       params.Email,
+		UserType:    params.UserType,
+		Password:    params.Password,
+		PhoneNumber: params.PhoneNumber,
 	})
 
 	if err != nil {
@@ -58,14 +60,15 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	switch params.UserType {
 
 	case "student":
-		if params.RegId == "" {
+
+		if params.RegID == "" {
 			common.ResponseWithError(w, http.StatusBadRequest, "Registration number required")
 			return
 		}
 
 		_, err = h.service.CreateStudent(r.Context(), tx, CreateStudentParams{
 			UserID: user.ID,
-			RegID:  params.RegId,
+			RegID:  params.RegID,
 		})
 
 	case "employee":
@@ -87,4 +90,8 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	common.ResponseWithJSON(w, http.StatusCreated, user)
+}
+
+func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+
 }

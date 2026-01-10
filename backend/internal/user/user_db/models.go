@@ -35,7 +35,7 @@ type GikiWalletUser struct {
 	ID           uuid.UUID   `json:"id"`
 	Name         string      `json:"name"`
 	Email        string      `json:"email"`
-	PhoneNumber  pgtype.Text `json:"phone_number"`
+	PhoneNumber  string      `json:"phone_number"`
 	AuthProvider string      `json:"auth_provider"`
 	ExternalID   pgtype.Text `json:"external_id"`
 	PasswordHash string      `json:"password_hash"`

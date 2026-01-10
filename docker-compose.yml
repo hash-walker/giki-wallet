@@ -27,6 +27,7 @@ services:
       db:
         condition: service_healthy
     environment:
+      - PORT=${PORT:-8080}
       - DB_HOST=${DB_HOST}
       - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
@@ -34,7 +35,7 @@ services:
       - DB_SSL_MODE=${DB_SSL_MODE}
       - DB_URL=${DB_URL}
     ports:
-      - "${PORT}:${PORT}"
+      - "${PORT:-8080}:${PORT:-8080}"
 
 volumes:
   giki_wallet_data:

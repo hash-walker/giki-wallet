@@ -11,17 +11,22 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/joho/godotenv"
+	"github.com/rs/cors"
 )
 
 func main() {
-
 	ctx := context.Background()
-	godotenv.Load()
+
+	// Load .env file if it exists (for local development)
+	// In Docker, environment variables come from docker-compose.yml
+	_ = godotenv.Load()
 
 	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		log.Fatal("DB_URL environment variable is required")
+	}
 
 	pool, err := pgxpool.New(ctx, dbURL)
-
 	if err != nil {
 		log.Fatalf("Unable to connect to database: %v\n", err)
 	}
@@ -33,10 +38,29 @@ func main() {
 	srv := api.NewServer(userHandler)
 	srv.MountRoutes()
 
-	server := &http.Server{
-		Addr:    ":8080",
-		Handler: srv.Router,
+	c := cors.New(cors.Options{
+		// Allow any origin in development (for production, use AllowedOrigins with specific domains)
+		AllowOriginFunc: func(origin string) bool {
+			return true // Allow all origins in development
+		},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization", "X-Requested-With"},
+		AllowCredentials: true,
+		Debug:            true, // Enable Debugging for testing, consider disabling in production
+	})
+
+	handler := c.Handler(srv.Router)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // Default port
 	}
 
+	server := &http.Server{
+		Addr:    ":" + port,
+		Handler: handler,
+	}
+
+	log.Printf("Server starting on port %s\n", port)
 	log.Fatal(server.ListenAndServe())
 }

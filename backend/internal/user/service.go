@@ -17,10 +17,11 @@ import (
 )
 
 type CreateUserParams struct {
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	UserType string `json:"user_type"`
-	Password string `json:"password"`
+	Name        string
+	Email       string
+	UserType    string
+	Password    string
+	PhoneNumber string
 }
 
 type CreateStudentParams struct {
@@ -66,6 +67,8 @@ func (s *Service) CreateUser(ctx context.Context, tx pgx.Tx, payload CreateUserP
 	user, err := qUser.CreateUser(ctx, user_db.CreateUserParams{
 		Name:         payload.Name,
 		Email:        payload.Email,
+		PhoneNumber:  payload.PhoneNumber,
+		PasswordAlgo: "BCRYPT",
 		UserType:     payload.UserType,
 		PasswordHash: string(passwordHash),
 	})
