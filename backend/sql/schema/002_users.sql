@@ -4,7 +4,7 @@ CREATE TABLE giki_wallet.users(
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(150) NOT NULL,
     email VARCHAR(254) NOT NULL UNIQUE,
-    phone_number VARCHAR(20) UNIQUE,
+    phone_number VARCHAR(20) NOT NULL UNIQUE,
     auth_provider VARCHAR(20) NOT NULL DEFAULT 'Local',
     external_id VARCHAR(255),
     password_hash VARCHAR(500) NOT NULL,

@@ -1,7 +1,7 @@
 -- name: CreateUser :one
 
-INSERT INTO giki_wallet.users(name, email, auth_provider, password_hash, password_algo, is_active, is_verified, user_type)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO giki_wallet.users(name, email, phone_number, auth_provider, password_hash, password_algo, is_active, is_verified, user_type)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING *;
 
 -- name: CreateStudent :one

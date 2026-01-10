@@ -19,10 +19,15 @@ func NewServer(userHandler *user.Handler) *Server {
 }
 
 func (s *Server) MountRoutes() {
+
 	s.Router.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, err := w.Write([]byte("OK"))
+		if err != nil {
+			return
+		}
 	})
 
 	s.Router.HandleFunc("POST /auth/register", s.User.Register)
+
 }
