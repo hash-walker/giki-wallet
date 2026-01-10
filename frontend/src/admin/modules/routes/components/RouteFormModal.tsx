@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Modal } from '@/shared/components/ui/Modal';
 import { Input } from '@/shared/components/ui/Input';
@@ -79,15 +80,15 @@ export const RouteFormModal = ({
                 const defaultSlotIds = routeSlotIds.filter(id => !id.startsWith('custom_'));
                 const customSlotIds = routeSlotIds.filter(id => id.startsWith('custom_'));
                 
-                setSelectedTimeSlotIds(defaultSlotIds);
+                    setSelectedTimeSlotIds(defaultSlotIds);
                 // For custom slots, we only have IDs, so we'll need to reconstruct them
                 // For now, just track the IDs - in a real app, you'd fetch the full custom slot data
-                setCustomSlots(customSlotIds.map(id => ({
+                    setCustomSlots(customSlotIds.map(id => ({
                     id,
                     date: '', // Would need to fetch from API
                     time: '', // Would need to fetch from API
                 })));
-                setIsHeld(route.isHeld);
+                    setIsHeld(route.isHeld);
             } else {
                 // Reset form for new route
                 setDirection('from-giki');

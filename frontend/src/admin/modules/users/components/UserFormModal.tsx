@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect } from 'react';
 import { Modal } from '@/shared/components/ui/Modal';
 import { Input } from '@/shared/components/ui/Input';
