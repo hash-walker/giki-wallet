@@ -7,11 +7,13 @@ import { X } from 'lucide-react';
 interface ClientNavbarProps {
     onMyBookingsClick?: () => void;
     onSignInClick?: () => void;
+    onSignUpClick?: () => void;
 }
 
 export const ClientNavbar = ({ 
     onMyBookingsClick, 
-    onSignInClick 
+    onSignInClick,
+    onSignUpClick
 }: ClientNavbarProps) => {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -24,6 +26,12 @@ export const ClientNavbar = ({
     const handleSignInClick = (e: React.MouseEvent) => {
         e.preventDefault();
         onSignInClick?.();
+        setIsMobileMenuOpen(false);
+    };
+
+    const handleSignUpClick = (e: React.MouseEvent) => {
+        e.preventDefault();
+        onSignUpClick?.();
         setIsMobileMenuOpen(false);
     };
 
@@ -43,6 +51,14 @@ export const ClientNavbar = ({
                 onClick={handleSignInClick}
             >
                 Sign In
+            </Button>
+            <Button
+                variant="outline"
+                size="sm"
+                className="border-white/30 text-white bg-transparent hover:bg-white/10 hover:text-white font-medium"
+                onClick={handleSignUpClick}
+            >
+                Sign Up
             </Button>
         </>
     );
@@ -99,6 +115,13 @@ export const ClientNavbar = ({
                         onClick={handleSignInClick}
                     >
                         Sign In
+                    </Button>
+                    <Button
+                        variant="outline"
+                        className="w-full font-semibold mt-2"
+                        onClick={handleSignUpClick}
+                    >
+                        Sign Up
                     </Button>
                 </div>
             </nav>

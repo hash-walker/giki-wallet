@@ -6,6 +6,7 @@ import {
   TriangleAlertIcon,
 } from "lucide-react"
 import { Toaster as Sonner } from "sonner"
+import type { CSSProperties } from "react"
 
 const Toaster = () => {
   return (
@@ -25,7 +26,7 @@ const Toaster = () => {
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
           "--border-radius": "var(--radius)",
-        } as React.CSSProperties
+        } as CSSProperties
       }
       position="top-right"
       duration={3000}

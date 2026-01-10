@@ -7,6 +7,7 @@ interface NavbarProps {
     // Client props
     onMyBookingsClick?: () => void;
     onSignInClick?: () => void;
+    onSignUpClick?: () => void;
     // Admin props
     navItems?: Array<{ path: string; label: string; icon?: LucideIcon }>;
     onLogout?: () => void;
@@ -20,6 +21,7 @@ export const Navbar = ({
     variant = 'client',
     onMyBookingsClick,
     onSignInClick,
+    onSignUpClick,
     navItems,
     onLogout,
 }: NavbarProps) => {
@@ -31,6 +33,7 @@ export const Navbar = ({
         <ClientNavbar
             onMyBookingsClick={onMyBookingsClick}
             onSignInClick={onSignInClick}
+            onSignUpClick={onSignUpClick}
         />
     );
 };
