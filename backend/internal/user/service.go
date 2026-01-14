@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	""
+
 	"github.com/google/uuid"
 	"github.com/hash-walker/giki-wallet/internal/common"
 	"github.com/hash-walker/giki-wallet/internal/user/user_db"
@@ -15,6 +17,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
+
+func HashPassword(password string) (string, error) {
+	hashPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+
+	if err != nil {
+		return "", err
+	}
+
+	return string(hashPassword), nil
+}
 
 type CreateUserParams struct {
 	Name        string
@@ -56,7 +68,7 @@ func (s *Service) CreateUser(ctx context.Context, tx pgx.Tx, payload CreateUserP
 		return User{}, errors.New("only GIKI students allows")
 	}
 
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
+	passwordHash, err := HashPassword(payload.Password)
 
 	if err != nil {
 		return User{}, err

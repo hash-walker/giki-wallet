@@ -91,7 +91,3 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	common.ResponseWithJSON(w, http.StatusCreated, user)
 }
-
-func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
-
-}
