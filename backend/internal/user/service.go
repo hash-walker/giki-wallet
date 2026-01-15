@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	""
-
 	"github.com/google/uuid"
 	"github.com/hash-walker/giki-wallet/internal/common"
 	"github.com/hash-walker/giki-wallet/internal/user/user_db"
@@ -82,7 +80,7 @@ func (s *Service) CreateUser(ctx context.Context, tx pgx.Tx, payload CreateUserP
 		PhoneNumber:  payload.PhoneNumber,
 		PasswordAlgo: "BCRYPT",
 		UserType:     payload.UserType,
-		PasswordHash: string(passwordHash),
+		PasswordHash: passwordHash,
 	})
 
 	if err != nil {

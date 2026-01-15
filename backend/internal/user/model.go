@@ -10,10 +10,13 @@ import (
 )
 
 type User struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	Email     string    `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
+	ID           uuid.UUID `json:"id"`
+	Name         string    `json:"name"`
+	Email        string    `json:"email"`
+	UserType     string    `json:"user_type"`
+	AccessToken  string    `json:"access_token,omitempty"`
+	RefreshToken string    `json:"refresh_token,omitempty"`
+	CreatedAt    time.Time `json:"created_at,omitempty"`
 }
 
 func mapDBUserToUser(u userdb.GikiWalletUser) User {
@@ -30,6 +33,12 @@ type Student struct {
 	RegID         string      `json:"reg_id"`
 	DegreeProgram pgtype.Text `json:"degree_program"`
 	BatchYear     pgtype.Int4 `json:"batch_year"`
+}
+
+type AuthPayload struct {
+	AccessToken  string
+	RefreshToken string
+	ExpiresAt    time.Duration
 }
 
 // Mapper: DB -> Domain
@@ -56,4 +65,20 @@ func mapDBEmployeeToEmployee(e userdb.GikiWalletEmployeeProfile) Employee {
 		Designation:  common.TextToString(e.Designation),
 		Department:   common.TextToString(e.Department),
 	}
+}
+
+func DatabaseUserToUser(dbUser userdb.GikiWalletUser, payload interface{}) User {
+
+	user := User{
+		ID:       dbUser.ID,
+		Email:    dbUser.Email,
+		UserType: dbUser.UserType,
+	}
+
+	if auth, ok := payload.(AuthPayload); ok {
+		user.AccessToken = auth.AccessToken
+		user.RefreshToken = auth.RefreshToken
+	}
+
+	return user
 }

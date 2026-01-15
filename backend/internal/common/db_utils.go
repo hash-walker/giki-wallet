@@ -1,6 +1,10 @@
 package common
 
-import "github.com/jackc/pgx/v5/pgtype"
+import (
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
+)
 
 func StringToText(s string) pgtype.Text {
 	return pgtype.Text{
@@ -22,4 +26,8 @@ func TextToString(text pgtype.Text) string {
 
 func Int4ToInt(n pgtype.Int4) int {
 	return int(n.Int32)
+}
+
+func TimeToPgTime(goTime time.Time) pgtype.Timestamp {
+	return pgtype.Timestamp{Time: goTime, Valid: !goTime.IsZero()}
 }

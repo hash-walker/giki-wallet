@@ -15,3 +15,8 @@ RETURNING *;
 INSERT INTO giki_wallet.employee_profiles(user_id, employee_id)
 Values ($1, $2)
 RETURNING *;
+
+-- name: GetUserByEmail :one
+
+SELECT * FROM giki_wallet.users
+WHERE giki_wallet.users.email = $1;

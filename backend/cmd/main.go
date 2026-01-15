@@ -7,11 +7,12 @@ import (
 	"os"
 
 	"github.com/hash-walker/giki-wallet/internal/api"
+	"github.com/hash-walker/giki-wallet/internal/auth"
 	"github.com/hash-walker/giki-wallet/internal/user"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
-	"github.com/rs/cors"
 )
 
 func main() {
@@ -34,15 +35,15 @@ func main() {
 
 	userService := user.NewService(pool)
 	userHandler := user.NewHandler(userService)
+	authService := auth.NewService(pool)
+	authHandler := auth.NewHandler(authService)
 
-	srv := api.NewServer(userHandler)
+	srv := api.NewServer(userHandler, authHandler)
 	srv.MountRoutes()
 
 	c := cors.New(cors.Options{
 		// Allow any origin in development (for production, use AllowedOrigins with specific domains)
-		AllowOriginFunc: func(origin string) bool {
-			return true // Allow all origins in development
-		},
+		AllowedOrigins:   []string{"https://*", "http://*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization", "X-Requested-With"},
 		AllowCredentials: true,
