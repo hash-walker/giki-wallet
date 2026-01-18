@@ -19,3 +19,45 @@ sql:
           - db_type: "uuid"
             go_type: "github.com/google/uuid.UUID"
 
+#   ------ Auth Module -----
+  - engine: "postgresql"
+    queries: "internal/auth/sql"
+    schema: "sql/schema"
+    gen:
+      go:
+        package: "auth"
+        out: "internal/auth/auth_db"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_prepared_queries: false
+        emit_interface: true
+        emit_exact_table_names: false
+        overrides:
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "timestamp"
+            go_type: "time.Time"
+
+  #   ------ Payment Module -----
+  - engine: "postgresql"
+    queries: "internal/payment/sql"
+    schema: "sql/schema"
+    gen:
+      go:
+        package: "auth"
+        out: "internal/payment/payment_db"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_prepared_queries: false
+        emit_interface: true
+        emit_exact_table_names: false
+        overrides:
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "timestamp"
+            go_type: "time.Time"
+

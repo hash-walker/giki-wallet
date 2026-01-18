@@ -7,13 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	""
-
-	"github.com/google/uuid"
 	"github.com/hash-walker/giki-wallet/internal/common"
 	"github.com/hash-walker/giki-wallet/internal/user/user_db"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -26,28 +22,6 @@ func HashPassword(password string) (string, error) {
 	}
 
 	return string(hashPassword), nil
-}
-
-type CreateUserParams struct {
-	Name        string
-	Email       string
-	UserType    string
-	Password    string
-	PhoneNumber string
-}
-
-type CreateStudentParams struct {
-	UserID        uuid.UUID
-	RegID         string
-	DegreeProgram pgtype.Text
-	BatchYear     pgtype.Int4
-}
-
-type CreateEmployeeParams struct {
-	UserID      uuid.UUID
-	EmployeeID  pgtype.Text
-	Designation pgtype.Text
-	Department  pgtype.Text
 }
 
 type Service struct {
@@ -82,7 +56,7 @@ func (s *Service) CreateUser(ctx context.Context, tx pgx.Tx, payload CreateUserP
 		PhoneNumber:  payload.PhoneNumber,
 		PasswordAlgo: "BCRYPT",
 		UserType:     payload.UserType,
-		PasswordHash: string(passwordHash),
+		PasswordHash: passwordHash,
 	})
 
 	if err != nil {
