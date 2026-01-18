@@ -23,8 +23,6 @@ var (
 	ErrUserNotFound    = errors.New("user not found")
 	ErrInvalidPassword = errors.New("invalid password")
 	ErrUserInactive    = errors.New("user inactive")
-	ErrTokenExpired    = errors.New("token expired")
-	ErrTokenInvalid    = errors.New("token invalid")
 	ErrTokenCreation   = errors.New("error creating secure token")
 )
 
