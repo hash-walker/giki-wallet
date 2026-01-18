@@ -81,6 +81,7 @@ type GikiWalletGatewayTransaction struct {
 	Status         CurrentStatus `json:"status"`
 	Amount         int64         `json:"amount"`
 	RawResponse    []byte        `json:"raw_response"`
+	IsPolling      pgtype.Bool   `json:"is_polling"`
 	CreatedAt      time.Time     `json:"created_at"`
 	UpdatedAt      time.Time     `json:"updated_at"`
 }
