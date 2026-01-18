@@ -82,7 +82,7 @@ func NewJazzCashClient(
 		cardPaymentURL:   cardPaymentURL,
 		statusInquiryURL: statusInquiryURL,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second, // HTTP timeout
+			Timeout: 45 * time.Second, // HTTP timeout
 		},
 	}
 }
