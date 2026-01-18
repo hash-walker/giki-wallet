@@ -5,11 +5,57 @@
 package user_db
 
 import (
+	"database/sql/driver"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type CurrentStatus string
+
+const (
+	CurrentStatusPENDING CurrentStatus = "PENDING"
+	CurrentStatusSUCCESS CurrentStatus = "SUCCESS"
+	CurrentStatusFAILED  CurrentStatus = "FAILED"
+	CurrentStatusUNKNOWN CurrentStatus = "UNKNOWN"
+)
+
+func (e *CurrentStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = CurrentStatus(s)
+	case string:
+		*e = CurrentStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for CurrentStatus: %T", src)
+	}
+	return nil
+}
+
+type NullCurrentStatus struct {
+	CurrentStatus CurrentStatus `json:"current_status"`
+	Valid         bool          `json:"valid"` // Valid is true if CurrentStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullCurrentStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.CurrentStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.CurrentStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullCurrentStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.CurrentStatus), nil
+}
 
 type GikiWalletAdmin struct {
 	UserID      uuid.UUID `json:"user_id"`
@@ -22,6 +68,21 @@ type GikiWalletEmployeeProfile struct {
 	EmployeeID  string      `json:"employee_id"`
 	Designation pgtype.Text `json:"designation"`
 	Department  pgtype.Text `json:"department"`
+}
+
+type GikiWalletGatewayTransaction struct {
+	ID             uuid.UUID     `json:"id"`
+	UserID         uuid.UUID     `json:"user_id"`
+	IdempotencyKey uuid.UUID     `json:"idempotency_key"`
+	BillRefID      string        `json:"bill_ref_id"`
+	TxnRefNo       string        `json:"txn_ref_no"`
+	PaymentMethod  string        `json:"payment_method"`
+	GatewayRrn     pgtype.Text   `json:"gateway_rrn"`
+	Status         CurrentStatus `json:"status"`
+	Amount         int64         `json:"amount"`
+	RawResponse    []byte        `json:"raw_response"`
+	CreatedAt      time.Time     `json:"created_at"`
+	UpdatedAt      time.Time     `json:"updated_at"`
 }
 
 type GikiWalletRefreshToken struct {
