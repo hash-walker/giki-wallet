@@ -22,19 +22,18 @@ const (
 type TopUpRequest struct {
 	IdempotencyKey uuid.UUID     `json:"idempotency_key"`
 	Amount         int64         `json:"amount"` // smallest unit (e.g., paisa)
-	Method         PaymentMethod `json:"method"` // MWALLET or CARD
-
-	// MWALLET (CNIC) fields
-	PhoneNumber string `json:"phone_number,omitempty"`
-	CNICLast6   string `json:"cnic_last6,omitempty"`
+	Method         PaymentMethod `json:"method"`
+	PhoneNumber    string        `json:"phone_number,omitempty"`
+	CNICLast6      string        `json:"cnic_last6,omitempty"`
 }
 
 // Backend → frontend
 type TopUpResult struct {
-	ID       uuid.UUID     `json:"id"`         // gateway_transactions.id
-	TxnRefNo string        `json:"txn_ref_no"` // gateway_transactions.txn_ref_no
-	Status   PaymentStatus `json:"status"`
-	Message  string        `json:"message,omitempty"`
+	ID            uuid.UUID     `json:"id"`         // gateway_transactions.id
+	TxnRefNo      string        `json:"txn_ref_no"` // gateway_transactions.txn_ref_no
+	Status        PaymentStatus `json:"status"`
+	Message       string        `json:"message,omitempty"`
+	PaymentMethod PaymentMethod `json:"paymentMethod"`
 
 	// CARD redirect flow
 	Redirect *RedirectPayload `json:"redirect,omitempty"`

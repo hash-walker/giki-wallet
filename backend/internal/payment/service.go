@@ -27,13 +27,47 @@ type Service struct {
 	q             *payment.Queries
 	dbPool        *pgxpool.Pool
 	gatewayClient *gateway.JazzCashClient
+	rateLimiter   *RateLimiter
 }
 
-func NewService(dbPool *pgxpool.Pool, gatewayClient *gateway.JazzCashClient) *Service {
+type RateLimiter struct {
+	tokens chan struct{}
+}
+
+func NewRateLimiter(maxConcurrent int) *RateLimiter {
+	rl := &RateLimiter{
+		tokens: make(chan struct{}, maxConcurrent),
+	}
+	// Fill once
+	for i := 0; i < maxConcurrent; i++ {
+		rl.tokens <- struct{}{}
+	}
+	return rl
+}
+
+func (rl *RateLimiter) Acquire(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-rl.tokens:
+		return nil
+	}
+}
+
+func (rl *RateLimiter) Release() {
+	select {
+	case rl.tokens <- struct{}{}:
+	default:
+		// Shouldn't happen
+	}
+}
+
+func NewService(dbPool *pgxpool.Pool, gatewayClient *gateway.JazzCashClient, rateLimiter *RateLimiter) *Service {
 	return &Service{
 		q:             payment.New(dbPool),
 		dbPool:        dbPool,
 		gatewayClient: gatewayClient,
+		rateLimiter:   rateLimiter,
 	}
 }
 
@@ -94,7 +128,6 @@ func (s *Service) InitiatePayment(ctx context.Context, tx pgx.Tx, payload TopUpR
 		return s.initiateMWalletPayment(ctx, gatewayTxn, payload, billRefNo, txnRefNo)
 
 	default:
-
 		return nil, fmt.Errorf("unsupported payment method: %s", payload.Method)
 	}
 }
@@ -166,6 +199,107 @@ func (s *Service) initiateMWalletPayment(
 	}
 }
 
+func (s *Service) startPollingForTransaction(txRefNo string) {
+	conn, err := s.dbPool.Acquire(context.Background())
+	if err != nil {
+		log.Printf("Failed to establish connection with database: %v", err)
+		return
+	}
+	defer conn.Release()
+
+	paymentQ := payment.New(conn)
+
+	// acquire polling lock
+	_, err = paymentQ.UpdatePollingStatus(context.Background(), txRefNo)
+	if err != nil {
+		log.Printf("Polling already started or transaction not found: %v", err)
+		return
+	}
+
+	pollCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-pollCtx.Done():
+			cleanupCtx := context.Background()
+
+			err := paymentQ.UpdateGatewayTransactionStatus(cleanupCtx, payment.UpdateGatewayTransactionStatusParams{
+				Status:   payment.CurrentStatus(PaymentStatusFailed),
+				TxnRefNo: txRefNo,
+			})
+			if err != nil {
+				log.Printf("Failed to update status on timeout: %v", err)
+			}
+
+			if err := paymentQ.ClearPollingStatus(cleanupCtx, txRefNo); err != nil {
+				log.Printf("Failed to clear polling status: %v", err)
+			}
+			return
+
+		case <-ticker.C:
+			// Acquire rate limit token
+			err := s.rateLimiter.Acquire(pollCtx)
+			if err != nil {
+				log.Printf("Rate limiter acquire failed: %v", err)
+				return
+			}
+
+			// Call Inquiry API
+			inquiryResult, err := s.gatewayClient.Inquiry(pollCtx, txRefNo)
+
+			// Always release token (explicit release, not defer)
+			if err != nil {
+				log.Printf("Inquiry API failed (will retry): %v", err)
+				s.rateLimiter.Release()
+				continue
+			}
+
+			status := gatewayStatusToPaymentStatus(inquiryResult.Status)
+
+			switch status {
+			case PaymentStatusSuccess:
+				err := paymentQ.UpdateGatewayTransactionStatus(pollCtx, payment.UpdateGatewayTransactionStatusParams{
+					Status:   payment.CurrentStatus(status),
+					TxnRefNo: txRefNo,
+				})
+				if err != nil {
+					log.Printf("Failed to update status to SUCCESS: %v", err)
+				}
+
+				if err := paymentQ.ClearPollingStatus(pollCtx, txRefNo); err != nil {
+					log.Printf("Failed to clear polling status: %v", err)
+				}
+				s.rateLimiter.Release()
+				return
+
+			case PaymentStatusFailed:
+				err := paymentQ.UpdateGatewayTransactionStatus(pollCtx, payment.UpdateGatewayTransactionStatusParams{
+					Status:   payment.CurrentStatus(status),
+					TxnRefNo: txRefNo,
+				})
+				if err != nil {
+					log.Printf("Failed to update status to FAILED: %v", err)
+				}
+
+				if err := paymentQ.ClearPollingStatus(pollCtx, txRefNo); err != nil {
+					log.Printf("Failed to clear polling status: %v", err)
+				}
+				s.rateLimiter.Release()
+				return
+
+			default:
+				// Still PENDING - continue polling
+				s.rateLimiter.Release()
+				continue
+			}
+		}
+	}
+}
+
 func (s *Service) handleExistingTransaction(ctx context.Context, paymentQ *payment.Queries, existing payment.GikiWalletGatewayTransaction) (*TopUpResult, error) {
 	status := existing.Status
 
@@ -191,7 +325,7 @@ func (s *Service) handleExistingTransaction(ctx context.Context, paymentQ *payme
 		case PaymentStatusSuccess:
 			// Transaction completed
 			err := paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
-				Status:   payment.CurrentStatus(PaymentStatusSuccess),
+				Status:   payment.CurrentStatus(paymentStatus),
 				TxnRefNo: existing.TxnRefNo,
 			})
 
@@ -201,14 +335,14 @@ func (s *Service) handleExistingTransaction(ctx context.Context, paymentQ *payme
 
 			return &TopUpResult{
 				TxnRefNo: existing.TxnRefNo,
-				Status:   PaymentStatusSuccess,
+				Status:   paymentStatus,
 				Message:  inquiryResult.Message,
 			}, nil
 
 		case PaymentStatusFailed:
 			// Transaction failed
 			err := paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
-				Status:   payment.CurrentStatus(PaymentStatusFailed),
+				Status:   payment.CurrentStatus(paymentStatus),
 				TxnRefNo: existing.TxnRefNo,
 			})
 			if err != nil {
@@ -217,7 +351,7 @@ func (s *Service) handleExistingTransaction(ctx context.Context, paymentQ *payme
 
 			return &TopUpResult{
 				TxnRefNo: existing.TxnRefNo,
-				Status:   PaymentStatusFailed,
+				Status:   paymentStatus,
 				Message:  inquiryResult.Message,
 			}, nil
 
