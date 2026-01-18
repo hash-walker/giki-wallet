@@ -8,6 +8,9 @@ import (
 
 	"github.com/hash-walker/giki-wallet/internal/api"
 	"github.com/hash-walker/giki-wallet/internal/auth"
+	"github.com/hash-walker/giki-wallet/internal/config"
+	"github.com/hash-walker/giki-wallet/internal/payment"
+	"github.com/hash-walker/giki-wallet/internal/payment/gateway"
 	"github.com/hash-walker/giki-wallet/internal/user"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -27,6 +30,20 @@ func main() {
 		log.Fatal("DB_URL environment variable is required")
 	}
 
+	cfg := config.LoadConfig()
+
+	jazzcashClient := gateway.NewJazzCashClient(
+		cfg.Jazzcash.MerchantID,
+		cfg.Jazzcash.Password,
+		cfg.Jazzcash.IntegritySalt,
+		cfg.Jazzcash.MerchantMPIN,
+		cfg.Jazzcash.CardCallbackURL,
+		cfg.Jazzcash.BaseURL,
+		cfg.Jazzcash.WalletPaymentURl,
+		cfg.Jazzcash.CardPaymentURL,
+		cfg.Jazzcash.StatusInquiryURL,
+	)
+
 	pool, err := pgxpool.New(ctx, dbURL)
 	if err != nil {
 		log.Fatalf("Unable to connect to database: %v\n", err)
@@ -37,6 +54,8 @@ func main() {
 	userHandler := user.NewHandler(userService)
 	authService := auth.NewService(pool)
 	authHandler := auth.NewHandler(authService)
+	paymentService := payment.NewService(pool, jazzcashClient)
+	paymentHandler := payment.NewHandler(paymentService)
 
 	srv := api.NewServer(userHandler, authHandler)
 	srv.MountRoutes()
