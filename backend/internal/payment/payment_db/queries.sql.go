@@ -11,10 +11,21 @@ import (
 	"github.com/google/uuid"
 )
 
+const clearPollingStatus = `-- name: ClearPollingStatus :exec
+UPDATE giki_wallet.gateway_transactions
+SET is_polling = FALSE
+WHERE txn_ref_no = $1
+`
+
+func (q *Queries) ClearPollingStatus(ctx context.Context, txnRefNo string) error {
+	_, err := q.db.Exec(ctx, clearPollingStatus, txnRefNo)
+	return err
+}
+
 const createGatewayTransaction = `-- name: CreateGatewayTransaction :one
 INSERT INTO giki_wallet.gateway_transactions(user_id, idempotency_key, bill_ref_id, txn_ref_no, payment_method, status, amount)
 VALUES ($1, $2,$3,$4, $5, $6, $7)
-RETURNING id, user_id, idempotency_key, bill_ref_id, txn_ref_no, payment_method, gateway_rrn, status, amount, raw_response, created_at, updated_at
+RETURNING id, user_id, idempotency_key, bill_ref_id, txn_ref_no, payment_method, gateway_rrn, status, amount, raw_response, is_polling, created_at, updated_at
 `
 
 type CreateGatewayTransactionParams struct {
@@ -49,6 +60,7 @@ func (q *Queries) CreateGatewayTransaction(ctx context.Context, arg CreateGatewa
 		&i.Status,
 		&i.Amount,
 		&i.RawResponse,
+		&i.IsPolling,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -57,7 +69,7 @@ func (q *Queries) CreateGatewayTransaction(ctx context.Context, arg CreateGatewa
 
 const getByIdempotencyKey = `-- name: GetByIdempotencyKey :one
 
-SELECT id, user_id, idempotency_key, bill_ref_id, txn_ref_no, payment_method, gateway_rrn, status, amount, raw_response, created_at, updated_at FROM giki_wallet.gateway_transactions
+SELECT id, user_id, idempotency_key, bill_ref_id, txn_ref_no, payment_method, gateway_rrn, status, amount, raw_response, is_polling, created_at, updated_at FROM giki_wallet.gateway_transactions
 WHERE idempotency_key = $1
 `
 
@@ -75,6 +87,7 @@ func (q *Queries) GetByIdempotencyKey(ctx context.Context, idempotencyKey uuid.U
 		&i.Status,
 		&i.Amount,
 		&i.RawResponse,
+		&i.IsPolling,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -83,7 +96,7 @@ func (q *Queries) GetByIdempotencyKey(ctx context.Context, idempotencyKey uuid.U
 
 const getPendingTransaction = `-- name: GetPendingTransaction :one
 
-SELECT id, user_id, idempotency_key, bill_ref_id, txn_ref_no, payment_method, gateway_rrn, status, amount, raw_response, created_at, updated_at FROM giki_wallet.gateway_transactions
+SELECT id, user_id, idempotency_key, bill_ref_id, txn_ref_no, payment_method, gateway_rrn, status, amount, raw_response, is_polling, created_at, updated_at FROM giki_wallet.gateway_transactions
 WHERE user_id = $1
     AND status IN ('PENDING', 'UNKNOWN')
 LIMIT 1
@@ -103,6 +116,34 @@ func (q *Queries) GetPendingTransaction(ctx context.Context, userID uuid.UUID) (
 		&i.Status,
 		&i.Amount,
 		&i.RawResponse,
+		&i.IsPolling,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getTransactionByTxnRefNo = `-- name: GetTransactionByTxnRefNo :one
+
+SELECT id, user_id, idempotency_key, bill_ref_id, txn_ref_no, payment_method, gateway_rrn, status, amount, raw_response, is_polling, created_at, updated_at from giki_wallet.gateway_transactions
+WHERE txn_ref_no = $1
+`
+
+func (q *Queries) GetTransactionByTxnRefNo(ctx context.Context, txnRefNo string) (GikiWalletGatewayTransaction, error) {
+	row := q.db.QueryRow(ctx, getTransactionByTxnRefNo, txnRefNo)
+	var i GikiWalletGatewayTransaction
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.IdempotencyKey,
+		&i.BillRefID,
+		&i.TxnRefNo,
+		&i.PaymentMethod,
+		&i.GatewayRrn,
+		&i.Status,
+		&i.Amount,
+		&i.RawResponse,
+		&i.IsPolling,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -121,4 +162,34 @@ type UpdateGatewayTransactionStatusParams struct {
 func (q *Queries) UpdateGatewayTransactionStatus(ctx context.Context, arg UpdateGatewayTransactionStatusParams) error {
 	_, err := q.db.Exec(ctx, updateGatewayTransactionStatus, arg.Status, arg.TxnRefNo)
 	return err
+}
+
+const updatePollingStatus = `-- name: UpdatePollingStatus :one
+
+UPDATE giki_wallet.gateway_transactions
+SET is_polling = TRUE
+WHERE txn_ref_no = $1 AND is_polling = FALSE
+RETURNING id, user_id, idempotency_key, bill_ref_id, txn_ref_no, payment_method, gateway_rrn, status, amount, raw_response, is_polling, created_at, updated_at
+`
+
+// - update polling status
+func (q *Queries) UpdatePollingStatus(ctx context.Context, txnRefNo string) (GikiWalletGatewayTransaction, error) {
+	row := q.db.QueryRow(ctx, updatePollingStatus, txnRefNo)
+	var i GikiWalletGatewayTransaction
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.IdempotencyKey,
+		&i.BillRefID,
+		&i.TxnRefNo,
+		&i.PaymentMethod,
+		&i.GatewayRrn,
+		&i.Status,
+		&i.Amount,
+		&i.RawResponse,
+		&i.IsPolling,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

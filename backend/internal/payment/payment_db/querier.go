@@ -11,10 +11,14 @@ import (
 )
 
 type Querier interface {
+	ClearPollingStatus(ctx context.Context, txnRefNo string) error
 	CreateGatewayTransaction(ctx context.Context, arg CreateGatewayTransactionParams) (GikiWalletGatewayTransaction, error)
 	GetByIdempotencyKey(ctx context.Context, idempotencyKey uuid.UUID) (GikiWalletGatewayTransaction, error)
 	GetPendingTransaction(ctx context.Context, userID uuid.UUID) (GikiWalletGatewayTransaction, error)
+	GetTransactionByTxnRefNo(ctx context.Context, txnRefNo string) (GikiWalletGatewayTransaction, error)
 	UpdateGatewayTransactionStatus(ctx context.Context, arg UpdateGatewayTransactionStatusParams) error
+	//- update polling status
+	UpdatePollingStatus(ctx context.Context, txnRefNo string) (GikiWalletGatewayTransaction, error)
 }
 
 var _ Querier = (*Queries)(nil)

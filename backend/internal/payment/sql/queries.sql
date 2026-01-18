@@ -18,3 +18,20 @@ WHERE user_id = $1
     AND status IN ('PENDING', 'UNKNOWN')
 LIMIT 1;
 
+-- name: GetTransactionByTxnRefNo :one
+
+SELECT * from giki_wallet.gateway_transactions
+WHERE txn_ref_no = $1;
+
+--- update polling status
+
+-- name: UpdatePollingStatus :one
+UPDATE giki_wallet.gateway_transactions
+SET is_polling = TRUE
+WHERE txn_ref_no = $1 AND is_polling = FALSE
+RETURNING *;
+
+-- name: ClearPollingStatus :exec
+UPDATE giki_wallet.gateway_transactions
+SET is_polling = FALSE
+WHERE txn_ref_no = $1;
