@@ -42,8 +42,20 @@ func (h *Handler) TopUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if response.Status == PaymentStatusSuccess {
-		common.ResponseWithJSON(w, http.StatusOK, response)
-		return
+	tx.Commit(r.Context())
+
+	if response.PaymentMethod == PaymentMethodMWallet {
+		status := response.Status
+
+		switch status {
+		case PaymentStatusSuccess:
+			common.ResponseWithJSON(w, http.StatusOK, response)
+			return
+		case PaymentStatusFailed:
+			common.ResponseWithJSON(w, http.StatusBadRequest, response)
+			return
+		default:
+			go h.service.startPollingForTransaction(response.TxnRefNo)
+		}
 	}
 }
