@@ -55,7 +55,7 @@ func (s *Service) AuthenticateAndIssueTokens(ctx context.Context, tx pgx.Tx, ema
 			return LoginResult{}, ErrInvalidPassword
 		default:
 			log.Printf("Error getting user by email: %v", err)
-			return LoginResult{}, fmt.Errorf("get user by email: %w", err)
+			return LoginResult{}, fmt.Errorf("error getting user by email: %w", err)
 		}
 
 	}
