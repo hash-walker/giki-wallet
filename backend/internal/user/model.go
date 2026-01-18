@@ -19,6 +19,28 @@ type User struct {
 	CreatedAt    time.Time `json:"created_at,omitempty"`
 }
 
+type CreateUserParams struct {
+	Name        string
+	Email       string
+	UserType    string
+	Password    string
+	PhoneNumber string
+}
+
+type CreateStudentParams struct {
+	UserID        uuid.UUID
+	RegID         string
+	DegreeProgram pgtype.Text
+	BatchYear     pgtype.Int4
+}
+
+type CreateEmployeeParams struct {
+	UserID      uuid.UUID
+	EmployeeID  pgtype.Text
+	Designation pgtype.Text
+	Department  pgtype.Text
+}
+
 func mapDBUserToUser(u userdb.GikiWalletUser) User {
 	return User{
 		ID:        u.ID,
