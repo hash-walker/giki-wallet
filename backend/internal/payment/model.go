@@ -18,7 +18,7 @@ const (
 	PaymentStatusUnknown PaymentStatus = "UNKNOWN"
 )
 
-// Frontend → backend
+// TopUpRequest Frontend → backend
 type TopUpRequest struct {
 	IdempotencyKey uuid.UUID     `json:"idempotency_key"`
 	Amount         int64         `json:"amount"` // smallest unit (e.g., paisa)
@@ -27,7 +27,7 @@ type TopUpRequest struct {
 	CNICLast6      string        `json:"cnic_last6,omitempty"`
 }
 
-// Backend → frontend
+// TopUpResult Backend → frontend
 type TopUpResult struct {
 	ID            uuid.UUID     `json:"id"`         // gateway_transactions.id
 	TxnRefNo      string        `json:"txn_ref_no"` // gateway_transactions.txn_ref_no
