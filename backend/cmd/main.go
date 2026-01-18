@@ -50,12 +50,13 @@ func main() {
 	}
 	defer pool.Close()
 
+	inquiryRateLimiter := payment.NewRateLimiter(10)
 	userService := user.NewService(pool)
 	userHandler := user.NewHandler(userService)
 	authService := auth.NewService(pool)
 	authHandler := auth.NewHandler(authService)
-	paymentService := payment.NewService(pool, jazzcashClient)
-	paymentHandler := payment.NewHandler(paymentService)
+	paymentService := payment.NewService(pool, jazzcashClient, inquiryRateLimiter)
+	_ = payment.NewHandler(paymentService)
 
 	srv := api.NewServer(userHandler, authHandler)
 	srv.MountRoutes()
