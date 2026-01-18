@@ -22,6 +22,9 @@ CREATE TABLE giki_wallet.gateway_transactions (
     amount BIGINT NOT NULL,
     raw_response JSONB,
 
+    -- Polling bool
+    is_polling BOOLEAN DEFAULT FALSE,
+
     -- Timestamps
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -30,3 +33,4 @@ CREATE TABLE giki_wallet.gateway_transactions (
 -- +goose down
 
 DROP TABLE giki_wallet.gateway_transactions;
+DROP TYPE current_status;
