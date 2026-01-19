@@ -63,6 +63,27 @@ func (h *Handler) TopUp(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Handler) CardCallBack(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+
+	if err != nil {
+		log.Printf("cannot parse form data: %v", err)
+		common.ResponseWithError(w, http.StatusInternalServerError, "Internal Server Error")
+		return
+	}
+
+	tx, err := h.service.dbPool.Begin(r.Context())
+	if err != nil {
+		log.Printf("DATABASE ERROR: %v", err)
+		common.ResponseWithError(w, http.StatusInternalServerError, "Internal Server Error")
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	response, err := h.service.CompleteCardPayment(r.Context(), tx, r.Form)
+
+}
+
 // handleServiceError maps service errors to HTTP responses
 func (h *Handler) handleServiceError(w http.ResponseWriter, err error) {
 	switch {

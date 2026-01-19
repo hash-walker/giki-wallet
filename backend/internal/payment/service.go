@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/hash-walker/giki-wallet/internal/auth"
+	"github.com/hash-walker/giki-wallet/internal/config"
 	"github.com/hash-walker/giki-wallet/internal/payment/gateway"
 	payment "github.com/hash-walker/giki-wallet/internal/payment/payment_db"
 	"github.com/jackc/pgx/v5"
@@ -142,6 +144,21 @@ func (s *Service) InitiatePayment(ctx context.Context, tx pgx.Tx, payload TopUpR
 		return nil, fmt.Errorf("%w: %v", ErrDatabaseQuery, err)
 	}
 
+	transaction, err := paymentQ.GetPendingTransaction(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := s.checkTransactionStatus(ctx, paymentQ, transaction)
+	if err != nil {
+		return nil, err
+	}
+
+	if response.Status == PaymentStatusFailed {
+	} else {
+		return response, nil
+	}
+
 	// Generate reference numbers
 	billRefNo, err := GenerateBillRefNo()
 	if err != nil {
@@ -174,6 +191,8 @@ func (s *Service) InitiatePayment(ctx context.Context, tx pgx.Tx, payload TopUpR
 	switch payload.Method {
 	case PaymentMethodMWallet:
 		return s.initiateMWalletPayment(ctx, paymentQ, gatewayTxn, payload, billRefNo, txnRefNo)
+	case PaymentMethodCard:
+		return s.initiateCardPayment(ctx, gatewayTxn, payload, billRefNo, txnRefNo)
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrInvalidPaymentMethod, payload.Method)
 	}
@@ -218,64 +237,88 @@ func (s *Service) initiateMWalletPayment(
 	}
 
 	// Call gateway
-	mwResponse, err := s.gatewayClient.SubmitMWallet(ctx, mwRequest)
+	_, err = s.gatewayClient.SubmitMWallet(ctx, mwRequest)
 	if err != nil {
 		log.Printf("gateway MWallet initiate failed: %v", err)
 		return nil, fmt.Errorf("%w: %v", ErrGatewayUnavailable, err)
 	}
 
-	// Process response
-	paymentStatus := gatewayStatusToPaymentStatus(mwResponse.Status)
-
-	switch paymentStatus {
-	case PaymentStatusSuccess:
-		err := paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
-			Status:   payment.CurrentStatus(PaymentStatusSuccess),
-			TxnRefNo: txnRefNo,
-		})
-		if err != nil {
-			log.Printf("failed to update transaction status to SUCCESS: %v", err)
-			return nil, fmt.Errorf("%w: %v", ErrTransactionUpdate, err)
-		}
-
-		return &TopUpResult{
-			ID:            gatewayTxn.ID,
-			TxnRefNo:      txnRefNo,
-			Status:        PaymentStatusSuccess,
-			Message:       mwResponse.Message,
-			PaymentMethod: PaymentMethodMWallet,
-			Amount:        payload.Amount,
-		}, nil
-
-	case PaymentStatusPending, PaymentStatusUnknown:
-		return &TopUpResult{
-			ID:            gatewayTxn.ID,
-			TxnRefNo:      txnRefNo,
-			Status:        PaymentStatusPending,
-			Message:       mwResponse.Message,
-			PaymentMethod: PaymentMethodMWallet,
-			Amount:        payload.Amount,
-		}, nil
-
-	default:
-		err := paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
-			Status:   payment.CurrentStatus(PaymentStatusFailed),
-			TxnRefNo: txnRefNo,
-		})
-		if err != nil {
-			log.Printf("failed to update transaction status to FAILED: %v", err)
-			return nil, fmt.Errorf("%w: %v", ErrTransactionUpdate, err)
-		}
-
-		return &TopUpResult{
-			ID:            gatewayTxn.ID,
-			TxnRefNo:      txnRefNo,
-			Status:        PaymentStatusFailed,
-			Message:       mwResponse.Message,
-			PaymentMethod: PaymentMethodMWallet,
-			Amount:        payload.Amount,
-		}, nil
+	response, err := s.checkTransactionStatus(ctx, paymentQ, gatewayTxn)
+	if err != nil {
+		return nil, err
 	}
+
+	return response, nil
+
+}
+
+func (s *Service) initiateCardPayment(
+	ctx context.Context,
+	gatewayTxn payment.GikiWalletGatewayTransaction,
+	payload TopUpRequest,
+	billRefNo, txnRefNo string,
+) (*TopUpResult, error) {
+	// Build request
+	txnDateTime := time.Now().Format("20060102150405")
+	txnExpiryDateTime := time.Now().Add(24 * time.Hour).Format("20060102150405")
+	returnURL := config.LoadConfig().Jazzcash.CardCallbackURL
+
+	cardRequest := gateway.CardInitiateRequest{
+		AmountPaisa:       AmountToPaisa(payload.Amount),
+		BillRefID:         billRefNo,
+		TxnRefNo:          txnRefNo,
+		Description:       "GIKI Wallet Top Up",
+		ReturnURL:         returnURL,
+		TxnDateTime:       txnDateTime,
+		TxnExpiryDateTime: txnExpiryDateTime,
+	}
+
+	// initiate card payment
+	cardInitiateResponse, err := s.gatewayClient.InitiateCard(ctx, cardRequest)
+
+	if err != nil {
+		log.Printf("gateway card initiate failed: %v", err)
+		return nil, fmt.Errorf("%w: %v", ErrGatewayUnavailable, err)
+	}
+
+	return &TopUpResult{
+		ID:            gatewayTxn.ID,
+		TxnRefNo:      txnRefNo,
+		Status:        PaymentStatus(gatewayTxn.Status),
+		PaymentMethod: PaymentMethodCard,
+		Redirect: &RedirectPayload{
+			PostURL:   cardInitiateResponse.PostURL,
+			Fields:    cardInitiateResponse.Fields,
+			ReturnURL: returnURL,
+		},
+	}, nil
+
+}
+
+func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.Values) (*TopUpResult, error) {
+	callback, err := s.gatewayClient.ParseAndVerifyCardCallback(ctx, rForm)
+
+	if err != nil {
+		log.Printf("gateway card complete failed: %v", err)
+		return nil, fmt.Errorf("%w: %v", ErrGatewayUnavailable, err)
+	}
+
+	paymentQ := s.q.WithTx(tx)
+	gatewayTxn, err := paymentQ.GetTransactionByTxnRefNo(ctx, callback.TxnRefNo)
+
+	if err != nil {
+		log.Printf("cannot get transaction: %v", err)
+		return nil, fmt.Errorf("%w: %v", ErrDatabaseQuery, err)
+	}
+
+	response, err := s.checkTransactionStatus(ctx, paymentQ, gatewayTxn)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+
 }
 
 // =============================================================================
@@ -299,7 +342,7 @@ func (s *Service) handleExistingTransaction(
 		}, nil
 
 	case payment.CurrentStatus(PaymentStatusPending), payment.CurrentStatus(PaymentStatusUnknown):
-		return s.checkPendingTransactionStatus(ctx, paymentQ, existing)
+		return s.checkTransactionStatus(ctx, paymentQ, existing)
 
 	default:
 		return &TopUpResult{
@@ -313,7 +356,7 @@ func (s *Service) handleExistingTransaction(
 }
 
 // checkPendingTransactionStatus queries gateway for current status of pending transaction
-func (s *Service) checkPendingTransactionStatus(
+func (s *Service) checkTransactionStatus(
 	ctx context.Context,
 	paymentQ *payment.Queries,
 	existing payment.GikiWalletGatewayTransaction,
@@ -391,7 +434,6 @@ func (s *Service) checkPendingTransactionStatus(
 
 // startPollingForTransaction polls gateway for transaction status updates
 func (s *Service) startPollingForTransaction(txRefNo string) {
-
 	conn, err := s.dbPool.Acquire(context.Background())
 	if err != nil {
 		log.Printf("failed to acquire db connection for polling: %v", err)
