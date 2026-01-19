@@ -82,11 +82,11 @@ type CardCallback struct {
 // =============================================================================
 
 type Gateway interface {
-	SubmitMWallet(ctx context.Context, req MWalletInitiateRequest) (MWalletInitiateResponse, error)
-	InitiateCard(ctx context.Context, req CardInitiateRequest) (CardInitiateResponse, error)
+	SubmitMWallet(ctx context.Context, req MWalletInitiateRequest) (*MWalletInitiateResponse, error)
+	InitiateCard(ctx context.Context, req CardInitiateRequest) (*CardInitiateResponse, error)
 
-	Inquiry(ctx context.Context, req InquiryRequest) (InquiryResponse, error)
+	Inquiry(ctx context.Context, req InquiryRequest) (*InquiryResponse, error)
 
 	// ParseAndVerifyCardCallback For card ReturnURL/callback validation
-	ParseAndVerifyCardCallback(ctx context.Context, form map[string]string) (CardCallback, error)
+	ParseAndVerifyCardCallback(ctx context.Context, form map[string]string) (*CardCallback, error)
 }
