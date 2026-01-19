@@ -42,7 +42,11 @@ func (s *Server) MountRoutes() {
 	r.Post("/auth/register", s.User.Register)
 	r.Post("/auth/signin", s.Auth.Login)
 
-	r.Route(
-		r.Use(auth)
-		)
+	r.Route("/payment", func(r chi.Router) {
+		r.Use(auth.RequireAuth)
+		r.Post("/topup", s.Payment.TopUp)
+		r.Get("/payment/{txn_ref_no}", s.Payment.CardPaymentPage)
+	})
+
+	r.Post("/bookings/payment/response", s.Payment.CardCallBack)
 }
