@@ -65,9 +65,9 @@ func (h *Handler) TopUp(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CardPaymentPage(w http.ResponseWriter, r *http.Request) {
-	txn := chi.URLParam(r, "txn")
+	txnRefNo := chi.URLParam(r, "txn_ref_no")
 
-	html, err := h.service.initiateCardPayment(r.Context(), txn)
+	html, err := h.service.initiateCardPayment(r.Context(), txnRefNo)
 
 	if err != nil {
 		h.handleServiceError(w, err)
