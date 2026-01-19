@@ -39,7 +39,7 @@ type MWalletInitiateResponse struct {
 }
 
 type CardInitiateRequest struct {
-	AmountPaisa       int64
+	AmountPaisa       string
 	BillRefID         string
 	TxnRefNo          string
 	Description       string
@@ -70,9 +70,11 @@ type InquiryResponse struct {
 type CardCallback struct {
 	TxnRefNo        string
 	ResponseCode    string
+	Status          Status
+	Message         string
 	ResponseMessage string
 	RRN             string
-	Fields          map[string]string // full pp_* payload
+	Raw             map[string]any // full pp_* payload
 }
 
 // =============================================================================

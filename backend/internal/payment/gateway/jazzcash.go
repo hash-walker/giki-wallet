@@ -9,10 +9,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/hash-walker/giki-wallet/internal/config"
 )
 
 // =============================================================================
@@ -35,6 +37,7 @@ const (
 	FieldTxnExpiryDateTime = "pp_TxnExpiryDateTime"
 	FieldReturnURL         = "pp_ReturnURL"
 	FieldSecureHash        = "pp_SecureHash"
+	FieldTxnCurrency       = "pp_TxnCurrency"
 )
 
 // =============================================================================
@@ -91,14 +94,14 @@ func NewJazzCashClient(
 // PUBLIC API METHODS - Gateway interface implementation
 // =============================================================================
 
-func (c *JazzCashClient) SubmitMWallet(ctx context.Context, req MWalletInitiateRequest) (MWalletInitiateResponse, error) {
+func (c *JazzCashClient) SubmitMWallet(ctx context.Context, req MWalletInitiateRequest) (*MWalletInitiateResponse, error) {
 	fields := c.buildMWalletFields(req)
 
 	// find the secure hash
 	secureHash, err := c.JazzcashSecureHash(fields)
 
 	if err != nil {
-		return MWalletInitiateResponse{}, err
+		return nil, err
 	}
 
 	fields[FieldSecureHash] = secureHash
@@ -106,14 +109,14 @@ func (c *JazzCashClient) SubmitMWallet(ctx context.Context, req MWalletInitiateR
 	// convert fields to json body
 	jsonBody, err := json.Marshal(fields)
 	if err != nil {
-		return MWalletInitiateResponse{}, err
+		return nil, err
 	}
 
 	// create a https post request
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.statusInquiryURL, bytes.NewBuffer(jsonBody))
 
 	if err != nil {
-		return MWalletInitiateResponse{}, err
+		return nil, err
 	}
 
 	// set headers content-type
@@ -123,13 +126,13 @@ func (c *JazzCashClient) SubmitMWallet(ctx context.Context, req MWalletInitiateR
 	resp, err := c.httpClient.Do(httpReq)
 
 	if err != nil {
-		return MWalletInitiateResponse{}, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	// check http status
 	if resp.StatusCode != http.StatusOK {
-		return MWalletInitiateResponse{}, fmt.Errorf("inquiry API returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("inquiry API returned status %d", resp.StatusCode)
 	}
 
 	// parse json resp
@@ -137,16 +140,51 @@ func (c *JazzCashClient) SubmitMWallet(ctx context.Context, req MWalletInitiateR
 	var responseMap map[string]any
 
 	if err := json.NewDecoder(resp.Body).Decode(&responseMap); err != nil {
-		return MWalletInitiateResponse{}, fmt.Errorf("failed to decode response: %w", err)
+		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	// verify response hash
 
 	if err := c.verifyResponseHash(responseMap); err != nil {
-		return MWalletInitiateResponse{}, fmt.Errorf("response hash verification failed: %w", err)
+		return nil, fmt.Errorf("response hash verification failed: %w", err)
 	}
 
 	return c.mapMWalletResponse(responseMap), nil
+}
+
+func (c *JazzCashClient) InitiateCard(ctx context.Context, req CardInitiateRequest) (*CardInitiateResponse, error) {
+	fields := c.buildCardFields(req)
+
+	// find the secure hash
+	secureHash, err := c.JazzcashSecureHash(fields)
+
+	if err != nil {
+		return nil, err
+	}
+
+	fields[FieldSecureHash] = secureHash
+
+	return &CardInitiateResponse{
+		PostURL: config.LoadConfig().Jazzcash.CardPaymentURL,
+		Fields:  fields,
+	}, nil
+}
+
+func (c *JazzCashClient) ParseAndVerifyCardCallback(ctx context.Context, rForm url.Values) (*CardCallback, error) {
+	var responseMap map[string]any
+
+	for key, value := range rForm {
+		responseMap[key] = value
+	}
+
+	// verify response hash
+
+	if err := c.verifyResponseHash(responseMap); err != nil {
+		return nil, fmt.Errorf("response hash verification failed: %w", err)
+	}
+
+	return c.mapCardResponse(responseMap), nil
+
 }
 
 func (c *JazzCashClient) Inquiry(ctx context.Context, txnRefNo string) (InquiryResponse, error) {
@@ -298,12 +336,11 @@ func (c *JazzCashClient) verifyResponseHash(responseMap map[string]any) error {
 func (c *JazzCashClient) buildMWalletFields(req MWalletInitiateRequest) JazzCashFields {
 	fields := make(JazzCashFields)
 
-	fields[FieldVersion] = "2.0"
-	fields[FieldTxnType] = "MWALLET"
 	fields[FieldLanguage] = "EN"
 	fields[FieldMerchantID] = c.merchantID
 	fields[FieldPassword] = c.password
 	fields[FieldAmount] = req.AmountPaisa
+	fields[FieldTxnCurrency] = "PKR"
 	fields[FieldBillReference] = req.BillRefID
 	fields[FieldTxnRefNo] = req.TxnRefNo
 	fields[FieldDescription] = req.Description
@@ -320,11 +357,12 @@ func (c *JazzCashClient) buildCardFields(req CardInitiateRequest) JazzCashFields
 	fields := make(JazzCashFields)
 
 	fields[FieldVersion] = "1.1"
-	fields[FieldTxnType] = "CARDPAYMENT"
+	fields[FieldTxnType] = "MPAY"
 	fields[FieldLanguage] = "EN"
 	fields[FieldMerchantID] = c.merchantID
 	fields[FieldPassword] = c.password
-	fields[FieldAmount] = strconv.FormatInt(req.AmountPaisa, 10)
+	fields[FieldAmount] = req.AmountPaisa
+	fields[FieldTxnCurrency] = "PKR"
 	fields[FieldBillReference] = req.BillRefID
 	fields[FieldTxnRefNo] = req.TxnRefNo
 	fields[FieldDescription] = req.Description
@@ -411,8 +449,31 @@ func (c *JazzCashClient) mapInquiryResponse(responseMap map[string]any) InquiryR
 	return resp
 }
 
-func (c *JazzCashClient) mapMWalletResponse(responseMap map[string]any) MWalletInitiateResponse {
-	resp := MWalletInitiateResponse{
+func (c *JazzCashClient) mapMWalletResponse(responseMap map[string]any) *MWalletInitiateResponse {
+	resp := &MWalletInitiateResponse{
+		Raw: responseMap,
+	}
+
+	responseCode, _ := responseMap["pp_ResponseCode"].(string)
+	resp.ResponseCode = responseCode
+
+	// Map to status
+	resp.Status = mapResponseCodeToStatus(responseCode)
+
+	// Convert response code to user-friendly message
+	resp.Message = getUserFriendlyMessage(responseCode)
+
+	// Extract RRN
+	if rrn, ok := responseMap["pp_RetreivalReferenceNo"].(string); ok {
+		resp.RRN = rrn
+	}
+
+	return resp
+
+}
+
+func (c *JazzCashClient) mapCardResponse(responseMap map[string]any) *CardCallback {
+	resp := &CardCallback{
 		Raw: responseMap,
 	}
 
