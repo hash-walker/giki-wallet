@@ -134,30 +134,31 @@ func (s *Service) InitiatePayment(ctx context.Context, tx pgx.Tx, payload TopUpR
 	// Check for existing payment with this idempotency key
 	existingPayment, err := paymentQ.GetByIdempotencyKey(ctx, idempotencyKey)
 	if err == nil {
-		if existingPayment.Status == payment.CurrentStatus(PaymentStatusFailed) {
-			// Previous transaction failed - proceed to create new
-		} else {
-			return s.handleExistingTransaction(ctx, paymentQ, existingPayment)
-		}
+		// Found existing transaction - check real status via Inquiry for all statuses
+		return s.handleExistingTransaction(ctx, paymentQ, existingPayment)
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		log.Printf("error checking idempotency key: %v", err)
 		return nil, fmt.Errorf("%w: %v", ErrDatabaseQuery, err)
 	}
 
+	// Check for existing pending transaction
 	transaction, err := paymentQ.GetPendingTransaction(ctx, userID)
-	if err != nil {
-		return nil, err
+	if err == nil {
+		// Found a pending transaction - check its current status
+		response, err := s.checkTransactionStatus(ctx, paymentQ, transaction)
+		if err != nil {
+			log.Printf("error checking transaction status: %v", err)
+			// Continue to create new transaction on error
+		} else if response.Status != PaymentStatusFailed {
+			// Return if still pending or successful
+			return response, nil
+		}
+		// If status is FAILED, continue to create a new transaction
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		// Only log actual errors, not "no rows"
+		log.Printf("error checking pending transaction: %v", err)
 	}
-
-	response, err := s.checkTransactionStatus(ctx, paymentQ, transaction)
-	if err != nil {
-		return nil, err
-	}
-
-	if response.Status == PaymentStatusFailed {
-	} else {
-		return response, nil
-	}
+	// No pending transaction found or pending transaction failed - create new one
 
 	// Generate reference numbers
 	billRefNo, err := GenerateBillRefNo()
@@ -187,12 +188,20 @@ func (s *Service) InitiatePayment(ctx context.Context, tx pgx.Tx, payload TopUpR
 		return nil, fmt.Errorf("%w: %v", ErrTransactionCreation, err)
 	}
 
+	baseURL := config.LoadConfig().Jazzcash.BaseURL
+
 	// Route to payment method handler
 	switch payload.Method {
 	case PaymentMethodMWallet:
 		return s.initiateMWalletPayment(ctx, paymentQ, gatewayTxn, payload, billRefNo, txnRefNo)
 	case PaymentMethodCard:
-		return s.initiateCardPayment(ctx, gatewayTxn, payload, billRefNo, txnRefNo)
+		return &TopUpResult{
+			ID:             gatewayTxn.ID,
+			TxnRefNo:       txnRefNo,
+			Status:         PaymentStatus(gatewayTxn.Status),
+			PaymentMethod:  PaymentMethodCard,
+			PaymentPageURL: fmt.Sprintf("%s/payment/page/%s", baseURL, txnRefNo),
+		}, nil
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrInvalidPaymentMethod, payload.Method)
 	}
@@ -244,6 +253,7 @@ func (s *Service) initiateMWalletPayment(
 	}
 
 	response, err := s.checkTransactionStatus(ctx, paymentQ, gatewayTxn)
+
 	if err != nil {
 		return nil, err
 	}
@@ -254,19 +264,29 @@ func (s *Service) initiateMWalletPayment(
 
 func (s *Service) initiateCardPayment(
 	ctx context.Context,
-	gatewayTxn payment.GikiWalletGatewayTransaction,
-	payload TopUpRequest,
-	billRefNo, txnRefNo string,
-) (*TopUpResult, error) {
+	txnRefNo string,
+) (string, error) {
+
+	txn, err := s.q.GetTransactionByTxnRefNo(ctx, txnRefNo)
+
+	if err != nil {
+		log.Printf("cannot get transaction: %v", err)
+		return "", fmt.Errorf("%w: %v", ErrDatabaseQuery, err)
+	}
+
+	if txn.Status != "PENDING" {
+		return "", err
+	}
+
 	// Build request
 	txnDateTime := time.Now().Format("20060102150405")
 	txnExpiryDateTime := time.Now().Add(24 * time.Hour).Format("20060102150405")
 	returnURL := config.LoadConfig().Jazzcash.CardCallbackURL
 
 	cardRequest := gateway.CardInitiateRequest{
-		AmountPaisa:       AmountToPaisa(payload.Amount),
-		BillRefID:         billRefNo,
-		TxnRefNo:          txnRefNo,
+		AmountPaisa:       AmountToPaisa(txn.Amount),
+		BillRefID:         txn.BillRefID,
+		TxnRefNo:          txn.TxnRefNo,
 		Description:       "GIKI Wallet Top Up",
 		ReturnURL:         returnURL,
 		TxnDateTime:       txnDateTime,
@@ -278,21 +298,12 @@ func (s *Service) initiateCardPayment(
 
 	if err != nil {
 		log.Printf("gateway card initiate failed: %v", err)
-		return nil, fmt.Errorf("%w: %v", ErrGatewayUnavailable, err)
+		return "", fmt.Errorf("%w: %v", ErrGatewayUnavailable, err)
 	}
 
-	return &TopUpResult{
-		ID:            gatewayTxn.ID,
-		TxnRefNo:      txnRefNo,
-		Status:        PaymentStatus(gatewayTxn.Status),
-		PaymentMethod: PaymentMethodCard,
-		Redirect: &RedirectPayload{
-			PostURL:   cardInitiateResponse.PostURL,
-			Fields:    cardInitiateResponse.Fields,
-			ReturnURL: returnURL,
-		},
-	}, nil
+	html := s.buildAutoSubmitForm(cardInitiateResponse.Fields, cardInitiateResponse.PostURL)
 
+	return html, nil
 }
 
 func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.Values) (*TopUpResult, error) {
@@ -311,14 +322,27 @@ func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.
 		return nil, fmt.Errorf("%w: %v", ErrDatabaseQuery, err)
 	}
 
-	response, err := s.checkTransactionStatus(ctx, paymentQ, gatewayTxn)
+	// For card payments, use the callback status directly (no inquiry needed)
+	paymentStatus := gatewayStatusToPaymentStatus(callback.Status)
 
+	// Update transaction status based on callback
+	err = paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
+		Status:   payment.CurrentStatus(paymentStatus),
+		TxnRefNo: callback.TxnRefNo,
+	})
 	if err != nil {
-		return nil, err
+		log.Printf("failed to update transaction status: %v", err)
+		return nil, fmt.Errorf("%w: %v", ErrTransactionUpdate, err)
 	}
 
-	return response, nil
-
+	return &TopUpResult{
+		ID:            gatewayTxn.ID,
+		TxnRefNo:      gatewayTxn.TxnRefNo,
+		Status:        paymentStatus,
+		Message:       callback.Message,
+		PaymentMethod: PaymentMethodCard,
+		Amount:        gatewayTxn.Amount,
+	}, nil
 }
 
 // =============================================================================
@@ -326,6 +350,7 @@ func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.
 // =============================================================================
 
 // handleExistingTransaction checks and returns status of an existing transaction
+// For PENDING/UNKNOWN/FAILED statuses, it queries JazzCash Inquiry API to get the real status
 func (s *Service) handleExistingTransaction(
 	ctx context.Context,
 	paymentQ *payment.Queries,
@@ -333,7 +358,9 @@ func (s *Service) handleExistingTransaction(
 ) (*TopUpResult, error) {
 	switch existing.Status {
 	case payment.CurrentStatus(PaymentStatusSuccess):
+		// Already successful - return immediately
 		return &TopUpResult{
+			ID:            existing.ID,
 			TxnRefNo:      existing.TxnRefNo,
 			Status:        PaymentStatusSuccess,
 			Message:       "Transaction has already completed",
@@ -341,14 +368,22 @@ func (s *Service) handleExistingTransaction(
 			Amount:        existing.Amount,
 		}, nil
 
-	case payment.CurrentStatus(PaymentStatusPending), payment.CurrentStatus(PaymentStatusUnknown):
+	case payment.CurrentStatus(PaymentStatusPending),
+		payment.CurrentStatus(PaymentStatusUnknown),
+		payment.CurrentStatus(PaymentStatusFailed):
+		// For all non-success statuses, check the REAL status at JazzCash
+		// This handles cases where:
+		// - Payment is still pending
+		// - Payment status is unknown
+		// - Payment was marked failed but may have actually succeeded (network error scenario)
 		return s.checkTransactionStatus(ctx, paymentQ, existing)
 
 	default:
 		return &TopUpResult{
+			ID:            existing.ID,
 			TxnRefNo:      existing.TxnRefNo,
 			Status:        PaymentStatusFailed,
-			Message:       "Transaction has failed",
+			Message:       "Transaction has failed. Please create a new payment.",
 			PaymentMethod: PaymentMethod(existing.PaymentMethod),
 			Amount:        existing.Amount,
 		}, nil
@@ -525,6 +560,44 @@ func (s *Service) pollTransactionOnce(ctx context.Context, paymentQ *payment.Que
 		s.rateLimiter.Release()
 		return false
 	}
+}
+
+// =============================================================================
+// HELPERS - Form Builder
+// =============================================================================
+
+func (s *Service) buildAutoSubmitForm(fields gateway.JazzCashFields, jazzcashPostURL string) string {
+
+	html := fmt.Sprintf(`
+        <html>
+        <body onload="document.getElementById('payForm').submit()">
+            <p>Redirecting to payment gateway...</p>
+            <form id="payForm" method="POST" action="%s">
+                <input type="hidden" name="pp_Amount" value="%s">
+                <input type="hidden" name="pp_BillRefrence" value="%s">
+                <input type="hidden" name="pp_Description" value="%s">
+                <input type="hidden" name="pp_Language" value="EN">
+                <input type="hidden" name="pp_TxnRefNo" value="%s">
+                <input type="hidden" name="pp_MerchantID" value="%s">
+                <input type="hidden" name="pp_Password" value="%s">
+                <input type="hidden" name="pp_ReturnURL" value="%s">
+                <input type="hidden" name="pp_TxnCurrency" value="PKR">
+                <input type="hidden" name="pp_TxnDateTime" value="%s">
+                <input type="hidden" name="pp_TxnExpiryDateTime" value="%s">
+                <input type="hidden" name="pp_TxnRefNo" value="%s">
+                <input type="hidden" name="pp_TxnType" value="MPAY">
+                <input type="hidden" name="pp_Version" value="1.1">
+                <input type="hidden" name="pp_SecureHash" value="%s">
+                
+            </form>
+        </body>
+        </html>
+    `, jazzcashPostURL, fields[gateway.FieldAmount], fields[gateway.FieldBillReference], fields[gateway.FieldDescription],
+		fields[gateway.FieldTxnRefNo], fields[gateway.FieldMerchantID], fields[gateway.FieldPassword], fields[gateway.FieldReturnURL],
+		fields[gateway.FieldTxnDateTime], fields[gateway.FieldTxnExpiryDateTime], fields[gateway.FieldTxnRefNo], fields[gateway.FieldSecureHash],
+	)
+
+	return html
 }
 
 // =============================================================================

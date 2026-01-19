@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/hash-walker/giki-wallet/internal/common"
 )
 
@@ -63,6 +64,20 @@ func (h *Handler) TopUp(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Handler) CardPaymentPage(w http.ResponseWriter, r *http.Request) {
+	txn := chi.URLParam(r, "txn")
+
+	html, err := h.service.initiateCardPayment(r.Context(), txn)
+
+	if err != nil {
+		h.handleServiceError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html")
+	w.Write([]byte(html))
+}
+
 func (h *Handler) CardCallBack(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 
@@ -78,9 +93,29 @@ func (h *Handler) CardCallBack(w http.ResponseWriter, r *http.Request) {
 		common.ResponseWithError(w, http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
+
 	defer tx.Rollback(r.Context())
 
-	response, err := h.service.CompleteCardPayment(r.Context(), tx, r.Form)
+	result, err := h.service.CompleteCardPayment(r.Context(), tx, r.Form)
+
+	if err != nil {
+		h.handleServiceError(w, err)
+		return
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(r.Context()); err != nil {
+		log.Printf("failed to commit: %v", err)
+		http.Redirect(w, r, "/payment/error", http.StatusSeeOther)
+		return
+	}
+
+	// Redirect to success/failure page (not JSON - this is browser redirect!)
+	if result.Status == PaymentStatusSuccess {
+		http.Redirect(w, r, "/payment/success?txn="+result.TxnRefNo, http.StatusSeeOther)
+	} else {
+		http.Redirect(w, r, "/payment/failed?txn="+result.TxnRefNo, http.StatusSeeOther)
+	}
 
 }
 

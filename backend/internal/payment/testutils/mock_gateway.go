@@ -17,11 +17,12 @@ import (
 
 // MockGatewayServer represents a mock JazzCash gateway server for testing
 type MockGatewayServer struct {
-	server            *httptest.Server
-	integritySalt     string
-	mwResponseCode    string // Response code for MWallet requests
-	inquiryResponseCode string // Response code for Inquiry requests
-	mu                sync.RWMutex // Protect response codes
+	server              *httptest.Server
+	integritySalt       string
+	mwResponseCode      string       // Response code for MWallet requests
+	inquiryResponseCode string       // Response code for Inquiry requests
+	cardResponseCode    string       // Response code for Card callback simulation
+	mu                  sync.RWMutex // Protect response codes
 }
 
 // Scenario represents different test scenarios
@@ -36,18 +37,26 @@ const (
 // NewMockGatewayServer creates a new mock gateway server
 func NewMockGatewayServer(integritySalt string) *MockGatewayServer {
 	mock := &MockGatewayServer{
-		integritySalt:      integritySalt,
+		integritySalt:       integritySalt,
 		mwResponseCode:      "000", // Default: SUCCESS
 		inquiryResponseCode: "000", // Default: SUCCESS
+		cardResponseCode:    "000", // Default: SUCCESS
 	}
 
 	mux := http.NewServeMux()
 	// Handle MWallet on both endpoints (since SubmitMWallet currently uses statusInquiryURL)
 	mux.HandleFunc("/ApplicationAPI/API/2.0/Purchase/DoMWalletTransaction", mock.handleMWallet)
 	mux.HandleFunc("/ApplicationAPI/API/PaymentInquiry/Inquire", mock.handleInquiryOrMWallet)
+	// Handle Card payment page (simulates JazzCash card form submission)
+	mux.HandleFunc("/ApplicationAPI/API/CardPayment", mock.handleCardPayment)
 
 	mock.server = httptest.NewServer(mux)
 	return mock
+}
+
+// SetScenario sets the response scenario for MWallet requests (convenience alias)
+func (m *MockGatewayServer) SetScenario(scenario Scenario) {
+	m.SetMWalletScenario(scenario)
 }
 
 // SetMWalletScenario sets the response scenario for MWallet requests
@@ -76,6 +85,25 @@ func (m *MockGatewayServer) SetInquiryScenario(scenario Scenario) {
 	case ScenarioFailed:
 		m.inquiryResponseCode = "101"
 	}
+}
+
+// SetCardScenario sets the response scenario for Card callback requests
+func (m *MockGatewayServer) SetCardScenario(scenario Scenario) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	switch scenario {
+	case ScenarioSuccess:
+		m.cardResponseCode = "000"
+	case ScenarioPending:
+		m.cardResponseCode = "157"
+	case ScenarioFailed:
+		m.cardResponseCode = "101"
+	}
+}
+
+// SetCardCallbackScenario is an alias for SetCardScenario
+func (m *MockGatewayServer) SetCardCallbackScenario(scenario Scenario) {
+	m.SetCardScenario(scenario)
 }
 
 // URL returns the base URL of the mock server
@@ -185,14 +213,14 @@ func (m *MockGatewayServer) handleInquiryRequest(w http.ResponseWriter, requestD
 	m.mu.RUnlock()
 
 	response := map[string]any{
-		"pp_ResponseCode":         "000",
-		"pp_ResponseMessage":      "The requested operation has been performed successfully.",
-		"pp_PaymentResponseCode":  inquiryCode,
+		"pp_ResponseCode":           "000",
+		"pp_ResponseMessage":        "The requested operation has been performed successfully.",
+		"pp_PaymentResponseCode":    inquiryCode,
 		"pp_PaymentResponseMessage": m.getResponseMessage(inquiryCode),
-		"pp_Status":               m.getStatus(inquiryCode),
-		"pp_RetreivalReferenceNo": "TEST_RRN_" + fmt.Sprintf("%d", len(requestData)),
-		"pp_TxnRefNo":             getString(requestData, "pp_TxnRefNo"),
-		"pp_MerchantID":           getString(requestData, "pp_MerchantID"),
+		"pp_Status":                 m.getStatus(inquiryCode),
+		"pp_RetreivalReferenceNo":   "TEST_RRN_" + fmt.Sprintf("%d", len(requestData)),
+		"pp_TxnRefNo":               getString(requestData, "pp_TxnRefNo"),
+		"pp_MerchantID":             getString(requestData, "pp_MerchantID"),
 	}
 
 	secureHash := m.computeSecureHash(response)
@@ -216,6 +244,50 @@ func (m *MockGatewayServer) handleInquiry(w http.ResponseWriter, r *http.Request
 	}
 
 	m.handleInquiryRequest(w, requestData)
+}
+
+// handleCardPayment simulates the JazzCash card payment page
+// In real flow: user POSTs form to JazzCash, JazzCash redirects to ReturnURL
+// This handler just returns success to simulate the POST
+func (m *MockGatewayServer) handleCardPayment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	// Just acknowledge receipt - real JazzCash would show a payment page
+	w.Header().Set("Content-Type", "text/html")
+	w.Write([]byte("<html><body>Mock JazzCash Card Payment Page</body></html>"))
+}
+
+// GenerateCardCallbackFormData creates form data that simulates JazzCash callback
+// This is what JazzCash POSTs to your ReturnURL after user completes payment
+// responseCode: "000" for success, "101" for failed, "157" for pending
+func (m *MockGatewayServer) GenerateCardCallbackFormData(txnRefNo string, responseCode string) map[string][]string {
+	// Build callback data
+	data := map[string]any{
+		"pp_ResponseCode":         responseCode,
+		"pp_ResponseMessage":      m.getResponseMessage(responseCode),
+		"pp_TxnRefNo":             txnRefNo,
+		"pp_Amount":               "100000", // 1000 PKR in paisa
+		"pp_TxnCurrency":          "PKR",
+		"pp_TxnDateTime":          "20240119120000",
+		"pp_BillReference":        "TEST_BILL",
+		"pp_RetreivalReferenceNo": "TEST_RRN_CARD",
+		"pp_AuthCode":             "123456",
+		"pp_MerchantID":           "TEST_MERCHANT_ID",
+	}
+
+	// Compute secure hash
+	secureHash := m.computeSecureHash(data)
+
+	// Convert to url.Values format (map[string][]string)
+	result := make(map[string][]string)
+	for k, v := range data {
+		result[k] = []string{fmt.Sprintf("%v", v)}
+	}
+	result["pp_SecureHash"] = []string{secureHash}
+
+	return result
 }
 
 // computeSecureHash computes the secure hash using the same algorithm as JazzCash

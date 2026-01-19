@@ -36,14 +36,14 @@ type TopUpResult struct {
 	PaymentMethod PaymentMethod `json:"paymentMethod"`
 
 	// CARD redirect flow
-	Redirect *RedirectPayload `json:"redirect,omitempty"`
+	PaymentPageURL string `json:"redirect,omitempty"`
 
 	// Useful for UI
 	Amount int64 `json:"amount,omitempty"`
 }
 
-type RedirectPayload struct {
-	PostURL   string            `json:"post_url"`             // JazzCash hosted page URL
-	Fields    map[string]string `json:"fields"`               // pp_* fields including pp_SecureHash
-	ReturnURL string            `json:"return_url,omitempty"` // optional: for debugging/UI
-}
+//type RedirectPayload struct {
+//	PostURL   string            `json:"post_url"`             // JazzCash hosted page URL
+//	Fields    map[string]string `json:"fields"`               // pp_* fields including pp_SecureHash
+//	ReturnURL string            `json:"return_url,omitempty"` // optional: for debugging/UI
+//}

@@ -13,8 +13,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/hash-walker/giki-wallet/internal/config"
 )
 
 // =============================================================================
@@ -113,7 +111,7 @@ func (c *JazzCashClient) SubmitMWallet(ctx context.Context, req MWalletInitiateR
 	}
 
 	// create a https post request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.statusInquiryURL, bytes.NewBuffer(jsonBody))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.walletPaymentURL, bytes.NewBuffer(jsonBody))
 
 	if err != nil {
 		return nil, err
@@ -165,16 +163,16 @@ func (c *JazzCashClient) InitiateCard(ctx context.Context, req CardInitiateReque
 	fields[FieldSecureHash] = secureHash
 
 	return &CardInitiateResponse{
-		PostURL: config.LoadConfig().Jazzcash.CardPaymentURL,
+		PostURL: c.cardPaymentURL,
 		Fields:  fields,
 	}, nil
 }
 
 func (c *JazzCashClient) ParseAndVerifyCardCallback(ctx context.Context, rForm url.Values) (*CardCallback, error) {
-	var responseMap map[string]any
+	responseMap := make(map[string]any)
 
-	for key, value := range rForm {
-		responseMap[key] = value
+	for key, _ := range rForm {
+		responseMap[key] = rForm.Get(key)
 	}
 
 	// verify response hash
@@ -485,6 +483,10 @@ func (c *JazzCashClient) mapCardResponse(responseMap map[string]any) *CardCallba
 
 	// Convert response code to user-friendly message
 	resp.Message = getUserFriendlyMessage(responseCode)
+
+	txnRefNo, _ := responseMap["pp_TxnRefNo"].(string)
+
+	resp.TxnRefNo = txnRefNo
 
 	// Extract RRN
 	if rrn, ok := responseMap["pp_RetreivalReferenceNo"].(string); ok {
