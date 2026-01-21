@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.30.0
 
-package auth
+package payment_db
 
 import (
 	"context"
@@ -12,10 +12,17 @@ import (
 
 type Querier interface {
 	ClearPollingStatus(ctx context.Context, txnRefNo string) error
+	// =============================================================================
+	// AUDIT LOG QUERIES
+	// =============================================================================
+	CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (GikiWalletPaymentAuditLog, error)
 	CreateGatewayTransaction(ctx context.Context, arg CreateGatewayTransactionParams) (GikiWalletGatewayTransaction, error)
 	GetByIdempotencyKey(ctx context.Context, idempotencyKey uuid.UUID) (GikiWalletGatewayTransaction, error)
 	GetPendingTransaction(ctx context.Context, userID uuid.UUID) (GikiWalletGatewayTransaction, error)
 	GetTransactionByTxnRefNo(ctx context.Context, txnRefNo string) (GikiWalletGatewayTransaction, error)
+	GetUnprocessedAudits(ctx context.Context, arg GetUnprocessedAuditsParams) ([]GikiWalletPaymentAuditLog, error)
+	MarkAuditFailed(ctx context.Context, arg MarkAuditFailedParams) error
+	MarkAuditProcessed(ctx context.Context, id uuid.UUID) error
 	UpdateGatewayTransactionStatus(ctx context.Context, arg UpdateGatewayTransactionStatusParams) error
 	//- update polling status
 	UpdatePollingStatus(ctx context.Context, txnRefNo string) (GikiWalletGatewayTransaction, error)

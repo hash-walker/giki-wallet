@@ -12,6 +12,7 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/payment"
 	"github.com/hash-walker/giki-wallet/internal/payment/gateway"
 	"github.com/hash-walker/giki-wallet/internal/user"
+	"github.com/hash-walker/giki-wallet/internal/wallet"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/go-chi/cors"
@@ -55,8 +56,9 @@ func main() {
 	userHandler := user.NewHandler(userService)
 	authService := auth.NewService(pool)
 	authHandler := auth.NewHandler(authService)
-	paymentService := payment.NewService(pool, jazzcashClient, inquiryRateLimiter)
-	paymentHandler := payment.NewHandler(paymentService)
+	walletService := wallet.NewService(pool)
+	paymentService := payment.NewService(pool, jazzcashClient, walletService, inquiryRateLimiter)
+	paymentHandler := payment.NewHandler(paymentService, walletService)
 
 	srv := api.NewServer(userHandler, authHandler, paymentHandler)
 	srv.MountRoutes()

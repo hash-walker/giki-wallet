@@ -898,7 +898,7 @@ func TestSentinelErrors(t *testing.T) {
 		{"GatewayUnavailable", fmt.Errorf("%w: timeout", ErrGatewayUnavailable), ErrGatewayUnavailable},
 		{"Internal", fmt.Errorf("%w: oops", ErrInternal), ErrInternal},
 		{"UserIDNotFound", ErrUserIDNotFound, ErrUserIDNotFound},
-		{"FailedToAcquireLock", fmt.Errorf("%w: locked", ErrFailedToAcquireLock), ErrFailedToAcquireLock},
+		{"DuplicateIdempotencyKey", fmt.Errorf("%w: duplicate", ErrDuplicateIdempotencyKey), ErrDuplicateIdempotencyKey},
 		{"TransactionCreation", fmt.Errorf("%w: failed", ErrTransactionCreation), ErrTransactionCreation},
 		{"TransactionUpdate", fmt.Errorf("%w: failed", ErrTransactionUpdate), ErrTransactionUpdate},
 		{"DatabaseQuery", fmt.Errorf("%w: query error", ErrDatabaseQuery), ErrDatabaseQuery},

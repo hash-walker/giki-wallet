@@ -3,12 +3,13 @@
 //   sqlc v1.30.0
 // source: queries.sql
 
-package auth
+package payment_db
 
 import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const clearPollingStatus = `-- name: ClearPollingStatus :exec
@@ -20,6 +21,50 @@ WHERE txn_ref_no = $1
 func (q *Queries) ClearPollingStatus(ctx context.Context, txnRefNo string) error {
 	_, err := q.db.Exec(ctx, clearPollingStatus, txnRefNo)
 	return err
+}
+
+const createAuditLog = `-- name: CreateAuditLog :one
+
+INSERT INTO giki_wallet.payment_audit_log (
+    event_type, raw_payload, txn_ref_no, gateway_ref, user_id
+) VALUES ($1, $2, $3, $4, $5)
+RETURNING id, event_type, raw_payload, txn_ref_no, gateway_ref, user_id, processed, processed_at, process_error, retry_count, received_at
+`
+
+type CreateAuditLogParams struct {
+	EventType  GikiWalletAuditEventType `json:"event_type"`
+	RawPayload []byte                   `json:"raw_payload"`
+	TxnRefNo   pgtype.Text              `json:"txn_ref_no"`
+	GatewayRef pgtype.Text              `json:"gateway_ref"`
+	UserID     pgtype.UUID              `json:"user_id"`
+}
+
+// =============================================================================
+// AUDIT LOG QUERIES
+// =============================================================================
+func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (GikiWalletPaymentAuditLog, error) {
+	row := q.db.QueryRow(ctx, createAuditLog,
+		arg.EventType,
+		arg.RawPayload,
+		arg.TxnRefNo,
+		arg.GatewayRef,
+		arg.UserID,
+	)
+	var i GikiWalletPaymentAuditLog
+	err := row.Scan(
+		&i.ID,
+		&i.EventType,
+		&i.RawPayload,
+		&i.TxnRefNo,
+		&i.GatewayRef,
+		&i.UserID,
+		&i.Processed,
+		&i.ProcessedAt,
+		&i.ProcessError,
+		&i.RetryCount,
+		&i.ReceivedAt,
+	)
+	return i, err
 }
 
 const createGatewayTransaction = `-- name: CreateGatewayTransaction :one
@@ -148,6 +193,77 @@ func (q *Queries) GetTransactionByTxnRefNo(ctx context.Context, txnRefNo string)
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getUnprocessedAudits = `-- name: GetUnprocessedAudits :many
+SELECT id, event_type, raw_payload, txn_ref_no, gateway_ref, user_id, processed, processed_at, process_error, retry_count, received_at FROM giki_wallet.payment_audit_log
+WHERE processed = FALSE AND event_type = $1
+ORDER BY received_at
+LIMIT $2
+`
+
+type GetUnprocessedAuditsParams struct {
+	EventType GikiWalletAuditEventType `json:"event_type"`
+	Limit     int32                    `json:"limit"`
+}
+
+func (q *Queries) GetUnprocessedAudits(ctx context.Context, arg GetUnprocessedAuditsParams) ([]GikiWalletPaymentAuditLog, error) {
+	rows, err := q.db.Query(ctx, getUnprocessedAudits, arg.EventType, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GikiWalletPaymentAuditLog
+	for rows.Next() {
+		var i GikiWalletPaymentAuditLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventType,
+			&i.RawPayload,
+			&i.TxnRefNo,
+			&i.GatewayRef,
+			&i.UserID,
+			&i.Processed,
+			&i.ProcessedAt,
+			&i.ProcessError,
+			&i.RetryCount,
+			&i.ReceivedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markAuditFailed = `-- name: MarkAuditFailed :exec
+UPDATE giki_wallet.payment_audit_log
+SET process_error = $2, retry_count = retry_count + 1
+WHERE id = $1
+`
+
+type MarkAuditFailedParams struct {
+	ID           uuid.UUID   `json:"id"`
+	ProcessError pgtype.Text `json:"process_error"`
+}
+
+func (q *Queries) MarkAuditFailed(ctx context.Context, arg MarkAuditFailedParams) error {
+	_, err := q.db.Exec(ctx, markAuditFailed, arg.ID, arg.ProcessError)
+	return err
+}
+
+const markAuditProcessed = `-- name: MarkAuditProcessed :exec
+UPDATE giki_wallet.payment_audit_log
+SET processed = TRUE, processed_at = NOW()
+WHERE id = $1
+`
+
+func (q *Queries) MarkAuditProcessed(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, markAuditProcessed, id)
+	return err
 }
 
 const updateGatewayTransactionStatus = `-- name: UpdateGatewayTransactionStatus :exec
