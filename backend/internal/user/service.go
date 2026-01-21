@@ -14,24 +14,14 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func HashPassword(password string) (string, error) {
-	hashPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-
-	if err != nil {
-		return "", err
-	}
-
-	return string(hashPassword), nil
-}
-
 type Service struct {
-	q      *user_db.Queries
+	userQ  *user_db.Queries
 	dbPool *pgxpool.Pool
 }
 
 func NewService(dbPool *pgxpool.Pool) *Service {
 	return &Service{
-		q:      user_db.New(dbPool),
+		userQ:  user_db.New(dbPool),
 		dbPool: dbPool,
 	}
 }
@@ -48,9 +38,9 @@ func (s *Service) CreateUser(ctx context.Context, tx pgx.Tx, payload CreateUserP
 		return User{}, err
 	}
 
-	qUser := s.q.WithTx(tx)
+	userQ := s.userQ.WithTx(tx)
 
-	user, err := qUser.CreateUser(ctx, user_db.CreateUserParams{
+	user, err := userQ.CreateUser(ctx, user_db.CreateUserParams{
 		Name:         payload.Name,
 		Email:        payload.Email,
 		PhoneNumber:  payload.PhoneNumber,
@@ -67,12 +57,12 @@ func (s *Service) CreateUser(ctx context.Context, tx pgx.Tx, payload CreateUserP
 }
 
 func (s *Service) CreateStudent(ctx context.Context, tx pgx.Tx, payload CreateStudentParams) (Student, error) {
-	qtx := s.q.WithTx(tx)
+	userQ := s.userQ.WithTx(tx)
 
 	batchYear := payload.RegID[0:4]
 	num, _ := strconv.Atoi(batchYear)
 
-	studentRow, err := qtx.CreateStudent(ctx, user_db.CreateStudentParams{
+	studentRow, err := userQ.CreateStudent(ctx, user_db.CreateStudentParams{
 		UserID:    payload.UserID,
 		RegID:     payload.RegID,
 		BatchYear: common.IntToInt4(num),
@@ -86,9 +76,9 @@ func (s *Service) CreateStudent(ctx context.Context, tx pgx.Tx, payload CreateSt
 }
 
 func (s *Service) CreateEmployee(ctx context.Context, tx pgx.Tx, payload CreateEmployeeParams) (Employee, error) {
-	qtx := s.q.WithTx(tx)
+	userQ := s.userQ.WithTx(tx)
 
-	employeeRow, err := qtx.CreateEmployee(ctx, user_db.CreateEmployeeParams{
+	employeeRow, err := userQ.CreateEmployee(ctx, user_db.CreateEmployeeParams{
 		UserID: payload.UserID,
 	})
 
@@ -97,4 +87,14 @@ func (s *Service) CreateEmployee(ctx context.Context, tx pgx.Tx, payload CreateE
 	}
 
 	return mapDBEmployeeToEmployee(employeeRow), nil
+}
+
+func HashPassword(password string) (string, error) {
+	hashPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+
+	if err != nil {
+		return "", err
+	}
+
+	return string(hashPassword), nil
 }

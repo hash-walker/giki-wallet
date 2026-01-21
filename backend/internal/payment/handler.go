@@ -8,15 +8,18 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/hash-walker/giki-wallet/internal/common"
+	"github.com/hash-walker/giki-wallet/internal/wallet"
 )
 
 type Handler struct {
-	service *Service
+	pService *Service
+	wService *wallet.Service
 }
 
-func NewHandler(service *Service) *Handler {
+func NewHandler(pService *Service, wService *wallet.Service) *Handler {
 	return &Handler{
-		service: service,
+		pService: pService,
+		wService: wService,
 	}
 }
 
@@ -28,46 +31,30 @@ func (h *Handler) TopUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx, err := h.service.dbPool.Begin(r.Context())
-	if err != nil {
-		log.Printf("DATABASE ERROR: %v", err)
-		common.ResponseWithError(w, http.StatusInternalServerError, "Internal Server Error")
-		return
-	}
-	defer tx.Rollback(r.Context())
-
-	response, err := h.service.InitiatePayment(r.Context(), tx, params)
+	response, err := h.pService.InitiatePayment(r.Context(), params)
 	if err != nil {
 		h.handleServiceError(w, err)
 		return
 	}
 
-	if err := tx.Commit(r.Context()); err != nil {
-		log.Printf("failed to commit transaction: %v", err)
-		common.ResponseWithError(w, http.StatusInternalServerError, "Internal Server Error")
-		return
-	}
-
-	// Start polling for pending MWallet transactions
 	if response.PaymentMethod == PaymentMethodMWallet && response.Status == PaymentStatusPending {
-		go h.service.startPollingForTransaction(response.TxnRefNo)
+		go h.pService.startPollingForTransaction(response.TxnRefNo)
 	}
 
-	// Return appropriate status based on payment result
 	switch response.Status {
 	case PaymentStatusSuccess:
 		common.ResponseWithJSON(w, http.StatusOK, response)
 	case PaymentStatusFailed:
-		common.ResponseWithJSON(w, http.StatusOK, response) // 200 OK with failed status in body
+		common.ResponseWithJSON(w, http.StatusOK, response)
 	default:
-		common.ResponseWithJSON(w, http.StatusAccepted, response) // 202 for pending
+		common.ResponseWithJSON(w, http.StatusAccepted, response)
 	}
 }
 
 func (h *Handler) CardPaymentPage(w http.ResponseWriter, r *http.Request) {
-	txnRefNo := chi.URLParam(r, "txn_ref_no")
+	txnRefNo := chi.URLParam(r, "txnRefNo")
 
-	html, err := h.service.initiateCardPayment(r.Context(), txnRefNo)
+	html, err := h.pService.initiateCardPayment(r.Context(), txnRefNo)
 
 	if err != nil {
 		h.handleServiceError(w, err)
@@ -87,41 +74,49 @@ func (h *Handler) CardCallBack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx, err := h.service.dbPool.Begin(r.Context())
+	auditID, err := h.pService.LogCardCallbackAudit(r.Context(), r.Form)
+	if err != nil {
+		log.Printf("CRITICAL: failed to write audit log: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	tx, err := h.pService.dbPool.Begin(r.Context())
+
 	if err != nil {
 		log.Printf("DATABASE ERROR: %v", err)
-		common.ResponseWithError(w, http.StatusInternalServerError, "Internal Server Error")
+		h.pService.MarkAuditFailed(r.Context(), auditID, err.Error())
+
+		http.Redirect(w, r, "/payment/pending", http.StatusSeeOther)
 		return
 	}
 
 	defer tx.Rollback(r.Context())
 
-	result, err := h.service.CompleteCardPayment(r.Context(), tx, r.Form)
-
+	result, err := h.pService.CompleteCardPayment(r.Context(), tx, r.Form, auditID)
 	if err != nil {
-		h.handleServiceError(w, err)
+		h.pService.MarkAuditFailed(r.Context(), auditID, err.Error())
+		http.Redirect(w, r, "/payment/pending", http.StatusSeeOther)
 		return
 	}
 
-	// Commit the transaction
 	if err := tx.Commit(r.Context()); err != nil {
 		log.Printf("failed to commit: %v", err)
+		h.pService.MarkAuditFailed(r.Context(), auditID, err.Error())
 		http.Redirect(w, r, "/payment/error", http.StatusSeeOther)
 		return
 	}
 
-	// Redirect to success/failure page (not JSON - this is browser redirect!)
 	if result.Status == PaymentStatusSuccess {
 		http.Redirect(w, r, "/payment/success?txn="+result.TxnRefNo, http.StatusSeeOther)
 	} else {
 		http.Redirect(w, r, "/payment/failed?txn="+result.TxnRefNo, http.StatusSeeOther)
 	}
-
 }
 
-// handleServiceError maps service errors to HTTP responses
 func (h *Handler) handleServiceError(w http.ResponseWriter, err error) {
 	switch {
+
 	// Validation errors (400) - show message to user
 	case errors.Is(err, ErrInvalidPhoneNumber):
 		common.ResponseWithError(w, http.StatusBadRequest, "Invalid phone number format. Please enter a valid Pakistani mobile number.")
@@ -137,6 +132,10 @@ func (h *Handler) handleServiceError(w http.ResponseWriter, err error) {
 	// Auth errors (401)
 	case errors.Is(err, ErrUserIDNotFound):
 		common.ResponseWithError(w, http.StatusUnauthorized, "Authentication required.")
+
+	// Duplicate/conflict (409)
+	case errors.Is(err, ErrDuplicateIdempotencyKey):
+		common.ResponseWithError(w, http.StatusConflict, "This request has already been processed.")
 
 	// Internal errors (500) - generic message, log details
 	default:

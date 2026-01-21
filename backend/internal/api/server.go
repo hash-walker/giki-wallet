@@ -45,8 +45,8 @@ func (s *Server) MountRoutes() {
 	r.Route("/payment", func(r chi.Router) {
 		r.Use(auth.RequireAuth)
 		r.Post("/topup", s.Payment.TopUp)
-		r.Get("/payment/{txn_ref_no}", s.Payment.CardPaymentPage)
+		r.Get("/page/{txnRefNo}", s.Payment.CardPaymentPage)
 	})
 
-	r.Post("/bookings/payment/response", s.Payment.CardCallBack)
+	r.Post("/booking/payment/response", s.Payment.CardCallBack)
 }

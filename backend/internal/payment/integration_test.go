@@ -14,6 +14,7 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/payment/gateway"
 	payment "github.com/hash-walker/giki-wallet/internal/payment/payment_db"
 	"github.com/hash-walker/giki-wallet/internal/payment/testutils"
+	"github.com/hash-walker/giki-wallet/internal/wallet"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -71,8 +72,11 @@ func TestMain(m *testing.M) {
 	// Create rate limiter
 	rateLimiter := NewRateLimiter(10)
 
+	// Create wallet service
+	walletService := wallet.NewService(testDBPool)
+
 	// Create test service
-	testService = NewService(testDBPool, gatewayClient, rateLimiter)
+	testService = NewService(testDBPool, gatewayClient, walletService, rateLimiter)
 
 	// Run tests
 	code := m.Run()
@@ -100,9 +104,17 @@ func createTestUser() error {
 }
 
 // cleanupTestUser removes the test user from the database
+// Set SKIP_TEST_CLEANUP=1 to keep data for inspection
 func cleanupTestUser() {
+	if os.Getenv("SKIP_TEST_CLEANUP") == "1" {
+		fmt.Printf("\n⚠️  SKIP_TEST_CLEANUP=1: Data left in DB for user %s\n", testUserID)
+		return
+	}
 	ctx := context.Background()
-	// First delete transactions, then user
+	// First delete ledger entries, then wallets, audit logs, transactions, then user
+	testDBPool.Exec(ctx, "DELETE FROM giki_wallet.ledger WHERE wallet_id IN (SELECT id FROM giki_wallet.wallets WHERE user_id = $1)", testUserID)
+	testDBPool.Exec(ctx, "DELETE FROM giki_wallet.wallets WHERE user_id = $1", testUserID)
+	testDBPool.Exec(ctx, "DELETE FROM giki_wallet.payment_audit_log WHERE user_id = $1", testUserID)
 	testDBPool.Exec(ctx, "DELETE FROM giki_wallet.gateway_transactions WHERE user_id = $1", testUserID)
 	testDBPool.Exec(ctx, "DELETE FROM giki_wallet.users WHERE id = $1", testUserID)
 }
@@ -114,7 +126,13 @@ func createIntegrationTestContext() context.Context {
 
 // cleanupTestTransactions removes test transactions
 func cleanupTestTransactions(t *testing.T) {
-	_, err := testDBPool.Exec(context.Background(),
+	ctx := context.Background()
+	_, err := testDBPool.Exec(ctx,
+		"DELETE FROM giki_wallet.payment_audit_log WHERE user_id = $1", testUserID)
+	if err != nil {
+		t.Logf("Warning: Failed to cleanup audit logs: %v", err)
+	}
+	_, err = testDBPool.Exec(ctx,
 		"DELETE FROM giki_wallet.gateway_transactions WHERE user_id = $1", testUserID)
 	if err != nil {
 		t.Logf("Warning: Failed to cleanup test transactions: %v", err)
@@ -135,15 +153,8 @@ func TestIntegration_MWalletPayment_Success(t *testing.T) {
 	ctx := createIntegrationTestContext()
 	idempotencyKey := uuid.New()
 
-	// Start a transaction
-	tx, err := testDBPool.Begin(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-	defer tx.Rollback(ctx)
-
-	// Initiate payment
-	result, err := testService.InitiatePayment(ctx, tx, TopUpRequest{
+	// Initiate payment (no transaction wrapper - service handles its own DB operations)
+	result, err := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         500,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
@@ -153,11 +164,6 @@ func TestIntegration_MWalletPayment_Success(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("InitiatePayment failed: %v", err)
-	}
-
-	// Commit transaction
-	if err := tx.Commit(ctx); err != nil {
-		t.Fatalf("Failed to commit transaction: %v", err)
 	}
 
 	// Verify result
@@ -196,13 +202,7 @@ func TestIntegration_MWalletPayment_Pending(t *testing.T) {
 	ctx := createIntegrationTestContext()
 	idempotencyKey := uuid.New()
 
-	tx, err := testDBPool.Begin(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-	defer tx.Rollback(ctx)
-
-	result, err := testService.InitiatePayment(ctx, tx, TopUpRequest{
+	result, err := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         1000,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
@@ -212,10 +212,6 @@ func TestIntegration_MWalletPayment_Pending(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("InitiatePayment failed: %v", err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		t.Fatalf("Failed to commit transaction: %v", err)
 	}
 
 	// Pending status means user needs to confirm on their phone
@@ -245,13 +241,7 @@ func TestIntegration_MWalletPayment_Failed(t *testing.T) {
 	ctx := createIntegrationTestContext()
 	idempotencyKey := uuid.New()
 
-	tx, err := testDBPool.Begin(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-	defer tx.Rollback(ctx)
-
-	result, err := testService.InitiatePayment(ctx, tx, TopUpRequest{
+	result, err := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         500,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
@@ -261,10 +251,6 @@ func TestIntegration_MWalletPayment_Failed(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("InitiatePayment failed: %v", err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		t.Fatalf("Failed to commit transaction: %v", err)
 	}
 
 	if result.Status != PaymentStatusFailed {
@@ -285,8 +271,7 @@ func TestIntegration_Idempotency_SameKeyReturnsSameResult(t *testing.T) {
 	idempotencyKey := uuid.New()
 
 	// First request
-	tx1, _ := testDBPool.Begin(ctx)
-	result1, err := testService.InitiatePayment(ctx, tx1, TopUpRequest{
+	result1, err := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         500,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
@@ -296,11 +281,9 @@ func TestIntegration_Idempotency_SameKeyReturnsSameResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("First request failed: %v", err)
 	}
-	tx1.Commit(ctx)
 
 	// Second request with same idempotency key
-	tx2, _ := testDBPool.Begin(ctx)
-	result2, err := testService.InitiatePayment(ctx, tx2, TopUpRequest{
+	result2, err := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         500,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
@@ -310,7 +293,6 @@ func TestIntegration_Idempotency_SameKeyReturnsSameResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Second request failed: %v", err)
 	}
-	tx2.Commit(ctx)
 
 	// Should return the same transaction
 	if result1.ID != result2.ID {
@@ -331,8 +313,8 @@ func TestIntegration_Idempotency_FailedTransactionAllowsRetry(t *testing.T) {
 	// First request - FAILED (set both MWallet and Inquiry to failed)
 	mockGateway.SetScenario(testutils.ScenarioFailed)
 	mockGateway.SetInquiryScenario(testutils.ScenarioFailed)
-	tx1, _ := testDBPool.Begin(ctx)
-	result1, err := testService.InitiatePayment(ctx, tx1, TopUpRequest{
+
+	result1, err := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         500,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
@@ -342,7 +324,6 @@ func TestIntegration_Idempotency_FailedTransactionAllowsRetry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("First request failed: %v", err)
 	}
-	tx1.Commit(ctx)
 
 	if result1.Status != PaymentStatusFailed {
 		t.Fatalf("First request should have failed, got %s", result1.Status)
@@ -351,8 +332,8 @@ func TestIntegration_Idempotency_FailedTransactionAllowsRetry(t *testing.T) {
 	// Second request with same idempotency key should retry the existing transaction
 	mockGateway.SetScenario(testutils.ScenarioSuccess)
 	mockGateway.SetInquiryScenario(testutils.ScenarioSuccess) // Also set inquiry to success for retry
-	tx2, _ := testDBPool.Begin(ctx)
-	result2, err := testService.InitiatePayment(ctx, tx2, TopUpRequest{
+
+	result2, err := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         500,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
@@ -362,7 +343,6 @@ func TestIntegration_Idempotency_FailedTransactionAllowsRetry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Second request failed: %v", err)
 	}
-	tx2.Commit(ctx)
 
 	// Should reuse the same transaction record (correct idempotency behavior)
 	if result1.ID != result2.ID {
@@ -388,13 +368,7 @@ func TestIntegration_CardPayment_InitiateReturnsPaymentPageURL(t *testing.T) {
 	ctx := createIntegrationTestContext()
 	idempotencyKey := uuid.New()
 
-	tx, err := testDBPool.Begin(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-	defer tx.Rollback(ctx)
-
-	result, err := testService.InitiatePayment(ctx, tx, TopUpRequest{
+	result, err := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         1000,
 		Method:         PaymentMethodCard,
 		IdempotencyKey: idempotencyKey,
@@ -402,10 +376,6 @@ func TestIntegration_CardPayment_InitiateReturnsPaymentPageURL(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("InitiatePayment failed: %v", err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		t.Fatalf("Failed to commit transaction: %v", err)
 	}
 
 	// Card payment returns a payment page URL
@@ -428,8 +398,7 @@ func TestIntegration_CardPayment_InitiateCardPaymentBuildsHTML(t *testing.T) {
 	idempotencyKey := uuid.New()
 
 	// First create a transaction via InitiatePayment
-	tx, _ := testDBPool.Begin(ctx)
-	result, err := testService.InitiatePayment(ctx, tx, TopUpRequest{
+	result, err := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         1000,
 		Method:         PaymentMethodCard,
 		IdempotencyKey: idempotencyKey,
@@ -437,7 +406,6 @@ func TestIntegration_CardPayment_InitiateCardPaymentBuildsHTML(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InitiatePayment failed: %v", err)
 	}
-	tx.Commit(ctx)
 
 	// Now call initiateCardPayment which builds the HTML form
 	html, err := testService.initiateCardPayment(ctx, result.TxnRefNo)
@@ -473,8 +441,7 @@ func TestIntegration_CardCallback_Success(t *testing.T) {
 	idempotencyKey := uuid.New()
 
 	// Create transaction
-	tx, _ := testDBPool.Begin(ctx)
-	initResult, err := testService.InitiatePayment(ctx, tx, TopUpRequest{
+	initResult, err := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         1000,
 		Method:         PaymentMethodCard,
 		IdempotencyKey: idempotencyKey,
@@ -482,17 +449,18 @@ func TestIntegration_CardCallback_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InitiatePayment failed: %v", err)
 	}
-	tx.Commit(ctx)
 
 	// Simulate callback from JazzCash
 	callbackData := mockGateway.GenerateCardCallbackFormData(initResult.TxnRefNo, "000") // 000 = success
 
-	tx2, _ := testDBPool.Begin(ctx)
-	result, err := testService.CompleteCardPayment(ctx, tx2, callbackData)
+	// CompleteCardPayment still requires a transaction (for atomic status + wallet credit)
+	tx, _ := testDBPool.Begin(ctx)
+	result, err := testService.CompleteCardPayment(ctx, tx, callbackData, uuid.Nil) // uuid.Nil = no audit ID for test
 	if err != nil {
+		tx.Rollback(ctx)
 		t.Fatalf("CompleteCardPayment failed: %v", err)
 	}
-	tx2.Commit(ctx)
+	tx.Commit(ctx)
 
 	if result.Status != PaymentStatusSuccess {
 		t.Errorf("Expected status SUCCESS, got %s", result.Status)
@@ -519,34 +487,28 @@ func TestIntegration_CardCallback_Failed(t *testing.T) {
 	idempotencyKey := uuid.New()
 
 	// Create transaction
-	tx, err := testDBPool.Begin(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-	initResult, err := testService.InitiatePayment(ctx, tx, TopUpRequest{
+	initResult, err := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         1000,
 		Method:         PaymentMethodCard,
 		IdempotencyKey: idempotencyKey,
 	})
 	if err != nil {
-		tx.Rollback(ctx)
 		t.Fatalf("InitiatePayment failed: %v", err)
 	}
-	tx.Commit(ctx)
 
 	// Simulate failed callback
 	callbackData := mockGateway.GenerateCardCallbackFormData(initResult.TxnRefNo, "101") // 101 = failed
 
-	tx2, err := testDBPool.Begin(ctx)
+	tx, err := testDBPool.Begin(ctx)
 	if err != nil {
 		t.Fatalf("Failed to begin transaction: %v", err)
 	}
-	result, err := testService.CompleteCardPayment(ctx, tx2, callbackData)
+	result, err := testService.CompleteCardPayment(ctx, tx, callbackData, uuid.Nil)
 	if err != nil {
-		tx2.Rollback(ctx)
+		tx.Rollback(ctx)
 		t.Fatalf("CompleteCardPayment failed: %v", err)
 	}
-	tx2.Commit(ctx)
+	tx.Commit(ctx)
 
 	if result.Status != PaymentStatusFailed {
 		t.Errorf("Expected status FAILED, got %s", result.Status)
@@ -563,10 +525,7 @@ func TestIntegration_Validation_InvalidPhoneNumber(t *testing.T) {
 
 	ctx := createIntegrationTestContext()
 
-	tx, _ := testDBPool.Begin(ctx)
-	defer tx.Rollback(ctx)
-
-	_, err := testService.InitiatePayment(ctx, tx, TopUpRequest{
+	_, err := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         500,
 		PhoneNumber:    "invalid",
 		CNICLast6:      "123456",
@@ -588,10 +547,7 @@ func TestIntegration_Validation_InvalidCNIC(t *testing.T) {
 
 	ctx := createIntegrationTestContext()
 
-	tx, _ := testDBPool.Begin(ctx)
-	defer tx.Rollback(ctx)
-
-	_, err := testService.InitiatePayment(ctx, tx, TopUpRequest{
+	_, err := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         500,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "12", // Too short
@@ -614,10 +570,7 @@ func TestIntegration_Validation_NoUserInContext(t *testing.T) {
 	// Use context WITHOUT user ID
 	ctx := context.Background()
 
-	tx, _ := testDBPool.Begin(ctx)
-	defer tx.Rollback(ctx)
-
-	_, err := testService.InitiatePayment(ctx, tx, TopUpRequest{
+	_, err := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         500,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
@@ -644,11 +597,7 @@ func TestIntegration_Database_TransactionPersistence(t *testing.T) {
 	mockGateway.SetScenario(testutils.ScenarioSuccess)
 	ctx := createIntegrationTestContext()
 
-	tx, err := testDBPool.Begin(ctx)
-	if err != nil {
-		t.Fatalf("Failed to begin transaction: %v", err)
-	}
-	result, err := testService.InitiatePayment(ctx, tx, TopUpRequest{
+	result, err := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         750,
 		PhoneNumber:    "03009876543",
 		CNICLast6:      "654321",
@@ -656,10 +605,8 @@ func TestIntegration_Database_TransactionPersistence(t *testing.T) {
 		IdempotencyKey: uuid.New(),
 	})
 	if err != nil {
-		tx.Rollback(ctx)
 		t.Fatalf("InitiatePayment failed: %v", err)
 	}
-	tx.Commit(ctx)
 
 	// Query the database directly to verify all fields
 	q := payment.New(testDBPool)
@@ -696,15 +643,13 @@ func TestIntegration_Database_PollingStatus(t *testing.T) {
 	mockGateway.SetScenario(testutils.ScenarioPending)
 	ctx := createIntegrationTestContext()
 
-	tx, _ := testDBPool.Begin(ctx)
-	result, _ := testService.InitiatePayment(ctx, tx, TopUpRequest{
+	result, _ := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         500,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
 		IdempotencyKey: uuid.New(),
 	})
-	tx.Commit(ctx)
 
 	q := payment.New(testDBPool)
 
@@ -745,15 +690,13 @@ func TestIntegration_Inquiry_Success(t *testing.T) {
 	mockGateway.SetScenario(testutils.ScenarioPending)
 	ctx := createIntegrationTestContext()
 
-	tx, _ := testDBPool.Begin(ctx)
-	result, _ := testService.InitiatePayment(ctx, tx, TopUpRequest{
+	result, _ := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         500,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
 		IdempotencyKey: uuid.New(),
 	})
-	tx.Commit(ctx)
 
 	// Set inquiry to return success
 	mockGateway.SetInquiryScenario(testutils.ScenarioSuccess)
@@ -779,15 +722,13 @@ func BenchmarkIntegration_MWalletPayment(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tx, _ := testDBPool.Begin(ctx)
-		testService.InitiatePayment(ctx, tx, TopUpRequest{
+		testService.InitiatePayment(ctx, TopUpRequest{
 			Amount:         500,
 			PhoneNumber:    "03001234567",
 			CNICLast6:      "123456",
 			Method:         PaymentMethodMWallet,
 			IdempotencyKey: uuid.New(),
 		})
-		tx.Commit(ctx)
 	}
 
 	// Cleanup
