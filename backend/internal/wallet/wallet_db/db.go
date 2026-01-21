@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.30.0
 
-package payment_db
+package wallet_db
 
 import (
 	"context"

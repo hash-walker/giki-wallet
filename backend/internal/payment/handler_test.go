@@ -25,7 +25,7 @@ func TestHandleServiceError_ValidationErrors(t *testing.T) {
 		gatewayClient: gatewayClient,
 		rateLimiter:   rateLimiter,
 	}
-	handler := NewHandler(service)
+	handler := NewHandler(service, nil) // nil wallet service - not used in these tests
 
 	tests := []struct {
 		name           string
@@ -104,7 +104,7 @@ func TestTopUp_InvalidJSON(t *testing.T) {
 		// Note: dbPool is nil, so any DB operation would panic
 		// This tests that invalid JSON is caught before DB operations
 	}
-	handler := NewHandler(service)
+	handler := NewHandler(service, nil) // nil wallet service - not used in these tests
 
 	req := httptest.NewRequest(http.MethodPost, "/payment/topup", bytes.NewBufferString("invalid json"))
 	req.Header.Set("Content-Type", "application/json")
@@ -127,7 +127,7 @@ func TestTopUp_EmptyBody(t *testing.T) {
 		gatewayClient: gatewayClient,
 		rateLimiter:   rateLimiter,
 	}
-	handler := NewHandler(service)
+	handler := NewHandler(service, nil) // nil wallet service - not used in these tests
 
 	req := httptest.NewRequest(http.MethodPost, "/payment/topup", nil)
 	req.Header.Set("Content-Type", "application/json")

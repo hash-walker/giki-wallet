@@ -57,6 +57,178 @@ func (ns NullCurrentStatus) Value() (driver.Value, error) {
 	return string(ns.CurrentStatus), nil
 }
 
+type GikiWalletAuditEventType string
+
+const (
+	GikiWalletAuditEventTypeTOPUPREQUEST    GikiWalletAuditEventType = "TOPUP_REQUEST"
+	GikiWalletAuditEventTypeCARDCALLBACK    GikiWalletAuditEventType = "CARD_CALLBACK"
+	GikiWalletAuditEventTypeMWALLETCALLBACK GikiWalletAuditEventType = "MWALLET_CALLBACK"
+	GikiWalletAuditEventTypeINQUIRYRESULT   GikiWalletAuditEventType = "INQUIRY_RESULT"
+)
+
+func (e *GikiWalletAuditEventType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = GikiWalletAuditEventType(s)
+	case string:
+		*e = GikiWalletAuditEventType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for GikiWalletAuditEventType: %T", src)
+	}
+	return nil
+}
+
+type NullGikiWalletAuditEventType struct {
+	GikiWalletAuditEventType GikiWalletAuditEventType `json:"giki_wallet_audit_event_type"`
+	Valid                    bool                     `json:"valid"` // Valid is true if GikiWalletAuditEventType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullGikiWalletAuditEventType) Scan(value interface{}) error {
+	if value == nil {
+		ns.GikiWalletAuditEventType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.GikiWalletAuditEventType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullGikiWalletAuditEventType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.GikiWalletAuditEventType), nil
+}
+
+type GikiWalletCurrencyCodeType string
+
+const (
+	GikiWalletCurrencyCodeTypeGBux GikiWalletCurrencyCodeType = "G-Bux"
+)
+
+func (e *GikiWalletCurrencyCodeType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = GikiWalletCurrencyCodeType(s)
+	case string:
+		*e = GikiWalletCurrencyCodeType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for GikiWalletCurrencyCodeType: %T", src)
+	}
+	return nil
+}
+
+type NullGikiWalletCurrencyCodeType struct {
+	GikiWalletCurrencyCodeType GikiWalletCurrencyCodeType `json:"giki_wallet_currency_code_type"`
+	Valid                      bool                       `json:"valid"` // Valid is true if GikiWalletCurrencyCodeType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullGikiWalletCurrencyCodeType) Scan(value interface{}) error {
+	if value == nil {
+		ns.GikiWalletCurrencyCodeType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.GikiWalletCurrencyCodeType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullGikiWalletCurrencyCodeType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.GikiWalletCurrencyCodeType), nil
+}
+
+type GikiWalletTransactionCategoryType string
+
+const (
+	GikiWalletTransactionCategoryTypeJAZZCASHDEPOSIT GikiWalletTransactionCategoryType = "JAZZCASH_DEPOSIT"
+	GikiWalletTransactionCategoryTypeTICKETPURCHASE  GikiWalletTransactionCategoryType = "TICKET_PURCHASE"
+	GikiWalletTransactionCategoryTypeREFUND          GikiWalletTransactionCategoryType = "REFUND"
+)
+
+func (e *GikiWalletTransactionCategoryType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = GikiWalletTransactionCategoryType(s)
+	case string:
+		*e = GikiWalletTransactionCategoryType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for GikiWalletTransactionCategoryType: %T", src)
+	}
+	return nil
+}
+
+type NullGikiWalletTransactionCategoryType struct {
+	GikiWalletTransactionCategoryType GikiWalletTransactionCategoryType `json:"giki_wallet_transaction_category_type"`
+	Valid                             bool                              `json:"valid"` // Valid is true if GikiWalletTransactionCategoryType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullGikiWalletTransactionCategoryType) Scan(value interface{}) error {
+	if value == nil {
+		ns.GikiWalletTransactionCategoryType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.GikiWalletTransactionCategoryType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullGikiWalletTransactionCategoryType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.GikiWalletTransactionCategoryType), nil
+}
+
+type GikiWalletWalletStatusType string
+
+const (
+	GikiWalletWalletStatusTypeACTIVE    GikiWalletWalletStatusType = "ACTIVE"
+	GikiWalletWalletStatusTypeFROZEN    GikiWalletWalletStatusType = "FROZEN"
+	GikiWalletWalletStatusTypeSUSPENDED GikiWalletWalletStatusType = "SUSPENDED"
+	GikiWalletWalletStatusTypeCLOSED    GikiWalletWalletStatusType = "CLOSED"
+)
+
+func (e *GikiWalletWalletStatusType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = GikiWalletWalletStatusType(s)
+	case string:
+		*e = GikiWalletWalletStatusType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for GikiWalletWalletStatusType: %T", src)
+	}
+	return nil
+}
+
+type NullGikiWalletWalletStatusType struct {
+	GikiWalletWalletStatusType GikiWalletWalletStatusType `json:"giki_wallet_wallet_status_type"`
+	Valid                      bool                       `json:"valid"` // Valid is true if GikiWalletWalletStatusType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullGikiWalletWalletStatusType) Scan(value interface{}) error {
+	if value == nil {
+		ns.GikiWalletWalletStatusType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.GikiWalletWalletStatusType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullGikiWalletWalletStatusType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.GikiWalletWalletStatusType), nil
+}
+
 type GikiWalletAdmin struct {
 	UserID      uuid.UUID `json:"user_id"`
 	Role        string    `json:"role"`
@@ -84,6 +256,30 @@ type GikiWalletGatewayTransaction struct {
 	IsPolling      pgtype.Bool   `json:"is_polling"`
 	CreatedAt      time.Time     `json:"created_at"`
 	UpdatedAt      time.Time     `json:"updated_at"`
+}
+
+type GikiWalletLedger struct {
+	ID              uuid.UUID                         `json:"id"`
+	WalletID        uuid.UUID                         `json:"wallet_id"`
+	Amount          int64                             `json:"amount"`
+	TransactionType GikiWalletTransactionCategoryType `json:"transaction_type"`
+	ReferenceID     string                            `json:"reference_id"`
+	Description     pgtype.Text                       `json:"description"`
+	CreatedAt       time.Time                         `json:"created_at"`
+}
+
+type GikiWalletPaymentAuditLog struct {
+	ID           uuid.UUID                `json:"id"`
+	EventType    GikiWalletAuditEventType `json:"event_type"`
+	RawPayload   []byte                   `json:"raw_payload"`
+	TxnRefNo     pgtype.Text              `json:"txn_ref_no"`
+	GatewayRef   pgtype.Text              `json:"gateway_ref"`
+	UserID       pgtype.UUID              `json:"user_id"`
+	Processed    pgtype.Bool              `json:"processed"`
+	ProcessedAt  pgtype.Timestamptz       `json:"processed_at"`
+	ProcessError pgtype.Text              `json:"process_error"`
+	RetryCount   pgtype.Int4              `json:"retry_count"`
+	ReceivedAt   time.Time                `json:"received_at"`
 }
 
 type GikiWalletRefreshToken struct {
@@ -120,4 +316,12 @@ type GikiWalletUser struct {
 	UserType     string      `json:"user_type"`
 	CreatedAt    time.Time   `json:"created_at"`
 	UpdatedAt    time.Time   `json:"updated_at"`
+}
+
+type GikiWalletWallet struct {
+	ID        uuid.UUID                  `json:"id"`
+	UserID    uuid.UUID                  `json:"user_id"`
+	Status    GikiWalletWalletStatusType `json:"status"`
+	Currency  GikiWalletCurrencyCodeType `json:"currency"`
+	CreatedAt time.Time                  `json:"created_at"`
 }

@@ -3,6 +3,7 @@ package payment
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -13,11 +14,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hash-walker/giki-wallet/internal/auth"
 	"github.com/hash-walker/giki-wallet/internal/config"
 	"github.com/hash-walker/giki-wallet/internal/payment/gateway"
 	payment "github.com/hash-walker/giki-wallet/internal/payment/payment_db"
+	"github.com/hash-walker/giki-wallet/internal/wallet"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -35,12 +40,12 @@ var (
 	ErrGatewayUnavailable = errors.New("payment gateway unavailable")
 
 	// ErrInternal Internal errors (500) - generic message, log details
-	ErrInternal            = errors.New("internal error")
-	ErrUserIDNotFound      = errors.New("user id not found in context")
-	ErrFailedToAcquireLock = errors.New("failed to acquire advisory lock")
-	ErrTransactionCreation = errors.New("failed to create transaction")
-	ErrTransactionUpdate   = errors.New("failed to update transaction status")
-	ErrDatabaseQuery       = errors.New("database query failed")
+	ErrInternal                = errors.New("internal error")
+	ErrUserIDNotFound          = errors.New("user id not found in context")
+	ErrTransactionCreation     = errors.New("failed to create transaction")
+	ErrTransactionUpdate       = errors.New("failed to update transaction status")
+	ErrDatabaseQuery           = errors.New("database query failed")
+	ErrDuplicateIdempotencyKey = errors.New("duplicate idempotency key")
 )
 
 // =============================================================================
@@ -50,6 +55,7 @@ var (
 // Service handles payment business logic
 type Service struct {
 	q             *payment.Queries
+	walletS       *wallet.Service
 	dbPool        *pgxpool.Pool
 	gatewayClient *gateway.JazzCashClient
 	rateLimiter   *RateLimiter
@@ -65,10 +71,11 @@ type RateLimiter struct {
 // =============================================================================
 
 // NewService creates a new payment service
-func NewService(dbPool *pgxpool.Pool, gatewayClient *gateway.JazzCashClient, rateLimiter *RateLimiter) *Service {
+func NewService(dbPool *pgxpool.Pool, gatewayClient *gateway.JazzCashClient, walletS *wallet.Service, rateLimiter *RateLimiter) *Service {
 	return &Service{
 		q:             payment.New(dbPool),
 		dbPool:        dbPool,
+		walletS:       walletS,
 		gatewayClient: gatewayClient,
 		rateLimiter:   rateLimiter,
 	}
@@ -112,55 +119,50 @@ func (rl *RateLimiter) Release() {
 // PUBLIC SERVICE METHODS
 // =============================================================================
 
-// InitiatePayment starts a new payment transaction with idempotency support
-func (s *Service) InitiatePayment(ctx context.Context, tx pgx.Tx, payload TopUpRequest) (*TopUpResult, error) {
+func (s *Service) InitiatePayment(ctx context.Context, payload TopUpRequest) (*TopUpResult, error) {
 	idempotencyKey := payload.IdempotencyKey
-	paymentQ := s.q.WithTx(tx)
 
-	// Acquire advisory lock for idempotency
-	_, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1))", idempotencyKey.String())
-	if err != nil {
-		log.Printf("failed to acquire advisory lock: %v", err)
-		return nil, fmt.Errorf("%w: %v", ErrFailedToAcquireLock, err)
-	}
-
-	// Get user_id from context
 	userID, ok := auth.GetUserIDFromContext(ctx)
 	if !ok {
 		log.Printf("user id not found in context")
 		return nil, ErrUserIDNotFound
 	}
 
-	// Check for existing payment with this idempotency key
-	existingPayment, err := paymentQ.GetByIdempotencyKey(ctx, idempotencyKey)
+	// ══════════════════════════════════════════════════════════════════════════=
+	// check for existing transaction (uses unique constraint)
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	existingPayment, err := s.q.GetByIdempotencyKey(ctx, idempotencyKey)
 	if err == nil {
-		// Found existing transaction - check real status via Inquiry for all statuses
-		return s.handleExistingTransaction(ctx, paymentQ, existingPayment)
+		return s.handleExistingTransaction(ctx, existingPayment)
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		log.Printf("error checking idempotency key: %v", err)
 		return nil, fmt.Errorf("%w: %v", ErrDatabaseQuery, err)
 	}
 
-	// Check for existing pending transaction
-	transaction, err := paymentQ.GetPendingTransaction(ctx, userID)
+	// ═══════════════════════════════════════════════════════════════════════════
+	// check for existing pending transaction for this user
+	// ═══════════════════════════════════════════════════════════════════════════
+	transaction, err := s.q.GetPendingTransaction(ctx, userID)
 	if err == nil {
-		// Found a pending transaction - check its current status
-		response, err := s.checkTransactionStatus(ctx, paymentQ, transaction)
+		response, err := s.checkTransactionStatus(ctx, transaction)
+
 		if err != nil {
 			log.Printf("error checking transaction status: %v", err)
 			// Continue to create new transaction on error
 		} else if response.Status != PaymentStatusFailed {
-			// Return if still pending or successful
 			return response, nil
 		}
+
 		// If status is FAILED, continue to create a new transaction
 	} else if !errors.Is(err, pgx.ErrNoRows) {
-		// Only log actual errors, not "no rows"
 		log.Printf("error checking pending transaction: %v", err)
 	}
-	// No pending transaction found or pending transaction failed - create new one
 
-	// Generate reference numbers
+	// ═══════════════════════════════════════════════════════════════════════════
+	// create new transaction record
+	// ═══════════════════════════════════════════════════════════════════════════
+
 	billRefNo, err := GenerateBillRefNo()
 	if err != nil {
 		log.Printf("error generating bill reference: %v", err)
@@ -173,8 +175,7 @@ func (s *Service) InitiatePayment(ctx context.Context, tx pgx.Tx, payload TopUpR
 		return nil, fmt.Errorf("%w: %v", ErrInternal, err)
 	}
 
-	// Create transaction record
-	gatewayTxn, err := paymentQ.CreateGatewayTransaction(ctx, payment.CreateGatewayTransactionParams{
+	gatewayTxn, err := s.q.CreateGatewayTransaction(ctx, payment.CreateGatewayTransactionParams{
 		UserID:         userID,
 		IdempotencyKey: payload.IdempotencyKey,
 		BillRefID:      billRefNo,
@@ -183,17 +184,33 @@ func (s *Service) InitiatePayment(ctx context.Context, tx pgx.Tx, payload TopUpR
 		Status:         payment.CurrentStatus(PaymentStatusPending),
 		Amount:         payload.Amount,
 	})
+
 	if err != nil {
+
+		check := CheckUniqueConstraintViolation(err)
+
+		if check {
+			existing, fetchErr := s.q.GetByIdempotencyKey(ctx, idempotencyKey)
+			if fetchErr != nil {
+				return nil, fmt.Errorf("%w: %v", ErrDatabaseQuery, fetchErr)
+			}
+			return s.handleExistingTransaction(ctx, existing)
+		}
+
 		log.Printf("failed to create gateway transaction: %v", err)
 		return nil, fmt.Errorf("%w: %v", ErrTransactionCreation, err)
+
 	}
 
 	baseURL := config.LoadConfig().Jazzcash.BaseURL
 
-	// Route to payment method handler
+	// ═══════════════════════════════════════════════════════════════════════════
+	// route to payment method handler
+	// ═══════════════════════════════════════════════════════════════════════════
+
 	switch payload.Method {
 	case PaymentMethodMWallet:
-		return s.initiateMWalletPayment(ctx, paymentQ, gatewayTxn, payload, billRefNo, txnRefNo)
+		return s.initiateMWalletPayment(ctx, gatewayTxn, payload, billRefNo, txnRefNo)
 	case PaymentMethodCard:
 		return &TopUpResult{
 			ID:             gatewayTxn.ID,
@@ -208,18 +225,117 @@ func (s *Service) InitiatePayment(ctx context.Context, tx pgx.Tx, payload TopUpR
 }
 
 // =============================================================================
+// AUDIT LOG METHODS
+// =============================================================================
+
+// LogCardCallbackAudit logs the raw callback data before processing
+func (s *Service) LogCardCallbackAudit(ctx context.Context, formData url.Values) (uuid.UUID, error) {
+
+	rawPayload, err := json.Marshal(formData)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to marshal form data: %w", err)
+	}
+
+	gatewayRef := formData.Get("pp_BillReference")
+	txnRefNo := formData.Get("pp_TxnRefNo")
+
+	auditLog, err := s.q.CreateAuditLog(ctx, payment.CreateAuditLogParams{
+		EventType:  payment.GikiWalletAuditEventTypeCARDCALLBACK,
+		RawPayload: rawPayload,
+		TxnRefNo:   pgtype.Text{String: txnRefNo, Valid: txnRefNo != ""},
+		GatewayRef: pgtype.Text{String: gatewayRef, Valid: gatewayRef != ""},
+		UserID:     pgtype.UUID{},
+	})
+
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to create audit log: %w", err)
+	}
+
+	return auditLog.ID, nil
+}
+
+func (s *Service) MarkAuditFailed(ctx context.Context, auditID uuid.UUID, errorMsg string) {
+
+	err := s.q.MarkAuditFailed(ctx, payment.MarkAuditFailedParams{
+		ID:           auditID,
+		ProcessError: pgtype.Text{String: errorMsg, Valid: true},
+	})
+	if err != nil {
+		log.Printf("failed to mark audit as failed: %v", err)
+	}
+
+}
+
+func (s *Service) MarkAuditProcessed(ctx context.Context, auditID uuid.UUID) {
+	err := s.q.MarkAuditProcessed(ctx, auditID)
+	if err != nil {
+		log.Printf("failed to mark audit as processed: %v", err)
+	}
+}
+
+func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.Values, auditID uuid.UUID) (*TopUpResult, error) {
+
+	callback, err := s.gatewayClient.ParseAndVerifyCardCallback(ctx, rForm)
+	if err != nil {
+		log.Printf("gateway card complete failed: %v", err)
+		return nil, fmt.Errorf("%w: %v", ErrGatewayUnavailable, err)
+	}
+
+	paymentQ := s.q.WithTx(tx)
+
+	gatewayTxn, err := paymentQ.GetTransactionByTxnRefNo(ctx, callback.TxnRefNo)
+
+	if err != nil {
+		log.Printf("cannot get transaction: %v", err)
+		return nil, fmt.Errorf("%w: %v", ErrDatabaseQuery, err)
+	}
+
+	paymentStatus := gatewayStatusToPaymentStatus(callback.Status)
+
+	err = paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
+		Status:   payment.CurrentStatus(paymentStatus),
+		TxnRefNo: callback.TxnRefNo,
+	})
+
+	if err != nil {
+		log.Printf("failed to update transaction status: %v", err)
+		return nil, fmt.Errorf("%w: %v", ErrTransactionUpdate, err)
+	}
+
+	if paymentStatus == PaymentStatusSuccess {
+		err = s.creditWalletIfNeeded(ctx, tx, gatewayTxn.UserID, gatewayTxn.Amount, callback.TxnRefNo, string(wallet.JazzcashDeposit))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err = paymentQ.MarkAuditProcessed(ctx, auditID)
+	if err != nil {
+		log.Printf("failed to mark audit processed: %v", err)
+		// Don't fail the whole operation for this
+	}
+
+	return &TopUpResult{
+		ID:            gatewayTxn.ID,
+		TxnRefNo:      gatewayTxn.TxnRefNo,
+		Status:        paymentStatus,
+		Message:       callback.Message,
+		PaymentMethod: PaymentMethodCard,
+		Amount:        gatewayTxn.Amount,
+	}, nil
+}
+
+// =============================================================================
 // PRIVATE SERVICE METHODS - Payment Initiation
 // =============================================================================
 
-// initiateMWalletPayment handles JazzCash MWallet payment initiation
 func (s *Service) initiateMWalletPayment(
 	ctx context.Context,
-	paymentQ *payment.Queries,
 	gatewayTxn payment.GikiWalletGatewayTransaction,
 	payload TopUpRequest,
 	billRefNo, txnRefNo string,
 ) (*TopUpResult, error) {
-	// Validate and normalize input
+
 	phoneNumber, err := NormalizePhoneNumber(payload.PhoneNumber)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidPhoneNumber, err)
@@ -230,7 +346,6 @@ func (s *Service) initiateMWalletPayment(
 		return nil, fmt.Errorf("%w: %v", ErrInvalidCNIC, err)
 	}
 
-	// Build request
 	txnDateTime := time.Now().Format("20060102150405")
 	txnExpiryDateTime := time.Now().Add(24 * time.Hour).Format("20060102150405")
 
@@ -245,21 +360,19 @@ func (s *Service) initiateMWalletPayment(
 		TxnExpiryDateTime: txnExpiryDateTime,
 	}
 
-	// Call gateway
 	_, err = s.gatewayClient.SubmitMWallet(ctx, mwRequest)
 	if err != nil {
 		log.Printf("gateway MWallet initiate failed: %v", err)
 		return nil, fmt.Errorf("%w: %v", ErrGatewayUnavailable, err)
 	}
 
-	response, err := s.checkTransactionStatus(ctx, paymentQ, gatewayTxn)
+	response, err := s.checkTransactionStatus(ctx, gatewayTxn)
 
 	if err != nil {
 		return nil, err
 	}
 
 	return response, nil
-
 }
 
 func (s *Service) initiateCardPayment(
@@ -268,14 +381,13 @@ func (s *Service) initiateCardPayment(
 ) (string, error) {
 
 	txn, err := s.q.GetTransactionByTxnRefNo(ctx, txnRefNo)
-
 	if err != nil {
 		log.Printf("cannot get transaction: %v", err)
 		return "", fmt.Errorf("%w: %v", ErrDatabaseQuery, err)
 	}
 
 	if txn.Status != "PENDING" {
-		return "", err
+		return "", fmt.Errorf("transaction is not pending")
 	}
 
 	// Build request
@@ -293,7 +405,6 @@ func (s *Service) initiateCardPayment(
 		TxnExpiryDateTime: txnExpiryDateTime,
 	}
 
-	// initiate card payment
 	cardInitiateResponse, err := s.gatewayClient.InitiateCard(ctx, cardRequest)
 
 	if err != nil {
@@ -306,43 +417,18 @@ func (s *Service) initiateCardPayment(
 	return html, nil
 }
 
-func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.Values) (*TopUpResult, error) {
-	callback, err := s.gatewayClient.ParseAndVerifyCardCallback(ctx, rForm)
-
+func (s *Service) creditWalletIfNeeded(ctx context.Context, tx pgx.Tx, userID uuid.UUID, amount int64, txnRefNo string, creditType string) error {
+	err := s.walletS.CreditWallet(ctx, tx, userID, amount, txnRefNo, creditType)
 	if err != nil {
-		log.Printf("gateway card complete failed: %v", err)
-		return nil, fmt.Errorf("%w: %v", ErrGatewayUnavailable, err)
+		// Check if it's a duplicate ledger entry (already credited) - this is OK
+		if errors.Is(err, wallet.ErrDuplicateLedgerEntry) {
+			log.Printf("wallet already credited for transaction %s (idempotent)", txnRefNo)
+			return nil // Not an error - already credited
+		}
+		log.Printf("failed to credit wallet for transaction %s: %v", txnRefNo, err)
+		return fmt.Errorf("wallet credit failed: %w", err)
 	}
-
-	paymentQ := s.q.WithTx(tx)
-	gatewayTxn, err := paymentQ.GetTransactionByTxnRefNo(ctx, callback.TxnRefNo)
-
-	if err != nil {
-		log.Printf("cannot get transaction: %v", err)
-		return nil, fmt.Errorf("%w: %v", ErrDatabaseQuery, err)
-	}
-
-	// For card payments, use the callback status directly (no inquiry needed)
-	paymentStatus := gatewayStatusToPaymentStatus(callback.Status)
-
-	// Update transaction status based on callback
-	err = paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
-		Status:   payment.CurrentStatus(paymentStatus),
-		TxnRefNo: callback.TxnRefNo,
-	})
-	if err != nil {
-		log.Printf("failed to update transaction status: %v", err)
-		return nil, fmt.Errorf("%w: %v", ErrTransactionUpdate, err)
-	}
-
-	return &TopUpResult{
-		ID:            gatewayTxn.ID,
-		TxnRefNo:      gatewayTxn.TxnRefNo,
-		Status:        paymentStatus,
-		Message:       callback.Message,
-		PaymentMethod: PaymentMethodCard,
-		Amount:        gatewayTxn.Amount,
-	}, nil
+	return nil
 }
 
 // =============================================================================
@@ -350,15 +436,12 @@ func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.
 // =============================================================================
 
 // handleExistingTransaction checks and returns status of an existing transaction
-// For PENDING/UNKNOWN/FAILED statuses, it queries JazzCash Inquiry API to get the real status
 func (s *Service) handleExistingTransaction(
 	ctx context.Context,
-	paymentQ *payment.Queries,
 	existing payment.GikiWalletGatewayTransaction,
 ) (*TopUpResult, error) {
 	switch existing.Status {
 	case payment.CurrentStatus(PaymentStatusSuccess):
-		// Already successful - return immediately
 		return &TopUpResult{
 			ID:            existing.ID,
 			TxnRefNo:      existing.TxnRefNo,
@@ -372,11 +455,7 @@ func (s *Service) handleExistingTransaction(
 		payment.CurrentStatus(PaymentStatusUnknown),
 		payment.CurrentStatus(PaymentStatusFailed):
 		// For all non-success statuses, check the REAL status at JazzCash
-		// This handles cases where:
-		// - Payment is still pending
-		// - Payment status is unknown
-		// - Payment was marked failed but may have actually succeeded (network error scenario)
-		return s.checkTransactionStatus(ctx, paymentQ, existing)
+		return s.checkTransactionStatus(ctx, existing)
 
 	default:
 		return &TopUpResult{
@@ -390,13 +469,14 @@ func (s *Service) handleExistingTransaction(
 	}
 }
 
-// checkPendingTransactionStatus queries gateway for current status of pending transaction
+// checkTransactionStatus queries gateway for current status
 func (s *Service) checkTransactionStatus(
 	ctx context.Context,
-	paymentQ *payment.Queries,
 	existing payment.GikiWalletGatewayTransaction,
 ) (*TopUpResult, error) {
+	// External API call - no transaction held
 	inquiryResult, err := s.gatewayClient.Inquiry(ctx, existing.TxnRefNo)
+
 	if err != nil {
 		log.Printf("inquiry API failed for existing transaction %s: %v", existing.TxnRefNo, err)
 		return nil, fmt.Errorf("%w: %v", ErrGatewayUnavailable, err)
@@ -405,14 +485,37 @@ func (s *Service) checkTransactionStatus(
 	paymentStatus := gatewayStatusToPaymentStatus(inquiryResult.Status)
 
 	switch paymentStatus {
-	case PaymentStatusSuccess, PaymentStatusFailed:
-		err := paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
+	case PaymentStatusSuccess:
+
+		tx, err := s.dbPool.Begin(ctx)
+		if err != nil {
+			log.Printf("failed to begin transaction: %v", err)
+			return nil, fmt.Errorf("%w: %v", ErrDatabaseQuery, err)
+		}
+		defer tx.Rollback(ctx) // Will rollback if commit doesn't happen
+
+		paymentQ := s.q.WithTx(tx)
+
+		// Update status in DB
+		err = paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
 			Status:   payment.CurrentStatus(paymentStatus),
 			TxnRefNo: existing.TxnRefNo,
 		})
 		if err != nil {
 			log.Printf("failed to update transaction status: %v", err)
 			return nil, fmt.Errorf("%w: %v", ErrTransactionUpdate, err)
+		}
+
+		// Credit wallet (must succeed or transaction rolls back)
+		err = s.creditWalletIfNeeded(ctx, tx, existing.UserID, existing.Amount, existing.TxnRefNo, string(wallet.JazzcashDeposit))
+		if err != nil {
+			return nil, err // Transaction will rollback via defer
+		}
+
+		// Commit transaction (status update + wallet credit)
+		if err := tx.Commit(ctx); err != nil {
+			log.Printf("failed to commit transaction: %v", err)
+			return nil, fmt.Errorf("%w: %v", ErrDatabaseQuery, err)
 		}
 
 		return &TopUpResult{
@@ -423,10 +526,29 @@ func (s *Service) checkTransactionStatus(
 			Amount:        existing.Amount,
 		}, nil
 
+	case PaymentStatusFailed:
+		// Update DB status to FAILED
+		err = s.q.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
+			Status:   payment.CurrentStatus(PaymentStatusFailed),
+			TxnRefNo: existing.TxnRefNo,
+		})
+		if err != nil {
+			log.Printf("failed to update transaction status to FAILED: %v", err)
+			return nil, fmt.Errorf("%w: %v", ErrTransactionUpdate, err)
+		}
+
+		return &TopUpResult{
+			TxnRefNo:      existing.TxnRefNo,
+			Status:        PaymentStatusFailed,
+			Message:       inquiryResult.Message,
+			PaymentMethod: PaymentMethod(existing.PaymentMethod),
+			Amount:        existing.Amount,
+		}, nil
+
 	case PaymentStatusPending, PaymentStatusUnknown:
 		// Check timeout
 		if time.Since(existing.CreatedAt) > 120*time.Second {
-			err := paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
+			err := s.q.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
 				Status:   payment.CurrentStatus(PaymentStatusFailed),
 				TxnRefNo: existing.TxnRefNo,
 			})
@@ -498,7 +620,7 @@ func (s *Service) startPollingForTransaction(txRefNo string) {
 			return
 
 		case <-ticker.C:
-			if done := s.pollTransactionOnce(pollCtx, paymentQ, txRefNo); done {
+			if done := s.pollTransactionOnce(pollCtx, txRefNo); done {
 				return
 			}
 		}
@@ -523,7 +645,7 @@ func (s *Service) handlePollingTimeout(paymentQ *payment.Queries, txRefNo string
 }
 
 // pollTransactionOnce performs a single polling iteration, returns true if polling should stop
-func (s *Service) pollTransactionOnce(ctx context.Context, paymentQ *payment.Queries, txRefNo string) bool {
+func (s *Service) pollTransactionOnce(ctx context.Context, txRefNo string) bool {
 	// Acquire rate limit token
 	if err := s.rateLimiter.Acquire(ctx); err != nil {
 		log.Printf("rate limiter acquire failed: %v", err)
@@ -541,18 +663,99 @@ func (s *Service) pollTransactionOnce(ctx context.Context, paymentQ *payment.Que
 	status := gatewayStatusToPaymentStatus(inquiryResult.Status)
 
 	switch status {
-	case PaymentStatusSuccess, PaymentStatusFailed:
-		err := paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
+	case PaymentStatusSuccess:
+
+		tx, err := s.dbPool.Begin(ctx)
+		if err != nil {
+			log.Printf("failed to begin transaction for polling: %v", err)
+			s.rateLimiter.Release()
+			return false // Retry later
+		}
+		defer func(tx pgx.Tx, ctx context.Context) {
+			err := tx.Rollback(ctx)
+			if err != nil {
+				log.Printf("failed to begin transaction for polling: %v", err)
+				s.rateLimiter.Release()
+				return
+			}
+		}(tx, ctx) // Will rollback if commit doesn't happen
+
+		paymentQ := s.q.WithTx(tx)
+
+		// Update status
+		err = paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
 			Status:   payment.CurrentStatus(status),
 			TxnRefNo: txRefNo,
 		})
 		if err != nil {
 			log.Printf("failed to update status to %s: %v", status, err)
+			s.rateLimiter.Release()
+			return false // Retry later
 		}
 
+		// Get transaction to get userID and amount for wallet credit
+		gatewayTxn, err := paymentQ.GetTransactionByTxnRefNo(ctx, txRefNo)
+		if err != nil {
+			log.Printf("failed to get transaction for wallet credit: %v", err)
+			s.rateLimiter.Release()
+			return false // Retry later
+		}
+
+		// Credit wallet (must succeed or transaction rolls back)
+		err = s.creditWalletIfNeeded(ctx, tx, gatewayTxn.UserID, gatewayTxn.Amount, txRefNo, string(wallet.JazzcashDeposit))
+		if err != nil {
+			log.Printf("failed to credit wallet during polling: %v", err)
+			s.rateLimiter.Release()
+			return false // Retry later - transaction will rollback via defer
+		}
+
+		// Clear polling status
 		if err := paymentQ.ClearPollingStatus(ctx, txRefNo); err != nil {
 			log.Printf("failed to clear polling status: %v", err)
+			s.rateLimiter.Release()
+			return false // Retry later
 		}
+
+		// Commit transaction (status update + wallet credit + clear polling)
+		if err := tx.Commit(ctx); err != nil {
+			log.Printf("failed to commit polling transaction: %v", err)
+			s.rateLimiter.Release()
+			return false // Retry later
+		}
+
+		s.rateLimiter.Release()
+		return true
+
+	case PaymentStatusFailed:
+
+		tx, err := s.dbPool.Begin(ctx)
+		defer tx.Rollback(ctx)
+
+		paymentQ := s.q.WithTx(tx)
+
+		err = paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
+			Status:   payment.CurrentStatus(status),
+			TxnRefNo: txRefNo,
+		})
+
+		if err != nil {
+			log.Printf("failed to update status to %s: %v", status, err)
+		}
+
+		// Clear polling status
+		if err := paymentQ.ClearPollingStatus(ctx, txRefNo); err != nil {
+			log.Printf("failed to clear polling status: %v", err)
+			s.rateLimiter.Release()
+			return false // Retry later
+		}
+
+		// Commit transaction (status update + wallet credit + clear polling)
+		if err := tx.Commit(ctx); err != nil {
+			log.Printf("failed to commit polling transaction: %v", err)
+			s.rateLimiter.Release()
+			return false // Retry later
+		}
+
 		s.rateLimiter.Release()
 		return true
 
@@ -567,7 +770,6 @@ func (s *Service) pollTransactionOnce(ctx context.Context, paymentQ *payment.Que
 // =============================================================================
 
 func (s *Service) buildAutoSubmitForm(fields gateway.JazzCashFields, jazzcashPostURL string) string {
-
 	html := fmt.Sprintf(`
         <html>
         <body onload="document.getElementById('payForm').submit()">
@@ -604,7 +806,6 @@ func (s *Service) buildAutoSubmitForm(fields gateway.JazzCashFields, jazzcashPos
 // HELPERS - Reference Number Generation
 // =============================================================================
 
-// GenerateTxnRefNo generates a unique transaction reference number
 func GenerateTxnRefNo() (string, error) {
 	date := time.Now().Format("20060102")
 	randBits, err := RandomBase32(3)
@@ -614,7 +815,6 @@ func GenerateTxnRefNo() (string, error) {
 	return fmt.Sprintf("GIKITU%s%s", date, randBits), nil
 }
 
-// GenerateBillRefNo generates a unique bill reference number
 func GenerateBillRefNo() (string, error) {
 	timestamp := time.Now().Unix()
 	randBits, err := RandomBase32(3)
@@ -624,7 +824,6 @@ func GenerateBillRefNo() (string, error) {
 	return fmt.Sprintf("BILL%d%s", timestamp, randBits), nil
 }
 
-// RandomBase32 generates n random characters from a base32-like alphabet
 func RandomBase32(n int) (string, error) {
 	const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 	b := make([]byte, n)
@@ -642,7 +841,6 @@ func RandomBase32(n int) (string, error) {
 // HELPERS - Status Conversion
 // =============================================================================
 
-// gatewayStatusToPaymentStatus converts gateway status to payment status
 func gatewayStatusToPaymentStatus(gwStatus gateway.Status) PaymentStatus {
 	switch gwStatus {
 	case gateway.StatusSuccess:
@@ -660,7 +858,6 @@ func gatewayStatusToPaymentStatus(gwStatus gateway.Status) PaymentStatus {
 // HELPERS - Input Normalization
 // =============================================================================
 
-// NormalizePhoneNumber converts phone number to standard format (03XXXXXXXXX)
 func NormalizePhoneNumber(phone string) (string, error) {
 	re := regexp.MustCompile(`\D`)
 	digits := re.ReplaceAllString(phone, "")
@@ -683,7 +880,6 @@ func NormalizePhoneNumber(phone string) (string, error) {
 	}
 }
 
-// NormalizeCNICLast6 extracts last 6 digits from CNIC
 func NormalizeCNICLast6(cnic string) (string, error) {
 	re := regexp.MustCompile(`\D`)
 	digits := re.ReplaceAllString(cnic, "")
@@ -706,4 +902,16 @@ func NormalizeCNICLast6(cnic string) (string, error) {
 // AmountToPaisa converts rupees to paisa as string
 func AmountToPaisa(amount int64) string {
 	return strconv.FormatInt(amount*100, 10)
+}
+
+// =============================================================================
+// HELPERS - Checking Unique Constraint
+// =============================================================================
+
+func CheckUniqueConstraintViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return true
+	}
+	return false
 }

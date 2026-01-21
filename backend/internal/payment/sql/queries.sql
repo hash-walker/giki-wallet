@@ -35,3 +35,29 @@ RETURNING *;
 UPDATE giki_wallet.gateway_transactions
 SET is_polling = FALSE
 WHERE txn_ref_no = $1;
+
+-- =============================================================================
+-- AUDIT LOG QUERIES
+-- =============================================================================
+
+-- name: CreateAuditLog :one
+INSERT INTO giki_wallet.payment_audit_log (
+    event_type, raw_payload, txn_ref_no, gateway_ref, user_id
+) VALUES ($1, $2, $3, $4, $5)
+RETURNING *;
+
+-- name: MarkAuditProcessed :exec
+UPDATE giki_wallet.payment_audit_log
+SET processed = TRUE, processed_at = NOW()
+WHERE id = $1;
+
+-- name: MarkAuditFailed :exec
+UPDATE giki_wallet.payment_audit_log
+SET process_error = $2, retry_count = retry_count + 1
+WHERE id = $1;
+
+-- name: GetUnprocessedAudits :many
+SELECT * FROM giki_wallet.payment_audit_log
+WHERE processed = FALSE AND event_type = $1
+ORDER BY received_at
+LIMIT $2;
