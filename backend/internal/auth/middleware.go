@@ -9,7 +9,8 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/hash-walker/giki-wallet/internal/common"
+	"github.com/hash-walker/giki-wallet/internal/common/errors"
+	"github.com/hash-walker/giki-wallet/internal/middleware"
 )
 
 type contextKey string
@@ -18,25 +19,25 @@ const userIDKey contextKey = "user_id"
 
 func RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID := middleware.GetRequestID(r.Context())
 		authHeader := r.Header.Get("Authorization")
-		// get bearer token
-		token, err := GetBearerToken(authHeader)
 
+		// Get bearer token
+		token, err := GetBearerToken(authHeader)
 		if err != nil {
-			common.ResponseWithError(w, http.StatusUnauthorized, err.Error())
+			middleware.HandleError(w, err, requestID)
 			return
 		}
 
-		// validate token
+		// Validate token
 		tokenSecret := os.Getenv("TOKEN_SECRET")
 		userID, err := ValidateJWT(token, tokenSecret)
 		if err != nil {
-			common.ResponseWithError(w, http.StatusUnauthorized, "Invalid token")
+			middleware.HandleError(w, errors.Wrap(ErrInvalidToken, err), requestID)
 			return
 		}
 
 		ctx := context.WithValue(r.Context(), userIDKey, userID)
-
 		r = r.WithContext(ctx)
 
 		next.ServeHTTP(w, r)
@@ -46,17 +47,17 @@ func RequireAuth(next http.Handler) http.Handler {
 func GetBearerToken(authHeader string) (string, error) {
 
 	if authHeader == "" {
-		return "", fmt.Errorf("error getting the authorization header")
+		return "", ErrMissingAuthHeader
 	}
 
 	authorizationSplit := strings.Split(authHeader, " ")
 
 	if len(authorizationSplit) != 2 {
-		return "", fmt.Errorf("malformed authorization header")
+		return "", ErrMalformedAuthHeader
 	}
 
 	if authorizationSplit[0] != "Bearer" {
-		return "", fmt.Errorf("authorization scheme must be Bearer")
+		return "", ErrMalformedAuthHeader
 	}
 
 	return authorizationSplit[1], nil

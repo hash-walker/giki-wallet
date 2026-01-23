@@ -19,13 +19,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var (
-	ErrUserNotFound    = errors.New("user not found")
-	ErrInvalidPassword = errors.New("invalid password")
-	ErrUserInactive    = errors.New("user inactive")
-	ErrTokenCreation   = errors.New("error creating secure token")
-)
-
 type Service struct {
 	userQ  *user_db.Queries
 	authQ  *auth.Queries

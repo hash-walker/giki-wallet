@@ -2,10 +2,12 @@ package user
 
 import (
 	"encoding/json"
-	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/hash-walker/giki-wallet/internal/common"
+	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
+	"github.com/hash-walker/giki-wallet/internal/middleware"
 )
 
 type Handler struct {
@@ -19,6 +21,7 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
 
 	type parameters struct {
 		Name        string `json:"name"`
@@ -31,15 +34,14 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	var params parameters
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-		common.ResponseWithJSON(w, http.StatusInternalServerError, common.ErrorResponse{Error: "Something went wrong"})
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidJSON, err), requestID)
 		return
 	}
 
 	tx, err := h.service.dbPool.Begin(r.Context())
-
 	if err != nil {
-		fmt.Printf("DATABASE ERROR: %v\n", err)
-		common.ResponseWithError(w, http.StatusInternalServerError, "Internal Server Error")
+		log.Printf("ERROR: requestID=%s, failed to begin transaction: %v", requestID, err)
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrTransactionBegin, err), requestID)
 		return
 	}
 	defer tx.Rollback(r.Context())
@@ -53,7 +55,8 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		common.ResponseWithJSON(w, http.StatusBadRequest, common.ErrorResponse{Error: err.Error()})
+		log.Printf("ERROR: requestID=%s, failed to create user: email=%s, err=%v", requestID, params.Email, err)
+		middleware.HandleError(w, err, requestID)
 		return
 	}
 
@@ -62,7 +65,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	case "student":
 
 		if params.RegID == "" {
-			common.ResponseWithError(w, http.StatusBadRequest, "Registration number required")
+			middleware.HandleError(w, ErrMissingRegID, requestID)
 			return
 		}
 
@@ -75,17 +78,19 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		_, err = h.service.CreateEmployee(r.Context(), tx, CreateEmployeeParams{UserID: user.ID})
 
 	default:
-		common.ResponseWithError(w, http.StatusInternalServerError, "Failed to create user profile")
+		middleware.HandleError(w, ErrInvalidUserType.WithDetails("userType", params.UserType), requestID)
 		return
 	}
 
 	if err != nil {
-		common.ResponseWithError(w, http.StatusInternalServerError, "Failed to create user profile")
+		log.Printf("ERROR: requestID=%s, failed to create user profile: userType=%s, err=%v", requestID, params.UserType, err)
+		middleware.HandleError(w, commonerrors.Wrap(ErrProfileCreationFailed, err), requestID)
 		return
 	}
 
 	if err := tx.Commit(r.Context()); err != nil {
-		common.ResponseWithError(w, http.StatusInternalServerError, "Commit Failed")
+		log.Printf("ERROR: requestID=%s, failed to commit transaction: %v", requestID, err)
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrTransactionCommit, err), requestID)
 		return
 	}
 
