@@ -262,7 +262,7 @@ func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.
 		return nil, commonerrors.Wrap(ErrDatabaseQuery, err)
 	}
 
-	paymentStatus := gatewayStatusToPaymentStatus(callback.Status)
+	paymentStatus := GatewayStatusToPaymentStatus(callback.Status)
 
 	err = paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
 		Status:   payment.CurrentStatus(paymentStatus),
@@ -285,14 +285,7 @@ func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.
 		// Don't fail the whole operation for this
 	}
 
-	return &TopUpResult{
-		ID:            gatewayTxn.ID,
-		TxnRefNo:      gatewayTxn.TxnRefNo,
-		Status:        paymentStatus,
-		Message:       callback.Message,
-		PaymentMethod: PaymentMethodCard,
-		Amount:        gatewayTxn.Amount,
-	}, nil
+	return MapCardCallbackToTopUpResult(gatewayTxn, callback), nil
 }
 
 // =============================================================================
@@ -330,18 +323,12 @@ func (s *Service) initiateMWalletPayment(
 		TxnExpiryDateTime: txnExpiryDateTime,
 	}
 
-	_, err = s.gatewayClient.SubmitMWallet(ctx, mwRequest)
+	mwResponse, err := s.gatewayClient.SubmitMWallet(ctx, mwRequest)
 	if err != nil {
 		return nil, commonerrors.Wrap(ErrGatewayUnavailable, err)
 	}
 
-	response, err := s.checkTransactionStatus(ctx, gatewayTxn)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return response, nil
+	return MapMWalletToTopUpResult(gatewayTxn, mwResponse), nil
 }
 
 func (s *Service) initiateCardPayment(
@@ -474,7 +461,7 @@ func (s *Service) checkTransactionStatus(
 		return nil, commonerrors.Wrap(ErrGatewayUnavailable, err)
 	}
 
-	paymentStatus := gatewayStatusToPaymentStatus(inquiryResult.Status)
+	paymentStatus := GatewayStatusToPaymentStatus(inquiryResult.Status)
 
 	switch paymentStatus {
 	case PaymentStatusSuccess:
@@ -507,13 +494,7 @@ func (s *Service) checkTransactionStatus(
 			return nil, commonerrors.Wrap(commonerrors.ErrTransactionCommit, err)
 		}
 
-		return &TopUpResult{
-			TxnRefNo:      existing.TxnRefNo,
-			Status:        paymentStatus,
-			Message:       inquiryResult.Message,
-			PaymentMethod: PaymentMethod(existing.PaymentMethod),
-			Amount:        existing.Amount,
-		}, nil
+		return MapInquiryToTopUpResult(existing, inquiryResult), nil
 
 	case PaymentStatusFailed:
 		// Update DB status to FAILED
@@ -525,13 +506,7 @@ func (s *Service) checkTransactionStatus(
 			return nil, commonerrors.Wrap(ErrTransactionUpdate, err)
 		}
 
-		return &TopUpResult{
-			TxnRefNo:      existing.TxnRefNo,
-			Status:        PaymentStatusFailed,
-			Message:       inquiryResult.Message,
-			PaymentMethod: PaymentMethod(existing.PaymentMethod),
-			Amount:        existing.Amount,
-		}, nil
+		return MapInquiryToTopUpResult(existing, inquiryResult), nil
 
 	case PaymentStatusPending, PaymentStatusUnknown:
 		// Check timeout
@@ -544,31 +519,16 @@ func (s *Service) checkTransactionStatus(
 				return nil, commonerrors.Wrap(ErrTransactionUpdate, err)
 			}
 
-			return &TopUpResult{
-				TxnRefNo:      existing.TxnRefNo,
-				Status:        PaymentStatusFailed,
-				Message:       "Transaction has timed out. Please try again.",
-				PaymentMethod: PaymentMethod(existing.PaymentMethod),
-				Amount:        existing.Amount,
-			}, nil
+			result := MapInquiryToTopUpResult(existing, inquiryResult)
+			result.Status = PaymentStatusFailed
+			result.Message = "Transaction has timed out. Please try again."
+			return result, nil
 		}
 
-		return &TopUpResult{
-			TxnRefNo:      existing.TxnRefNo,
-			Status:        PaymentStatusPending,
-			Message:       inquiryResult.Message,
-			PaymentMethod: PaymentMethod(existing.PaymentMethod),
-			Amount:        existing.Amount,
-		}, nil
+		return MapInquiryToTopUpResult(existing, inquiryResult), nil
 
 	default:
-		return &TopUpResult{
-			TxnRefNo:      existing.TxnRefNo,
-			Status:        PaymentStatusUnknown,
-			Message:       "Unknown transaction status",
-			PaymentMethod: PaymentMethod(existing.PaymentMethod),
-			Amount:        existing.Amount,
-		}, nil
+		return MapInquiryToTopUpResult(existing, inquiryResult), nil
 	}
 }
 
@@ -648,7 +608,7 @@ func (s *Service) pollTransactionOnce(ctx context.Context, txRefNo string) bool 
 		return false
 	}
 
-	status := gatewayStatusToPaymentStatus(inquiryResult.Status)
+	status := GatewayStatusToPaymentStatus(inquiryResult.Status)
 
 	switch status {
 	case PaymentStatusSuccess:
@@ -796,11 +756,11 @@ func (s *Service) buildAutoSubmitForm(fields gateway.JazzCashFields, jazzcashPos
 
 func GenerateTxnRefNo() (string, error) {
 	timestamp := time.Now().Format("20060102150405")
-	randBits, err := RandomBase32(3)
+	randBits, err := RandomBase32(4)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("TU%s%s", timestamp, randBits), nil
+	return fmt.Sprintf("T%s%s", timestamp, randBits), nil
 }
 
 func GenerateBillRefNo() (string, error) {
@@ -823,23 +783,6 @@ func RandomBase32(n int) (string, error) {
 		b[i] = alphabet[num.Int64()]
 	}
 	return string(b), nil
-}
-
-// =============================================================================
-// HELPERS - Status Conversion
-// =============================================================================
-
-func gatewayStatusToPaymentStatus(gwStatus gateway.Status) PaymentStatus {
-	switch gwStatus {
-	case gateway.StatusSuccess:
-		return PaymentStatusSuccess
-	case gateway.StatusFailed:
-		return PaymentStatusFailed
-	case gateway.StatusPending:
-		return PaymentStatusPending
-	default:
-		return PaymentStatusUnknown
-	}
 }
 
 // =============================================================================

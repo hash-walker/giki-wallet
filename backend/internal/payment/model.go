@@ -1,6 +1,10 @@
 package payment
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+	"github.com/hash-walker/giki-wallet/internal/payment/gateway"
+	paymentdb "github.com/hash-walker/giki-wallet/internal/payment/payment_db"
+)
 
 type PaymentMethod string
 
@@ -47,3 +51,62 @@ type TopUpResult struct {
 //	Fields    map[string]string `json:"fields"`               // pp_* fields including pp_SecureHash
 //	ReturnURL string            `json:"return_url,omitempty"` // optional: for debugging/UI
 //}
+
+// =============================================================================
+// MAPPING HELPERS
+// =============================================================================
+
+func MapMWalletToTopUpResult(
+	existing paymentdb.GikiWalletGatewayTransaction,
+	mwResp *gateway.MWalletInitiateResponse,
+) *TopUpResult {
+	return &TopUpResult{
+		ID:            existing.ID,
+		TxnRefNo:      existing.TxnRefNo,
+		Status:        GatewayStatusToPaymentStatus(mwResp.Status),
+		Message:       mwResp.Message,
+		PaymentMethod: PaymentMethod(existing.PaymentMethod),
+		Amount:        existing.Amount,
+	}
+}
+
+func MapInquiryToTopUpResult(
+	existing paymentdb.GikiWalletGatewayTransaction,
+	inquiryResult gateway.InquiryResponse,
+) *TopUpResult {
+	return &TopUpResult{
+		ID:            existing.ID,
+		TxnRefNo:      existing.TxnRefNo,
+		Status:        GatewayStatusToPaymentStatus(inquiryResult.Status),
+		Message:       inquiryResult.Message,
+		PaymentMethod: PaymentMethod(existing.PaymentMethod),
+		Amount:        existing.Amount,
+	}
+}
+
+func MapCardCallbackToTopUpResult(
+	existing paymentdb.GikiWalletGatewayTransaction,
+	callback *gateway.CardCallback,
+) *TopUpResult {
+	return &TopUpResult{
+		ID:            existing.ID,
+		TxnRefNo:      existing.TxnRefNo,
+		Status:        GatewayStatusToPaymentStatus(callback.Status),
+		Message:       callback.Message,
+		PaymentMethod: PaymentMethod(existing.PaymentMethod),
+		Amount:        existing.Amount,
+	}
+}
+
+func GatewayStatusToPaymentStatus(gwStatus gateway.Status) PaymentStatus {
+	switch gwStatus {
+	case gateway.StatusSuccess:
+		return PaymentStatusSuccess
+	case gateway.StatusFailed:
+		return PaymentStatusFailed
+	case gateway.StatusPending:
+		return PaymentStatusPending
+	default:
+		return PaymentStatusUnknown
+	}
+}

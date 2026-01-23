@@ -197,9 +197,9 @@ func TestGatewayStatusToPaymentStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := gatewayStatusToPaymentStatus(tt.gwStatus)
+			got := GatewayStatusToPaymentStatus(tt.gwStatus)
 			if got != tt.want {
-				t.Errorf("gatewayStatusToPaymentStatus() = %v, want %v", got, tt.want)
+				t.Errorf("GatewayStatusToPaymentStatus() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -794,7 +794,7 @@ func TestMapResponseCodeToStatus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run("code_"+tt.code, func(t *testing.T) {
-			// Test through gatewayStatusToPaymentStatus which uses similar logic
+			// Test through GatewayStatusToPaymentStatus which uses similar logic
 			var gwStatus gateway.Status
 			switch tt.code {
 			case "000", "121", "200":
@@ -811,7 +811,7 @@ func TestMapResponseCodeToStatus(t *testing.T) {
 				}
 			}
 
-			paymentStatus := gatewayStatusToPaymentStatus(gwStatus)
+			paymentStatus := GatewayStatusToPaymentStatus(gwStatus)
 
 			var expectedPaymentStatus PaymentStatus
 			switch tt.want {
