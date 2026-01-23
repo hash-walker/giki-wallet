@@ -2,23 +2,23 @@ package wallet
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/hash-walker/giki-wallet/internal/common"
+	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
 	wallet "github.com/hash-walker/giki-wallet/internal/wallet/wallet_db"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-)
-
-var (
-	ErrWalletNotFound       = errors.New("wallet not found")
-	ErrWalletInactive       = errors.New("wallet inactive")
-	ErrDuplicateLedgerEntry = errors.New("duplicate ledger entry")
-	ErrInsufficientFunds    = errors.New("insufficient funds")
-	ErrDatabase             = errors.New("wallet database error")
 )
 
 type Service struct {
@@ -33,131 +33,179 @@ func NewService(dbPool *pgxpool.Pool) *Service {
 	}
 }
 
-func (s *Service) GetOrCreateWallet(ctx context.Context, walletQ *wallet.Queries, userID uuid.UUID) (wallet.GikiWalletWallet, error) {
+func (s *Service) executeDoubleEntryTransaction(
+	ctx context.Context,
+	tx pgx.Tx,
+	senderWalletID uuid.UUID,
+	receiverWalletID uuid.UUID,
+	amount int64,
+	txnType string,
+	referenceID string,
+	description string,
+) error {
 
-	w, err := walletQ.GetWallet(ctx, userID)
+	walletQ := s.q.WithTx(tx)
+
+	// lock both wallets (prevent race conditions)
+	senderWallet, err := walletQ.GetWalletForUpdate(ctx, senderWalletID)
+	if err != nil {
+		return commonerrors.Wrap(ErrDatabase, err)
+	}
+
+	_, err = walletQ.GetWalletForUpdate(ctx, receiverWalletID)
+
+	if err != nil {
+		return commonerrors.Wrap(ErrDatabase, err)
+	}
+
+	// check sender balance (if not system wallet)
+	if common.TextToString(senderWallet.Type) != string(SystemWalletLiability) && common.TextToString(senderWallet.Type) != string(SystemWalletRevenue) {
+		balance, err := s.getWalletBalance(ctx, walletQ, senderWalletID)
+		if err != nil {
+			return err
+		}
+
+		balanceCheck := checkBalance(balance, amount)
+
+		if !balanceCheck {
+			return ErrInsufficientFunds
+		}
+	}
+
+	txnHeader, err := walletQ.CreateTransactionHeader(ctx, wallet.CreateTransactionHeaderParams{
+		Type:        txnType,
+		ReferenceID: referenceID,
+		Description: common.StringToText(description),
+	})
+
+	// get current balances
+	senderBalance, _ := s.getWalletBalance(ctx, walletQ, senderWalletID)
+	receiverBalance, _ := s.getWalletBalance(ctx, walletQ, receiverWalletID)
+
+	debitHash := calculateRowHash(
+		senderWalletID,
+		-amount,
+		txnHeader.ID,
+		senderBalance-amount,
+		txnHeader.CreatedAt,
+	)
+
+	_, err = walletQ.CreateLedgerEntry(ctx, wallet.CreateLedgerEntryParams{
+		WalletID:      senderWalletID,
+		Amount:        -amount,
+		TransactionID: txnHeader.ID,
+		BalanceAfter:  senderBalance - amount,
+		RowHash:       debitHash,
+	})
+
+	if err != nil {
+		return commonerrors.Wrap(ErrDatabase, err)
+	}
+
+	creditHash := calculateRowHash(
+		receiverWalletID,
+		amount,
+		txnHeader.ID,
+		receiverBalance+amount,
+		txnHeader.CreatedAt,
+	)
+
+	// create CREDIT entry (receiver gains money)
+	_, err = walletQ.CreateLedgerEntry(ctx, wallet.CreateLedgerEntryParams{
+		WalletID:      receiverWalletID,
+		Amount:        amount,
+		TransactionID: txnHeader.ID,
+		BalanceAfter:  receiverBalance + amount,
+		RowHash:       creditHash,
+	})
+
+	if err != nil {
+		return commonerrors.Wrap(ErrDatabase, err)
+	}
+
+	return nil
+}
+
+func (s *Service) ExecuteTransaction(
+	ctx context.Context,
+	tx pgx.Tx,
+	senderWalletID uuid.UUID,
+	receiverWalletID uuid.UUID,
+	amount int64,
+	txnType string,
+	referenceID string,
+	description string,
+) error {
+
+	return s.executeDoubleEntryTransaction(
+		ctx, tx, senderWalletID, receiverWalletID, amount,
+		txnType, referenceID, description,
+	)
+
+}
+
+func (s *Service) GetOrCreateWallet(ctx context.Context, tx pgx.Tx, userID uuid.UUID) (wallet.GikiWalletWallet, error) {
+
+	walletQ := s.q.WithTx(tx)
+
+	w, err := walletQ.GetWallet(ctx, common.GoogleUUIDtoPgUUID(userID, true))
+
 	if err == nil {
 		return w, nil
 	}
 
 	if !errors.Is(err, pgx.ErrNoRows) {
 		log.Printf("error getting wallet: %v", err)
-		return wallet.GikiWalletWallet{}, fmt.Errorf("%w: %v", ErrDatabase, err)
+		return wallet.GikiWalletWallet{}, commonerrors.Wrap(ErrDatabase, err)
 	}
 
-	w, err = s.q.CreateWallet(ctx, userID)
+	w, err = s.q.CreateWallet(ctx, wallet.CreateWalletParams{
+		UserID: common.GoogleUUIDtoPgUUID(userID, true),
+		Type:   common.StringToText("PERSONAL"),
+		Status: "ACTIVE",
+	})
+
 	if err != nil {
 
 		check := CheckUniqueConstraintViolation(err)
 
 		if check {
-			w, err = walletQ.GetWallet(ctx, userID)
+			w, err = walletQ.GetWallet(ctx, common.GoogleUUIDtoPgUUID(userID, true))
 			if err != nil {
-				return wallet.GikiWalletWallet{}, fmt.Errorf("%w: %v", ErrDatabase, err)
+				return wallet.GikiWalletWallet{}, commonerrors.Wrap(ErrDatabase, err)
 			}
 			return w, nil
 		} else {
 			log.Printf("error creating wallet: %v", err)
-			return wallet.GikiWalletWallet{}, fmt.Errorf("%w: %v", ErrDatabase, err)
+			return wallet.GikiWalletWallet{}, commonerrors.Wrap(ErrDatabase, err)
 		}
 	}
 
 	return w, nil
 }
 
-func (s *Service) CreditWallet(ctx context.Context, tx pgx.Tx, userID uuid.UUID, amount int64, txnRefNo string, creditType string) error {
-	walletQ := s.q.WithTx(tx)
+func (s *Service) GetSystemWalletByName(ctx context.Context, walletName SystemWalletName, walletType SystemWalletType) (uuid.UUID, error) {
 
-	w, err := s.GetOrCreateWallet(ctx, walletQ, userID)
+	walletQ := s.q
 
-	if err != nil {
-		return err
-	}
-
-	_, err = walletQ.CreateLedgerEntry(ctx, wallet.CreateLedgerEntryParams{
-		WalletID:        w.ID,
-		Amount:          amount,
-		TransactionType: wallet.GikiWalletTransactionCategoryType(creditType),
-		ReferenceID:     txnRefNo,
+	sysWallet, err := walletQ.GetSystemWalletByName(ctx, wallet.GetSystemWalletByNameParams{
+		Name: common.StringToText(string(walletName)),
+		Type: common.StringToText(string(walletType)),
 	})
 
 	if err != nil {
-		if check := CheckUniqueConstraintViolation(err); check {
-			log.Printf("duplicate ledger entry for txnRefNo %s (already credited)", txnRefNo)
-			return fmt.Errorf("%w: %s", ErrDuplicateLedgerEntry, txnRefNo)
-		} else {
-			log.Printf("error creating ledger entry: %v", err)
-			return fmt.Errorf("%w: %v", ErrDatabase, err)
-		}
+		return uuid.Nil, commonerrors.Wrap(ErrSystemWalletNotFound, err)
 	}
 
-	return nil
+	return sysWallet.ID, nil
 }
 
-func (s *Service) DebitWallet(ctx context.Context, tx pgx.Tx, userID uuid.UUID, amount int64, txnRefNo string, debitType string) error {
-	walletQ := s.q.WithTx(tx)
+func (s *Service) getWalletBalance(ctx context.Context, walletQ *wallet.Queries, walletID uuid.UUID) (int64, error) {
 
-	w, err := s.GetOrCreateWallet(ctx, walletQ, userID)
-
-	if err != nil {
-		return err
-	}
-
-	balance, err := s.GetBalance(ctx, userID)
+	balance, err := walletQ.GetWalletBalanceSnapshot(ctx, walletID)
 
 	if err != nil {
-		log.Printf("error getting balance: %v", err)
-		return fmt.Errorf("%w: %v", ErrDatabase, err)
-	}
-
-	var negAmount int64
-	balanceCheck := checkBalance(balance, amount)
-
-	if balanceCheck {
-		// amount should be negative here
-		negAmount = -1 * amount
-	} else {
-		log.Printf("error insufficient balance: %v", err)
-		return fmt.Errorf("%w: %v", ErrInsufficientFunds, err)
-	}
-
-	_, err = walletQ.CreateLedgerEntry(ctx, wallet.CreateLedgerEntryParams{
-		WalletID:        w.ID,
-		Amount:          negAmount,
-		TransactionType: wallet.GikiWalletTransactionCategoryType(debitType),
-		ReferenceID:     txnRefNo,
-	})
-
-	if err != nil {
-		if check := CheckUniqueConstraintViolation(err); check {
-			log.Printf("duplicate ledger entry for txnRefNo %s (already credited)", txnRefNo)
-			return fmt.Errorf("%w: %s", ErrDuplicateLedgerEntry, txnRefNo)
-		} else {
-			log.Printf("error creating ledger entry: %v", err)
-			return fmt.Errorf("%w: %v", ErrDatabase, err)
-		}
-	}
-
-	return nil
-}
-
-func creditOrDebit(ctx context.Context, walletQ *wallet.Queries, amount int64, txnRefNo, debitType string) {
-
-}
-
-func (s *Service) GetBalance(ctx context.Context, userID uuid.UUID) (int64, error) {
-	w, err := s.q.GetWallet(ctx, userID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, nil // No wallet = 0 balance
-		}
-		return 0, fmt.Errorf("%w: %v", ErrDatabase, err)
-	}
-
-	balance, err := s.q.GetWalletBalance(ctx, w.ID)
-
-	if err != nil {
-		return 0, fmt.Errorf("%w: %v", ErrDatabase, err)
+		return 0, commonerrors.Wrap(ErrDatabase, err)
 	}
 
 	return balance, nil
@@ -169,6 +217,36 @@ func checkBalance(balance int64, amount int64) bool {
 	}
 
 	return true
+}
+
+func calculateRowHash(
+	walletID uuid.UUID,
+	amount int64,
+	transactionID uuid.UUID,
+	balanceAfter int64,
+	createdAt time.Time,
+) string {
+
+	// get secret key from environment
+	secretKey := os.Getenv("LEDGER_HASH_SECRET")
+
+	// Build message: concatenate all fields that should be immutable
+	message := fmt.Sprintf(
+		"%s|%d|%s|%d|%s",
+		walletID.String(),
+		amount,
+		transactionID.String(),
+		balanceAfter,
+		createdAt.Format(time.RFC3339Nano),
+	)
+
+	// Compute HMAC-SHA256
+	mac := hmac.New(sha256.New, []byte(secretKey))
+	mac.Write([]byte(message))
+	hash := mac.Sum(nil)
+
+	// Return uppercase hex string (64 characters for SHA256)
+	return strings.ToUpper(hex.EncodeToString(hash))
 }
 
 func CheckUniqueConstraintViolation(err error) bool {
