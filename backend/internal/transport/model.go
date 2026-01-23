@@ -42,7 +42,6 @@ type QuickSlotItem struct {
 
 type CreateTripRequest struct {
 	RouteID         uuid.UUID         `json:"route_id"`
-	DriverID        uuid.UUID         `json:"driver_id"`
 	DepartureTime   time.Time         `json:"departure_time"`
 	BookingOpensAt  time.Time         `json:"booking_opens_at"`
 	BookingClosesAt time.Time         `json:"booking_closes_at"`
@@ -59,9 +58,8 @@ type CreateTripResponse struct {
 	TripID uuid.UUID `json:"trip_id"`
 }
 
-type StudentTripResponse struct {
+type TripResponse struct {
 	TripID        uuid.UUID `json:"trip_id"`
-	DriverName    string    `json:"driver_name"`
 	DepartureTime time.Time `json:"departure_time"`
 
 	BookingStatus string `json:"booking_status"`
@@ -127,9 +125,9 @@ func mapDBRouteToRoute(row transport_db.GetAllRoutesRow) Route {
 	}
 }
 
-func MapDBTripsToStudentTrips(rows []transport_db.GetUpcomingTripsByRouteRow) []StudentTripResponse {
+func MapDBTripsToTrips(rows []transport_db.GetUpcomingTripsByRouteRow) []TripResponse {
 
-	tripMap := make(map[uuid.UUID]*StudentTripResponse)
+	tripMap := make(map[uuid.UUID]*TripResponse)
 	var orderedIDs []uuid.UUID
 
 	for _, row := range rows {
@@ -156,7 +154,7 @@ func MapDBTripsToStudentTrips(rows []transport_db.GetUpcomingTripsByRouteRow) []
 				}
 			}
 
-			trip := &StudentTripResponse{
+			trip := &TripResponse{
 				TripID:         row.TripID,
 				DepartureTime:  row.DepartureTime,
 				BookingStatus:  apiStatus,
@@ -169,7 +167,7 @@ func MapDBTripsToStudentTrips(rows []transport_db.GetUpcomingTripsByRouteRow) []
 			tripMap[row.TripID] = trip
 			orderedIDs = append(orderedIDs, row.TripID)
 		}
-		
+
 		tripMap[row.TripID].Stops = append(tripMap[row.TripID].Stops, TripStopItem{
 			StopID:   row.StopID,
 			StopName: row.StopName,
@@ -178,7 +176,7 @@ func MapDBTripsToStudentTrips(rows []transport_db.GetUpcomingTripsByRouteRow) []
 	}
 
 	// Convert Map back to Slice using the ordered ID list
-	result := make([]StudentTripResponse, 0, len(orderedIDs))
+	result := make([]TripResponse, 0, len(orderedIDs))
 	for _, id := range orderedIDs {
 		result = append(result, *tripMap[id])
 	}

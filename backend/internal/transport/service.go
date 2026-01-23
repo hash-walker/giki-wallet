@@ -26,7 +26,7 @@ func (s *Service) RoutesList(ctx context.Context) ([]Route, error) {
 
 	rows, err := s.q.GetAllRoutes(ctx)
 	if err != nil {
-		return nil, commonerrors.ErrDatabase
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}
 
 	routes := make([]Route, len(rows))
@@ -40,15 +40,17 @@ func (s *Service) RoutesList(ctx context.Context) ([]Route, error) {
 func (s *Service) GetRouteTemplate(ctx context.Context, routeID uuid.UUID) (*RouteTemplateResponse, error) {
 
 	routeTemplateRows, err := s.q.GetRouteStopsDetails(ctx, routeID)
-
 	if err != nil {
-		return nil, commonerrors.ErrDatabase
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	if len(routeTemplateRows) == 0 {
+		return nil, ErrRouteNotFound
 	}
 
 	weeklyScheduleRows, err := s.q.GetRouteWeeklySchedule(ctx, routeID)
-
 	if err != nil {
-		return nil, commonerrors.ErrDatabase
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}
 
 	response := mapDBRouteTemplateToRouteTemplate(routeTemplateRows, weeklyScheduleRows)
@@ -60,7 +62,7 @@ func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.U
 
 	tx, err := s.dbPool.Begin(ctx)
 	if err != nil {
-		return uuid.Nil, commonerrors.ErrDatabase
+		return uuid.Nil, commonerrors.Wrap(ErrTripCreationFailed, err)
 	}
 
 	defer tx.Rollback(ctx)
@@ -78,9 +80,8 @@ func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.U
 	}
 
 	tripID, err := qtx.CreateTrip(ctx, arg)
-
 	if err != nil {
-		return uuid.Nil, commonerrors.ErrDatabase
+		return uuid.Nil, commonerrors.Wrap(ErrTripCreationFailed, err)
 	}
 
 	for i, stop := range req.Stops {
@@ -91,12 +92,12 @@ func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.U
 		})
 
 		if err != nil {
-			return uuid.Nil, commonerrors.ErrDatabase
+			return uuid.Nil, commonerrors.Wrap(ErrTripCreationFailed, err)
 		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return uuid.Nil, commonerrors.ErrDatabase
+		return uuid.Nil, commonerrors.Wrap(ErrTripCreationFailed, err)
 	}
 
 	return tripID, nil
@@ -105,10 +106,9 @@ func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.U
 func (s *Service) GetUpcomingTrips(ctx context.Context, routeID uuid.UUID) ([]StudentTripResponse, error) {
 
 	rows, err := s.q.GetUpcomingTripsByRoute(ctx, routeID)
-
 	if err != nil {
-		return nil, commonerrors.ErrDatabase
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}
 
-	return MapDBTripsToStudentTrips(rows), nil
+	return MapDBTripsToTrips(rows), nil
 }

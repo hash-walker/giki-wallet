@@ -2,7 +2,6 @@ package transport
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -24,11 +23,10 @@ func NewHandler(service *Service) *Handler {
 
 func (h *Handler) ListRoutes(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
-	routes, err := h.service.q.GetAllRoutes(r.Context())
+	routes, err := h.service.RoutesList(r.Context())
 
 	if err != nil {
-		log.Printf("ERROR: requestID=%s, failed to list routes: %v", requestID, err)
-		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrDatabase, err), requestID)
+		middleware.HandleError(w, err, requestID)
 		return
 	}
 
@@ -41,14 +39,13 @@ func (h *Handler) GetRouteTemplate(w http.ResponseWriter, r *http.Request) {
 
 	routeID, err := uuid.Parse(routeIDParam)
 	if err != nil {
-		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidUUID, err).WithDetails("routeID", routeIDParam), requestID)
+		middleware.HandleError(w, commonerrors.Wrap(ErrInvalidRouteID, err).WithDetails("routeID", routeIDParam), requestID)
 		return
 	}
 
 	routeTemplate, err := h.service.GetRouteTemplate(r.Context(), routeID)
 	if err != nil {
-		log.Printf("ERROR: requestID=%s, failed to get route template: routeID=%s, err=%v", requestID, routeID, err)
-		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrDatabase, err), requestID)
+		middleware.HandleError(w, err, requestID)
 		return
 	}
 
@@ -66,8 +63,7 @@ func (h *Handler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 
 	tripID, err := h.service.CreateTrip(r.Context(), req)
 	if err != nil {
-		log.Printf("ERROR: requestID=%s, failed to create trip: %v", requestID, err)
-		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrDatabase, err), requestID)
+		middleware.HandleError(w, err, requestID)
 		return
 	}
 
@@ -81,14 +77,13 @@ func (h *Handler) GetUpcomingTrips(w http.ResponseWriter, r *http.Request) {
 	routeID, err := uuid.Parse(routeIDParam)
 
 	if err != nil {
-		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidUUID, err).WithDetails("routeID", routeIDParam), requestID)
+		middleware.HandleError(w, commonerrors.Wrap(ErrInvalidRouteID, err).WithDetails("routeID", routeIDParam), requestID)
 		return
 	}
 
 	trips, err := h.service.GetUpcomingTrips(r.Context(), routeID)
 	if err != nil {
-		log.Printf("ERROR: requestID=%s, failed to fetch upcoming trips: routeID=%s, err=%v", requestID, routeID, err)
-		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrDatabase, err), requestID)
+		middleware.HandleError(w, err, requestID)
 		return
 	}
 
