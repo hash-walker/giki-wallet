@@ -1,6 +1,7 @@
 package errors
 
 import (
+	std_errors "errors"
 	"fmt"
 	"net/http"
 )
@@ -97,7 +98,8 @@ func Wrap(appErr *AppError, err error) *AppError {
 
 // Map transforms a generic error into an AppError (defaulting to 500)
 func Map(err error) *AppError {
-	if appErr, ok := err.(*AppError); ok {
+	var appErr *AppError
+	if std_errors.As(err, &appErr) {
 		return appErr
 	}
 	return Wrap(ErrInternal, err)

@@ -105,6 +105,7 @@ func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.U
 func (s *Service) GetUpcomingTrips(ctx context.Context, routeID uuid.UUID) ([]StudentTripResponse, error) {
 
 	rows, err := s.q.GetUpcomingTripsByRoute(ctx, routeID)
+
 	if err != nil {
 		return nil, commonerrors.ErrDatabase
 	}
