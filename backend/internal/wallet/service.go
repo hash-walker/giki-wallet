@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hash-walker/giki-wallet/internal/common"
 	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
+	"github.com/hash-walker/giki-wallet/internal/middleware"
 	wallet "github.com/hash-walker/giki-wallet/internal/wallet/wallet_db"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -148,19 +148,19 @@ func (s *Service) ExecuteTransaction(
 
 }
 
-func (s *Service) GetOrCreateWallet(ctx context.Context, tx pgx.Tx, userID uuid.UUID) (wallet.GikiWalletWallet, error) {
+func (s *Service) GetOrCreateWallet(ctx context.Context, tx pgx.Tx, userID uuid.UUID) (*Wallet, error) {
 
 	walletQ := s.q.WithTx(tx)
 
 	w, err := walletQ.GetWallet(ctx, common.GoogleUUIDtoPgUUID(userID, true))
 
 	if err == nil {
-		return w, nil
+		return MapDBWalletToWallet(w), nil
 	}
 
 	if !errors.Is(err, pgx.ErrNoRows) {
-		log.Printf("error getting wallet: %v", err)
-		return wallet.GikiWalletWallet{}, commonerrors.Wrap(ErrDatabase, err)
+		middleware.LogAppError(commonerrors.Wrap(ErrDatabase, err), "wallet-get-"+userID.String())
+		return nil, commonerrors.Wrap(ErrDatabase, err)
 	}
 
 	w, err = s.q.CreateWallet(ctx, wallet.CreateWalletParams{
@@ -176,16 +176,16 @@ func (s *Service) GetOrCreateWallet(ctx context.Context, tx pgx.Tx, userID uuid.
 		if check {
 			w, err = walletQ.GetWallet(ctx, common.GoogleUUIDtoPgUUID(userID, true))
 			if err != nil {
-				return wallet.GikiWalletWallet{}, commonerrors.Wrap(ErrDatabase, err)
+				return nil, commonerrors.Wrap(ErrDatabase, err)
 			}
-			return w, nil
+			return MapDBWalletToWallet(w), nil
 		} else {
-			log.Printf("error creating wallet: %v", err)
-			return wallet.GikiWalletWallet{}, commonerrors.Wrap(ErrDatabase, err)
+			middleware.LogAppError(commonerrors.Wrap(ErrDatabase, err), "wallet-create-"+userID.String())
+			return nil, commonerrors.Wrap(ErrDatabase, err)
 		}
 	}
 
-	return w, nil
+	return MapDBWalletToWallet(w), nil
 }
 
 func (s *Service) GetSystemWalletByName(ctx context.Context, walletName SystemWalletName, walletType SystemWalletType) (uuid.UUID, error) {

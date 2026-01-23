@@ -179,8 +179,8 @@ func TestIntegration_GetOrCreateWallet_CreatesNewWallet(t *testing.T) {
 		t.Fatalf("GetOrCreateWallet failed: %v", err)
 	}
 
-	if wallet.UserID.Bytes != testUserID1 {
-		t.Errorf("Wallet user_id mismatch: got %s, want %s", wallet.UserID.Bytes, testUserID1)
+	if wallet.UserID != testUserID1 {
+		t.Errorf("Wallet user_id mismatch: got %s, want %s", wallet.UserID, testUserID1)
 	}
 
 	tx.Commit(ctx)
