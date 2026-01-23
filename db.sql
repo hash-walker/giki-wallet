@@ -1,163 +1,236 @@
+Project GIKI_Unified_System {
+  database_type: 'PostgreSQL'
+  Note: 'Merged Schema: Robust Identity/Wallet + Decoupled Transport'
+}
+
 // ==========================================
-// CORE 1: IDENTITY & AUTH (Shared)
+// 1. IDENTITY & AUTH (The "Old" System)
 // ==========================================
 
 Table users {
-  id bigint [pk, increment]
-
-  // Auth Identity (Immutable)
-  microsoft_oid uuid [not null, unique, note: "The Anchor. Never changes."]
-
-  // Contact Info (Mutable)
+  id uuid [pk, default: `gen_random_uuid()`] 
+  
+  // Identity
   email varchar(254) [not null, unique]
   name varchar(150) [not null]
-  phone_number varchar(20) [unique, note: "Crucial for Transport alerts"]
-
-  // Authorization
-  user_type varchar(20) [not null, note: "'STUDENT', 'EMPLOYEE', 'DRIVER', 'ADMIN'"]
-  is_active boolean [default: true, note: "False = Banned/Left GIKI"]
-
-  // Meta
+  phone_number varchar(20) [unique]
+  
+  // Auth & Role
+  auth_provider varchar(20) [default: 'MICROSOFT'] 
+  external_id varchar(255) [unique] 
+  password_hash varchar(500) 
+  is_active boolean [default: true]
+  user_type varchar(20) [not null] // 'STUDENT', 'EMPLOYEE', 'ADMIN'
+  
   created_at timestamptz [default: `now()`]
   updated_at timestamptz [default: `now()`]
-
-  indexes {
-    email [name: "idx_users_email"]           // Fast Login
-    microsoft_oid [name: "idx_users_oid"]     // Fast Sync with Graph
-  }
 }
 
 Table student_profiles {
-  user_id bigint [pk, note: "FK to users.id"]
+  user_id uuid [pk, ref: - users.id] 
   reg_id varchar(20) [not null, unique]
   degree_program varchar(50)
   batch_year integer
 }
 
 Table employee_profiles {
-  user_id bigint [pk]
+  user_id uuid [pk, ref: - users.id] 
   designation varchar(100)
   department varchar(100)
 }
 
 // ==========================================
-// CORE 2: GIKI WALLET (Financial Engine)
+// 2. ROBUST WALLET (The "Old" System)
 // ==========================================
 
 Table wallets {
-  id bigint [pk, increment]
-  user_id bigint [not null, unique]
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, unique, ref: - users.id]
+  
+  name varchar(100) 
+  type varchar(20) [default: 'PERSONAL'] // PERSONAL, SYS_REVENUE
   status varchar(20) [default: 'ACTIVE']
-  currency varchar(3) [default: 'PKR']
+  currency varchar(3) [default: 'GIK'] 
+  
   created_at timestamptz [default: `now()`]
 }
 
 Table ledger {
-  id bigint [pk, increment]
-  wallet_id bigint [not null]
-
-  // The Money (Immutable)
-  amount bigint [not null, note: 'Positive (+) = Deposit, Negative (-) = Spend']
-
-  // The Trace (Polymorphic)
-  transaction_type varchar(50) [not null, note: 'JAZZCASH_DEPOSIT, TICKET_PURCHASE, CAFE_ORDER']
-  reference_id varchar(100) [not null, note: 'ID of the Ticket, Order, or Gateway Txn']
+  id uuid [pk, default: `gen_random_uuid()`]
+  wallet_id uuid [not null, ref: > wallets.id]
+  
+  // Financials
+  amount bigint [not null, note: 'Positive (+) Credit, Negative (-) Debit']
+  balance_after bigint [not null]
+  transaction_group_id uuid [not null, note: 'Links Debit/Credit pair']
+  
+  // Audit
+  transaction_type varchar(50) [not null] // TICKET_PURCHASE, JAZZCASH_TOPUP
+  reference_id varchar(100) [not null] // Links to transport_ticket.id
   description text
-
+  row_hash varchar(255) 
+  
   created_at timestamptz [default: `now()`]
 
   indexes {
-    (transaction_type, reference_id) [unique, note: 'Global Idempotency']
-    wallet_id [note: 'For Balance Calculation']
+    (transaction_type, reference_id) [unique]
   }
 }
 
 Table gateway_transactions {
-  id bigint [pk, increment]
-  user_id bigint [not null, note: "Link to User"]
-
-  // Core Identifiers (The minimal set to track a payment)
-  order_id varchar(50) [not null, unique, note: "Our 'ORD-XXX'"]
-  gateway_txn_id varchar(100) [note: "JazzCash pp_TxnRefNo"]
-  gateway_rrn varchar(50) [note: "The RRN (Proof of Payment)"]
-
-  // The Money
-  amount bigint [not null, note: "Paisa"]
-  status varchar(20) [default: 'PENDING', note: "PENDING, SUCCESS, FAILED"]
-  payment_method varchar(20) [note: "MWALLET, CARD"]
-
-  // Support Data (Just enough to help a student)
-  account_number_used varchar(20) [note: "Masked Mobile or Card Last4"]
-
-  // Technical Debugging
-  response_code varchar(10) [note: "The raw error code (e.g. 121)"]
-  raw_response jsonb [note: "Full payload for debugging"]
-
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  
+  txn_ref_no varchar(50) [not null, unique]
+  status varchar(20) [default: 'PENDING']
+  amount bigint [not null]
+  
   created_at timestamptz [default: `now()`]
-  updated_at timestamptz [default: `now()`]
 }
 
 // ==========================================
-// MODULE A: TRANSPORT (The Transport Dashboard)
+// 3. TRANSPORT: STATIC DATA (Drivers & Stops)
 // ==========================================
 
-Table locations {
-  id bigint [pk, increment]
-  name varchar(100) [note: "e.g. 'GIKI Main Gate'"]
-  short_code varchar(10)
-}
-
-Table vehicles {
-  id bigint [pk, increment]
-  plate_number varchar(20) [unique]
-  capacity int [note: "Total seats"]
+Table transport_driver {
+  id uuid [pk, default: `gen_random_uuid()`]
+  name varchar(100) [not null]
+  phone_number varchar(15)
+  license_number varchar(50) [unique]
   is_active boolean [default: true]
 }
 
-Table trip_schedules {
-  id bigint [pk, increment]
-  vehicle_id bigint [not null]
-  origin_id bigint [not null]
-  destination_id bigint [not null]
-
-  departure_time timestamptz [not null]
-  ticket_price bigint [not null, note: "Price in Paisa"]
-  status varchar(20) [default: 'SCHEDULED']
+Table transport_stop {
+  id uuid [pk, default: `gen_random_uuid()`]
+  name varchar(150) [not null, note: 'e.g. Main Gate, Toll Plaza']
+  latitude decimal(9,6)
+  longitude decimal(9,6)
+  type varchar(20) [default: 'BUS_STOP']
+  is_active boolean [default: true]
 }
 
-Table tickets {
-  id bigint [pk, increment]
-  user_id bigint [not null]
-  schedule_id bigint [not null]
-  seat_number int [not null]
+// ==========================================
+// 4. TRANSPORT: ROUTES (Templates)
+// ==========================================
 
-  price_paid bigint [not null]
-  status varchar(20) [default: 'CONFIRMED', note: "CONFIRMED, CANCELLED, USED"]
-  qr_code varchar(255) [unique, note: "Secret for conductor scanning"]
-
+Table transport_route {
+  id uuid [pk, default: `gen_random_uuid()`]
+  name varchar(150) [not null, note: 'e.g. GIKI - Islamabad']
+  origin_city varchar(100)
+  destination_city varchar(100)
+  is_active boolean [default: true]
   created_at timestamptz [default: `now()`]
+}
+
+// The "Master List" of stops for a route (The Template)
+Table transport_route_master_stop {
+  id uuid [pk, default: `gen_random_uuid()`]
+  route_id uuid [not null, ref: > transport_route.id]
+  stop_id uuid [not null, ref: > transport_stop.id]
+  
+  default_sequence_order int [not null]
+  is_default_active boolean [default: true]
 
   indexes {
-    (schedule_id, seat_number) [unique, note: "No double booking"]
+    (route_id, stop_id) [unique]
+    (route_id, default_sequence_order) [unique]
   }
 }
 
 // ==========================================
-// RELATIONSHIPS
+// 5. TRANSPORT: TRIPS (The Schedule)
 // ==========================================
 
-// Auth
-Ref: student_profiles.user_id - users.id [delete: cascade]
-Ref: employee_profiles.user_id - users.id [delete: cascade]
+// The specific instance (e.g., Friday 5 PM Bus)
+Table transport_trip {
+  id uuid [pk, default: `gen_random_uuid()`]
+  route_id uuid [not null, ref: > transport_route.id]
+  driver_id uuid [ref: > transport_driver.id]
+  
+  departure_time timestamptz [not null]
+  estimated_arrival_time timestamptz
+  
+  vehicle_number varchar(20)
+  total_capacity int [not null]
+  available_seats int [not null]
+  
+  base_price decimal(10,2) [not null]
+  status varchar(20) [default: 'SCHEDULED'] // SCHEDULED, BOARDING, COMPLETED
+  created_at timestamptz [default: `now()`]
+}
 
-// Finance
-Ref: wallets.user_id - users.id [delete: cascade]
-Ref: ledger.wallet_id > wallets.id [delete: restrict]
-Ref: gateway_transactions.user_id > users.id [delete: cascade]
+// The "Live" stops for this specific trip (Filtered from Master)
+Table transport_trip_stop {
+  id uuid [pk, default: `gen_random_uuid()`]
+  trip_id uuid [not null, ref: > transport_trip.id]
+  stop_id uuid [not null, ref: > transport_stop.id]
+  
+  sequence_order int [not null]
+  scheduled_arrival_time timestamptz
+  price_modifier decimal(10,2) [default: 0.00]
 
-// Transport
-Ref: trip_schedules.vehicle_id > vehicles.id
-Ref: trip_schedules.origin_id > locations.id
-Ref: trip_schedules.destination_id > locations.id
-Ref: tickets.schedule_id > trip_schedules.id
-Ref: tickets.user_id > users.id
+  indexes {
+    (trip_id, stop_id) [unique]
+    (trip_id, sequence_order) [unique]
+  }
+}
+
+// ==========================================
+// 6. TRANSPORT: TICKETING (The Bridge)
+// ==========================================
+
+Table transport_ticket {
+  id uuid [pk, default: `gen_random_uuid()`]
+  ticket_number varchar(30) [unique, not null]
+  
+  // 1. LINK TO IDENTITY (Using the "Old" table)
+  user_id uuid [not null, ref: > users.id]
+  
+  // 2. LINK TO TRANSPORT
+  trip_id uuid [not null, ref: > transport_trip.id]
+  pickup_trip_stop_id uuid [ref: > transport_trip_stop.id]
+  dropoff_trip_stop_id uuid [ref: > transport_trip_stop.id]
+  
+  // 3. LINK TO PAYMENT (Using the "Old" Ledger)
+  // This points to the Debit transaction in the ledger
+  ledger_transaction_id uuid [unique, ref: - ledger.id] 
+  
+  seat_number varchar(10)
+  price_paid decimal(10,2) [not null]
+  status varchar(20) [default: 'VALID']
+  
+  qr_code_data varchar(255) [not null]
+  checked_in_at timestamptz
+  booked_at timestamptz [default: `now()`]
+  cancelled_at timestamptz
+}
+
+// ==========================================
+// 7. SECURITY & OPS (The "Old" System)
+    // ==========================================
+
+Table login_attempts {
+  id uuid [pk, default: `gen_random_uuid()`]
+  ip_address varchar(45) [not null]
+  email varchar(254) 
+  attempt_count int [default: 1]
+  locked_until timestamptz 
+}
+
+Table notifications {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  title varchar(100)
+  body text
+  status varchar(20) [default: 'PENDING']
+}
+
+Table support_tickets {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  subject varchar(200)
+  message text
+  // Can link to a specific ticket issue
+  related_ticket_id uuid [ref: > transport_ticket.id] 
+  status varchar(20) [default: 'OPEN']
+}
