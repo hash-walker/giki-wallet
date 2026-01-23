@@ -323,12 +323,12 @@ func (s *Service) initiateMWalletPayment(
 		TxnExpiryDateTime: txnExpiryDateTime,
 	}
 
-	mwResponse, err := s.gatewayClient.SubmitMWallet(ctx, mwRequest)
+	_, err = s.gatewayClient.SubmitMWallet(ctx, mwRequest)
 	if err != nil {
 		return nil, commonerrors.Wrap(ErrGatewayUnavailable, err)
 	}
 
-	return MapMWalletToTopUpResult(gatewayTxn, mwResponse), nil
+	return s.checkTransactionStatus(ctx, gatewayTxn)
 }
 
 func (s *Service) initiateCardPayment(
