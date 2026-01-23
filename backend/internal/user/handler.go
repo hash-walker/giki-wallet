@@ -2,7 +2,6 @@ package user
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"github.com/hash-walker/giki-wallet/internal/common"
@@ -40,7 +39,6 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := h.service.dbPool.Begin(r.Context())
 	if err != nil {
-		log.Printf("ERROR: requestID=%s, failed to begin transaction: %v", requestID, err)
 		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrTransactionBegin, err), requestID)
 		return
 	}
@@ -55,7 +53,6 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		log.Printf("ERROR: requestID=%s, failed to create user: email=%s, err=%v", requestID, params.Email, err)
 		middleware.HandleError(w, err, requestID)
 		return
 	}
@@ -83,13 +80,11 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		log.Printf("ERROR: requestID=%s, failed to create user profile: userType=%s, err=%v", requestID, params.UserType, err)
 		middleware.HandleError(w, commonerrors.Wrap(ErrProfileCreationFailed, err), requestID)
 		return
 	}
 
 	if err := tx.Commit(r.Context()); err != nil {
-		log.Printf("ERROR: requestID=%s, failed to commit transaction: %v", requestID, err)
 		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrTransactionCommit, err), requestID)
 		return
 	}

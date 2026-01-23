@@ -11,82 +11,8 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/payment/testutils"
 )
 
-// =============================================================================
-// HANDLER ERROR MAPPING TESTS
-// =============================================================================
-
-func TestHandleServiceError_ValidationErrors(t *testing.T) {
-	mockServer := testutils.NewMockGatewayServer("test_salt_123")
-	defer mockServer.Close()
-
-	gatewayClient := mockServer.CreateTestJazzCashClient()
-	rateLimiter := NewRateLimiter(5)
-	service := &Service{
-		gatewayClient: gatewayClient,
-		rateLimiter:   rateLimiter,
-	}
-	handler := NewHandler(service, nil) // nil wallet service - not used in these tests
-
-	tests := []struct {
-		name           string
-		err            error
-		wantStatusCode int
-		wantContains   string
-	}{
-		{
-			name:           "invalid phone number",
-			err:            ErrInvalidPhoneNumber,
-			wantStatusCode: http.StatusBadRequest,
-			wantContains:   "phone number",
-		},
-		{
-			name:           "invalid CNIC",
-			err:            ErrInvalidCNIC,
-			wantStatusCode: http.StatusBadRequest,
-			wantContains:   "CNIC",
-		},
-		{
-			name:           "invalid payment method",
-			err:            ErrInvalidPaymentMethod,
-			wantStatusCode: http.StatusBadRequest,
-			wantContains:   "payment method",
-		},
-		{
-			name:           "gateway unavailable",
-			err:            ErrGatewayUnavailable,
-			wantStatusCode: http.StatusBadGateway,
-			wantContains:   "temporarily unavailable",
-		},
-		{
-			name:           "user not authenticated",
-			err:            ErrUserIDNotFound,
-			wantStatusCode: http.StatusUnauthorized,
-			wantContains:   "Authentication",
-		},
-		{
-			name:           "internal error",
-			err:            ErrInternal,
-			wantStatusCode: http.StatusInternalServerError,
-			wantContains:   "unexpected error",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			w := httptest.NewRecorder()
-			handler.handleServiceError(w, tt.err)
-
-			if w.Code != tt.wantStatusCode {
-				t.Errorf("handleServiceError() status = %d, want %d", w.Code, tt.wantStatusCode)
-			}
-
-			body := w.Body.String()
-			if !strings.Contains(strings.ToLower(body), strings.ToLower(tt.wantContains)) {
-				t.Errorf("handleServiceError() body = %v, should contain %v", body, tt.wantContains)
-			}
-		})
-	}
-}
+// TestHandleServiceError_ValidationErrors removed as the method (handleServiceError) no longer exists.
+// Error handling is now delegated directly to middleware.HandleError which is coverd by its own tests.
 
 // =============================================================================
 // TOP UP HANDLER TESTS (without DB - just request parsing)

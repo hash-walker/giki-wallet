@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math/big"
 	"net/url"
 	"regexp"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hash-walker/giki-wallet/internal/auth"
+	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
 	"github.com/hash-walker/giki-wallet/internal/config"
 	"github.com/hash-walker/giki-wallet/internal/payment/gateway"
 	payment "github.com/hash-walker/giki-wallet/internal/payment/payment_db"
@@ -24,6 +24,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/hash-walker/giki-wallet/internal/middleware"
 )
 
 // =============================================================================
@@ -102,7 +104,6 @@ func (s *Service) InitiatePayment(ctx context.Context, payload TopUpRequest) (*T
 
 	userID, ok := auth.GetUserIDFromContext(ctx)
 	if !ok {
-		log.Printf("user id not found in context")
 		return nil, ErrUserIDNotFound
 	}
 
@@ -114,8 +115,7 @@ func (s *Service) InitiatePayment(ctx context.Context, payload TopUpRequest) (*T
 	if err == nil {
 		return s.handleExistingTransaction(ctx, existingPayment)
 	} else if !errors.Is(err, pgx.ErrNoRows) {
-		log.Printf("error checking idempotency key: %v", err)
-		return nil, fmt.Errorf("%w: %v", ErrDatabaseQuery, err)
+		return nil, commonerrors.Wrap(ErrDatabaseQuery, err)
 	}
 
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -126,7 +126,6 @@ func (s *Service) InitiatePayment(ctx context.Context, payload TopUpRequest) (*T
 		response, err := s.checkTransactionStatus(ctx, transaction)
 
 		if err != nil {
-			log.Printf("error checking transaction status: %v", err)
 			// Continue to create new transaction on error
 		} else if response.Status != PaymentStatusFailed {
 			return response, nil
@@ -134,7 +133,7 @@ func (s *Service) InitiatePayment(ctx context.Context, payload TopUpRequest) (*T
 
 		// If status is FAILED, continue to create a new transaction
 	} else if !errors.Is(err, pgx.ErrNoRows) {
-		log.Printf("error checking pending transaction: %v", err)
+		// Log removed, handled by caller if needed or ignored as implementation detail specific logic
 	}
 
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -143,14 +142,12 @@ func (s *Service) InitiatePayment(ctx context.Context, payload TopUpRequest) (*T
 
 	billRefNo, err := GenerateBillRefNo()
 	if err != nil {
-		log.Printf("error generating bill reference: %v", err)
-		return nil, fmt.Errorf("%w: %v", ErrInternal, err)
+		return nil, commonerrors.Wrap(ErrInternal, err)
 	}
 
 	txnRefNo, err := GenerateTxnRefNo()
 	if err != nil {
-		log.Printf("error generating transaction reference: %v", err)
-		return nil, fmt.Errorf("%w: %v", ErrInternal, err)
+		return nil, commonerrors.Wrap(ErrInternal, err)
 	}
 
 	gatewayTxn, err := s.q.CreateGatewayTransaction(ctx, payment.CreateGatewayTransactionParams{
@@ -170,13 +167,12 @@ func (s *Service) InitiatePayment(ctx context.Context, payload TopUpRequest) (*T
 		if check {
 			existing, fetchErr := s.q.GetByIdempotencyKey(ctx, idempotencyKey)
 			if fetchErr != nil {
-				return nil, fmt.Errorf("%w: %v", ErrDatabaseQuery, fetchErr)
+				return nil, commonerrors.Wrap(ErrDatabaseQuery, fetchErr)
 			}
 			return s.handleExistingTransaction(ctx, existing)
 		}
 
-		log.Printf("failed to create gateway transaction: %v", err)
-		return nil, fmt.Errorf("%w: %v", ErrTransactionCreation, err)
+		return nil, commonerrors.Wrap(ErrTransactionCreation, err)
 
 	}
 
@@ -198,7 +194,7 @@ func (s *Service) InitiatePayment(ctx context.Context, payload TopUpRequest) (*T
 			PaymentPageURL: fmt.Sprintf("%s/payment/page/%s", baseURL, txnRefNo),
 		}, nil
 	default:
-		return nil, fmt.Errorf("%w: %s", ErrInvalidPaymentMethod, payload.Method)
+		return nil, commonerrors.Wrap(ErrInvalidPaymentMethod, fmt.Errorf("method: %s", payload.Method))
 	}
 }
 
@@ -211,7 +207,7 @@ func (s *Service) LogCardCallbackAudit(ctx context.Context, formData url.Values)
 
 	rawPayload, err := json.Marshal(formData)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("failed to marshal form data: %w", err)
+		return uuid.Nil, commonerrors.Wrap(commonerrors.ErrInvalidJSON, err)
 	}
 
 	gatewayRef := formData.Get("pp_BillReference")
@@ -226,7 +222,7 @@ func (s *Service) LogCardCallbackAudit(ctx context.Context, formData url.Values)
 	})
 
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("failed to create audit log: %w", err)
+		return uuid.Nil, commonerrors.Wrap(commonerrors.ErrDatabase, fmt.Errorf("failed to create audit log: %w", err))
 	}
 
 	return auditLog.ID, nil
@@ -239,7 +235,7 @@ func (s *Service) MarkAuditFailed(ctx context.Context, auditID uuid.UUID, errorM
 		ProcessError: pgtype.Text{String: errorMsg, Valid: true},
 	})
 	if err != nil {
-		log.Printf("failed to mark audit as failed: %v", err)
+		middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrDatabase, fmt.Errorf("failed to mark audit as failed: %w", err)), "audit-background")
 	}
 
 }
@@ -247,7 +243,7 @@ func (s *Service) MarkAuditFailed(ctx context.Context, auditID uuid.UUID, errorM
 func (s *Service) MarkAuditProcessed(ctx context.Context, auditID uuid.UUID) {
 	err := s.q.MarkAuditProcessed(ctx, auditID)
 	if err != nil {
-		log.Printf("failed to mark audit as processed: %v", err)
+		middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrDatabase, fmt.Errorf("failed to mark audit as processed: %w", err)), "audit-background")
 	}
 }
 
@@ -255,8 +251,7 @@ func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.
 
 	callback, err := s.gatewayClient.ParseAndVerifyCardCallback(ctx, rForm)
 	if err != nil {
-		log.Printf("gateway card complete failed: %v", err)
-		return nil, fmt.Errorf("%w: %v", ErrGatewayUnavailable, err)
+		return nil, commonerrors.Wrap(ErrGatewayUnavailable, err)
 	}
 
 	paymentQ := s.q.WithTx(tx)
@@ -264,8 +259,7 @@ func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.
 	gatewayTxn, err := paymentQ.GetTransactionByTxnRefNo(ctx, callback.TxnRefNo)
 
 	if err != nil {
-		log.Printf("cannot get transaction: %v", err)
-		return nil, fmt.Errorf("%w: %v", ErrDatabaseQuery, err)
+		return nil, commonerrors.Wrap(ErrDatabaseQuery, err)
 	}
 
 	paymentStatus := gatewayStatusToPaymentStatus(callback.Status)
@@ -276,8 +270,7 @@ func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.
 	})
 
 	if err != nil {
-		log.Printf("failed to update transaction status: %v", err)
-		return nil, fmt.Errorf("%w: %v", ErrTransactionUpdate, err)
+		return nil, commonerrors.Wrap(ErrTransactionUpdate, err)
 	}
 
 	if paymentStatus == PaymentStatusSuccess {
@@ -289,7 +282,6 @@ func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.
 
 	err = paymentQ.MarkAuditProcessed(ctx, auditID)
 	if err != nil {
-		log.Printf("failed to mark audit processed: %v", err)
 		// Don't fail the whole operation for this
 	}
 
@@ -316,12 +308,12 @@ func (s *Service) initiateMWalletPayment(
 
 	phoneNumber, err := NormalizePhoneNumber(payload.PhoneNumber)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidPhoneNumber, err)
+		return nil, commonerrors.Wrap(ErrInvalidPhoneNumber, err)
 	}
 
 	cnic, err := NormalizeCNICLast6(payload.CNICLast6)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidCNIC, err)
+		return nil, commonerrors.Wrap(ErrInvalidCNIC, err)
 	}
 
 	txnDateTime := time.Now().Format("20060102150405")
@@ -340,8 +332,7 @@ func (s *Service) initiateMWalletPayment(
 
 	_, err = s.gatewayClient.SubmitMWallet(ctx, mwRequest)
 	if err != nil {
-		log.Printf("gateway MWallet initiate failed: %v", err)
-		return nil, fmt.Errorf("%w: %v", ErrGatewayUnavailable, err)
+		return nil, commonerrors.Wrap(ErrGatewayUnavailable, err)
 	}
 
 	response, err := s.checkTransactionStatus(ctx, gatewayTxn)
@@ -360,8 +351,7 @@ func (s *Service) initiateCardPayment(
 
 	txn, err := s.q.GetTransactionByTxnRefNo(ctx, txnRefNo)
 	if err != nil {
-		log.Printf("cannot get transaction: %v", err)
-		return "", fmt.Errorf("%w: %v", ErrDatabaseQuery, err)
+		return "", commonerrors.Wrap(ErrDatabaseQuery, err)
 	}
 
 	if txn.Status != "PENDING" {
@@ -386,8 +376,7 @@ func (s *Service) initiateCardPayment(
 	cardInitiateResponse, err := s.gatewayClient.InitiateCard(ctx, cardRequest)
 
 	if err != nil {
-		log.Printf("gateway card initiate failed: %v", err)
-		return "", fmt.Errorf("%w: %v", ErrGatewayUnavailable, err)
+		return "", commonerrors.Wrap(ErrGatewayUnavailable, err)
 	}
 
 	html := s.buildAutoSubmitForm(cardInitiateResponse.Fields, cardInitiateResponse.PostURL)
@@ -426,12 +415,11 @@ func (s *Service) creditWalletFromPayment(ctx context.Context, tx pgx.Tx, userID
 	if err != nil {
 
 		if errors.Is(err, wallet.ErrDuplicateLedgerEntry) {
-			log.Printf("wallet already credited for transaction %s (idempotent)", paymentTxnRefNo)
+			// wallet already credited for transaction (idempotent)
 			return nil
 		}
 
-		log.Printf("failed to credit wallet for transaction %s: %v", paymentTxnRefNo, err)
-		return fmt.Errorf("wallet credit failed: %w", err)
+		return commonerrors.Wrap(commonerrors.ErrTransactionBegin, fmt.Errorf("wallet credit failed: %w", err))
 	}
 	return nil
 }
@@ -483,8 +471,7 @@ func (s *Service) checkTransactionStatus(
 	inquiryResult, err := s.gatewayClient.Inquiry(ctx, existing.TxnRefNo)
 
 	if err != nil {
-		log.Printf("inquiry API failed for existing transaction %s: %v", existing.TxnRefNo, err)
-		return nil, fmt.Errorf("%w: %v", ErrGatewayUnavailable, err)
+		return nil, commonerrors.Wrap(ErrGatewayUnavailable, err)
 	}
 
 	paymentStatus := gatewayStatusToPaymentStatus(inquiryResult.Status)
@@ -494,8 +481,7 @@ func (s *Service) checkTransactionStatus(
 
 		tx, err := s.dbPool.Begin(ctx)
 		if err != nil {
-			log.Printf("failed to begin transaction: %v", err)
-			return nil, fmt.Errorf("%w: %v", ErrDatabaseQuery, err)
+			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 		}
 		defer tx.Rollback(ctx) // Will rollback if commit doesn't happen
 
@@ -507,8 +493,7 @@ func (s *Service) checkTransactionStatus(
 			TxnRefNo: existing.TxnRefNo,
 		})
 		if err != nil {
-			log.Printf("failed to update transaction status: %v", err)
-			return nil, fmt.Errorf("%w: %v", ErrTransactionUpdate, err)
+			return nil, commonerrors.Wrap(ErrTransactionUpdate, err)
 		}
 
 		// Credit wallet (must succeed or transaction rolls back)
@@ -519,8 +504,7 @@ func (s *Service) checkTransactionStatus(
 
 		// Commit transaction (status update + wallet credit)
 		if err := tx.Commit(ctx); err != nil {
-			log.Printf("failed to commit transaction: %v", err)
-			return nil, fmt.Errorf("%w: %v", ErrDatabaseQuery, err)
+			return nil, commonerrors.Wrap(commonerrors.ErrTransactionCommit, err)
 		}
 
 		return &TopUpResult{
@@ -538,8 +522,7 @@ func (s *Service) checkTransactionStatus(
 			TxnRefNo: existing.TxnRefNo,
 		})
 		if err != nil {
-			log.Printf("failed to update transaction status to FAILED: %v", err)
-			return nil, fmt.Errorf("%w: %v", ErrTransactionUpdate, err)
+			return nil, commonerrors.Wrap(ErrTransactionUpdate, err)
 		}
 
 		return &TopUpResult{
@@ -558,8 +541,7 @@ func (s *Service) checkTransactionStatus(
 				TxnRefNo: existing.TxnRefNo,
 			})
 			if err != nil {
-				log.Printf("failed to update transaction status: %v", err)
-				return nil, fmt.Errorf("%w: %v", ErrTransactionUpdate, err)
+				return nil, commonerrors.Wrap(ErrTransactionUpdate, err)
 			}
 
 			return &TopUpResult{
@@ -598,7 +580,7 @@ func (s *Service) checkTransactionStatus(
 func (s *Service) startPollingForTransaction(txRefNo string) {
 	conn, err := s.dbPool.Acquire(context.Background())
 	if err != nil {
-		log.Printf("failed to acquire db connection for polling: %v", err)
+		middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrDatabase, fmt.Errorf("failed to acquire db connection for polling: %w", err)), "polling-"+txRefNo)
 		return
 	}
 	defer conn.Release()
@@ -608,7 +590,8 @@ func (s *Service) startPollingForTransaction(txRefNo string) {
 	// Acquire polling lock
 	_, err = paymentQ.UpdatePollingStatus(context.Background(), txRefNo)
 	if err != nil {
-		log.Printf("polling already started or transaction not found: %v", err)
+		// polling already started or transaction not found
+		middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrDatabase, fmt.Errorf("polling already started or transaction not found: %w", err)), "polling-"+txRefNo)
 		return
 	}
 
@@ -641,11 +624,11 @@ func (s *Service) handlePollingTimeout(paymentQ *payment.Queries, txRefNo string
 		TxnRefNo: txRefNo,
 	})
 	if err != nil {
-		log.Printf("failed to update status on timeout: %v", err)
+		middleware.LogAppError(commonerrors.Wrap(ErrTransactionUpdate, fmt.Errorf("failed to update status on timeout: %w", err)), "polling-"+txRefNo)
 	}
 
 	if err := paymentQ.ClearPollingStatus(cleanupCtx, txRefNo); err != nil {
-		log.Printf("failed to clear polling status: %v", err)
+		middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrDatabase, fmt.Errorf("failed to clear polling status: %w", err)), "polling-"+txRefNo)
 	}
 }
 
@@ -653,14 +636,14 @@ func (s *Service) handlePollingTimeout(paymentQ *payment.Queries, txRefNo string
 func (s *Service) pollTransactionOnce(ctx context.Context, txRefNo string) bool {
 	// Acquire rate limit token
 	if err := s.rateLimiter.Acquire(ctx); err != nil {
-		log.Printf("rate limiter acquire failed: %v", err)
+		middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("rate limiter acquire failed: %w", err)), "polling-"+txRefNo)
 		return true
 	}
 
 	// Call inquiry API
 	inquiryResult, err := s.gatewayClient.Inquiry(ctx, txRefNo)
 	if err != nil {
-		log.Printf("inquiry API failed (will retry): %v", err)
+		middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrExternalService, fmt.Errorf("inquiry API failed (will retry): %w", err)), "polling-"+txRefNo)
 		s.rateLimiter.Release()
 		return false
 	}
@@ -672,14 +655,14 @@ func (s *Service) pollTransactionOnce(ctx context.Context, txRefNo string) bool 
 
 		tx, err := s.dbPool.Begin(ctx)
 		if err != nil {
-			log.Printf("failed to begin transaction for polling: %v", err)
+			middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrDatabase, fmt.Errorf("failed to begin transaction for polling: %w", err)), "polling-"+txRefNo)
 			s.rateLimiter.Release()
 			return false // Retry later
 		}
 		defer func(tx pgx.Tx, ctx context.Context) {
 			err := tx.Rollback(ctx)
 			if err != nil {
-				log.Printf("failed to begin transaction for polling: %v", err)
+				middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrTransactionBegin, fmt.Errorf("failed to rollback transaction for polling: %w", err)), "polling-"+txRefNo)
 				s.rateLimiter.Release()
 				return
 			}
@@ -693,7 +676,7 @@ func (s *Service) pollTransactionOnce(ctx context.Context, txRefNo string) bool 
 			TxnRefNo: txRefNo,
 		})
 		if err != nil {
-			log.Printf("failed to update status to %s: %v", status, err)
+			middleware.LogAppError(commonerrors.Wrap(ErrTransactionUpdate, fmt.Errorf("failed to update status to %s: %w", status, err)), "polling-"+txRefNo)
 			s.rateLimiter.Release()
 			return false // Retry later
 		}
@@ -701,7 +684,7 @@ func (s *Service) pollTransactionOnce(ctx context.Context, txRefNo string) bool 
 		// Get transaction to get userID and amount for wallet credit
 		gatewayTxn, err := paymentQ.GetTransactionByTxnRefNo(ctx, txRefNo)
 		if err != nil {
-			log.Printf("failed to get transaction for wallet credit: %v", err)
+			middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrDatabase, fmt.Errorf("failed to get transaction for wallet credit: %w", err)), "polling-"+txRefNo)
 			s.rateLimiter.Release()
 			return false // Retry later
 		}
@@ -709,21 +692,21 @@ func (s *Service) pollTransactionOnce(ctx context.Context, txRefNo string) bool 
 		// Credit wallet (must succeed or transaction rolls back)
 		err = s.creditWalletFromPayment(ctx, tx, gatewayTxn.UserID, gatewayTxn.Amount, gatewayTxn.TxnRefNo)
 		if err != nil {
-			log.Printf("failed to credit wallet during polling: %v", err)
+			middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("failed to credit wallet during polling: %w", err)), "polling-"+txRefNo)
 			s.rateLimiter.Release()
 			return false // Retry later - transaction will rollback via defer
 		}
 
 		// Clear polling status
 		if err := paymentQ.ClearPollingStatus(ctx, txRefNo); err != nil {
-			log.Printf("failed to clear polling status: %v", err)
+			middleware.LogAppError(commonerrors.Wrap(ErrDatabaseQuery, fmt.Errorf("failed to clear polling status: %w", err)), "polling-"+txRefNo)
 			s.rateLimiter.Release()
 			return false // Retry later
 		}
 
 		// Commit transaction (status update + wallet credit + clear polling)
 		if err := tx.Commit(ctx); err != nil {
-			log.Printf("failed to commit polling transaction: %v", err)
+			middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrDatabase, fmt.Errorf("failed to commit polling transaction: %w", err)), "polling-"+txRefNo)
 			s.rateLimiter.Release()
 			return false // Retry later
 		}
@@ -744,19 +727,19 @@ func (s *Service) pollTransactionOnce(ctx context.Context, txRefNo string) bool 
 		})
 
 		if err != nil {
-			log.Printf("failed to update status to %s: %v", status, err)
+			middleware.LogAppError(commonerrors.Wrap(ErrTransactionUpdate, fmt.Errorf("failed to update status to FAILED: %w", err)), "polling-"+txRefNo)
 		}
 
 		// Clear polling status
 		if err := paymentQ.ClearPollingStatus(ctx, txRefNo); err != nil {
-			log.Printf("failed to clear polling status: %v", err)
+			middleware.LogAppError(commonerrors.Wrap(ErrDatabaseQuery, fmt.Errorf("failed to clear polling status: %w", err)), "polling-"+txRefNo)
 			s.rateLimiter.Release()
 			return false // Retry later
 		}
 
 		// Commit transaction (status update + wallet credit + clear polling)
 		if err := tx.Commit(ctx); err != nil {
-			log.Printf("failed to commit polling transaction: %v", err)
+			middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrTransactionCommit, fmt.Errorf("failed to commit polling transaction: %w", err)), "polling-"+txRefNo)
 			s.rateLimiter.Release()
 			return false // Retry later
 		}
@@ -812,21 +795,21 @@ func (s *Service) buildAutoSubmitForm(fields gateway.JazzCashFields, jazzcashPos
 // =============================================================================
 
 func GenerateTxnRefNo() (string, error) {
-	date := time.Now().Format("20060102")
+	timestamp := time.Now().Format("20060102150405")
 	randBits, err := RandomBase32(3)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("GIKITU%s%s", date, randBits), nil
+	return fmt.Sprintf("TU%s%s", timestamp, randBits), nil
 }
 
 func GenerateBillRefNo() (string, error) {
-	timestamp := time.Now().Unix()
-	randBits, err := RandomBase32(3)
+	timestamp := time.Now().Format("20060102150405")
+	randBits, err := RandomBase32(4)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("BILL%d%s", timestamp, randBits), nil
+	return fmt.Sprintf("B%s%s", timestamp, randBits), nil
 }
 
 func RandomBase32(n int) (string, error) {

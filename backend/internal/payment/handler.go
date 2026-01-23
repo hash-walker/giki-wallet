@@ -2,7 +2,6 @@ package payment
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -34,8 +33,9 @@ func (h *Handler) TopUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response, err := h.pService.InitiatePayment(r.Context(), params)
+
 	if err != nil {
-		h.handleServiceError(w, err, requestID)
+		middleware.HandleError(w, err, requestID)
 		return
 	}
 
@@ -59,7 +59,7 @@ func (h *Handler) CardPaymentPage(w http.ResponseWriter, r *http.Request) {
 
 	html, err := h.pService.initiateCardPayment(r.Context(), txnRefNo)
 	if err != nil {
-		h.handleServiceError(w, err, requestID)
+		middleware.HandleError(w, err, requestID)
 		return
 	}
 
@@ -72,21 +72,21 @@ func (h *Handler) CardCallBack(w http.ResponseWriter, r *http.Request) {
 
 	err := r.ParseForm()
 	if err != nil {
-		log.Printf("ERROR: requestID=%s, cannot parse form data: %v", requestID, err)
 		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err), requestID)
 		return
 	}
 
 	auditID, err := h.pService.LogCardCallbackAudit(r.Context(), r.Form)
+
 	if err != nil {
-		log.Printf("CRITICAL: requestID=%s, failed to write audit log: %v", requestID, err)
 		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInternal, err), requestID)
 		return
 	}
 
 	tx, err := h.pService.dbPool.Begin(r.Context())
+
 	if err != nil {
-		log.Printf("ERROR: requestID=%s, failed to begin transaction: %v", requestID, err)
+		middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrDatabase, err), requestID)
 		h.pService.MarkAuditFailed(r.Context(), auditID, err.Error())
 		http.Redirect(w, r, "/payment/pending", http.StatusSeeOther)
 		return
@@ -94,15 +94,16 @@ func (h *Handler) CardCallBack(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback(r.Context())
 
 	result, err := h.pService.CompleteCardPayment(r.Context(), tx, r.Form, auditID)
+
 	if err != nil {
-		log.Printf("ERROR: requestID=%s, failed to complete card payment: %v", requestID, err)
+		middleware.LogAppError(err, requestID)
 		h.pService.MarkAuditFailed(r.Context(), auditID, err.Error())
 		http.Redirect(w, r, "/payment/pending", http.StatusSeeOther)
 		return
 	}
 
 	if err := tx.Commit(r.Context()); err != nil {
-		log.Printf("ERROR: requestID=%s, failed to commit transaction: %v", requestID, err)
+		middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrDatabase, err), requestID)
 		h.pService.MarkAuditFailed(r.Context(), auditID, err.Error())
 		http.Redirect(w, r, "/payment/error", http.StatusSeeOther)
 		return
@@ -113,9 +114,4 @@ func (h *Handler) CardCallBack(w http.ResponseWriter, r *http.Request) {
 	} else {
 		http.Redirect(w, r, "/payment/failed?txn="+result.TxnRefNo, http.StatusSeeOther)
 	}
-}
-
-func (h *Handler) handleServiceError(w http.ResponseWriter, err error, requestID string) {
-	log.Printf("ERROR: requestID=%s, payment service error: %v", requestID, err)
-	middleware.HandleError(w, err, requestID)
 }

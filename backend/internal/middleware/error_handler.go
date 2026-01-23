@@ -36,17 +36,10 @@ func HandleError(w http.ResponseWriter, err error, requestID string) {
 		return
 	}
 
+	LogAppError(err, requestID)
+
 	// Check if it's an AppError
 	if appErr, ok := err.(*errors.AppError); ok {
-		// Log internal error details
-		if appErr.Err != nil {
-			log.Printf("ERROR: requestID=%s, code=%s, message=%s, internal=%v",
-				requestID, appErr.Code, appErr.Message, appErr.Err)
-		} else {
-			log.Printf("ERROR: requestID=%s, code=%s, message=%s",
-				requestID, appErr.Code, appErr.Message)
-		}
-
 		// Send user-facing error response
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(appErr.StatusCode)
@@ -64,8 +57,30 @@ func HandleError(w http.ResponseWriter, err error, requestID string) {
 		return
 	}
 
-	// Unknown error - log and return generic message
-	log.Printf("UNKNOWN ERROR: requestID=%s, error=%v", requestID, err)
+	// Unknown error - return generic message
 	appErr := errors.ErrInternal
 	common.ResponseWithError(w, appErr.StatusCode, appErr.Message)
+}
+
+// LogAppError logs the error details consistently with request context
+func LogAppError(err error, requestID string) {
+	if err == nil {
+		return
+	}
+
+	// Check if it's an AppError
+	if appErr, ok := err.(*errors.AppError); ok {
+		// Log internal error details
+		if appErr.Err != nil {
+			log.Printf("ERROR: requestID=%s, code=%s, message=%s, internal=%v",
+				requestID, appErr.Code, appErr.Message, appErr.Err)
+		} else {
+			log.Printf("ERROR: requestID=%s, code=%s, message=%s",
+				requestID, appErr.Code, appErr.Message)
+		}
+		return
+	}
+
+	// Unknown error - log generic message
+	log.Printf("UNKNOWN ERROR: requestID=%s, error=%v", requestID, err)
 }

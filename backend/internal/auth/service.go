@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"crypto/rand"
@@ -13,6 +12,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	auth "github.com/hash-walker/giki-wallet/internal/auth/auth_db"
 	"github.com/hash-walker/giki-wallet/internal/common"
+	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
 	"github.com/hash-walker/giki-wallet/internal/user/user_db"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -41,19 +41,17 @@ func (s *Service) AuthenticateAndIssueTokens(ctx context.Context, tx pgx.Tx, ema
 
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
-			return LoginResult{}, ErrUserNotFound
+			return LoginResult{}, commonerrors.Wrap(ErrUserNotFound, err)
 		case errors.Is(err, ErrInvalidPassword):
-			return LoginResult{}, ErrInvalidPassword
+			return LoginResult{}, commonerrors.Wrap(ErrInvalidPassword, err)
 		default:
-			log.Printf("Error getting user by email: %v", err)
-			return LoginResult{}, fmt.Errorf("error getting user by email: %w", err)
+			return LoginResult{}, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 		}
 
 	}
 
 	if !user.IsActive || !user.IsVerified {
-		log.Printf("Error user is not active or verified: %v", err)
-		return LoginResult{}, ErrUserInactive
+		return LoginResult{}, commonerrors.Wrap(ErrUserInactive, fmt.Errorf("user status inactive: active=%v, verified=%v", user.IsActive, user.IsVerified))
 	}
 
 	expireTime := time.Duration(3600) * time.Second
@@ -62,8 +60,7 @@ func (s *Service) AuthenticateAndIssueTokens(ctx context.Context, tx pgx.Tx, ema
 	tokenPair, err := s.IssueTokenPair(ctx, tx, user, tokenSecret, expireTime)
 
 	if err != nil {
-		log.Printf("Cannot generate token: %v", err)
-		return LoginResult{}, ErrTokenCreation
+		return LoginResult{}, commonerrors.Wrap(ErrTokenCreation, err)
 	}
 
 	res := LoginResult{
@@ -92,11 +89,15 @@ func (s *Service) IssueTokenPair(ctx context.Context, tx pgx.Tx, user user_db.Gi
 	signedToken, err := token.SignedString([]byte(tokenSecret))
 
 	if err != nil {
-		return TokenPairs{}, err
+		return TokenPairs{}, commonerrors.Wrap(ErrTokenCreation, err)
 	}
 
 	refreshToken, err := MakeRefreshToken()
 	expirationAt := time.Now().Add(60 * 24 * time.Hour)
+
+	if err != nil {
+		return TokenPairs{}, commonerrors.Wrap(commonerrors.ErrInternal, err)
+	}
 
 	authQ := s.authQ.WithTx(tx)
 
@@ -107,7 +108,7 @@ func (s *Service) IssueTokenPair(ctx context.Context, tx pgx.Tx, user user_db.Gi
 	})
 
 	if err != nil {
-		return TokenPairs{}, err
+		return TokenPairs{}, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}
 
 	tokenPairs := TokenPairs{
@@ -124,7 +125,7 @@ func (s *Service) CheckUserAndPassword(ctx context.Context, email string, passwo
 	user, err := s.userQ.GetUserByEmail(ctx, email)
 
 	if err != nil {
-		return user_db.GikiWalletUser{}, err
+		return user_db.GikiWalletUser{}, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}
 
 	passwordHash := user.PasswordHash
@@ -132,7 +133,7 @@ func (s *Service) CheckUserAndPassword(ctx context.Context, email string, passwo
 	err = bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password))
 
 	if err != nil {
-		return user_db.GikiWalletUser{}, ErrInvalidPassword
+		return user_db.GikiWalletUser{}, commonerrors.Wrap(ErrInvalidPassword, err)
 	}
 
 	return user, nil
@@ -141,7 +142,10 @@ func (s *Service) CheckUserAndPassword(ctx context.Context, email string, passwo
 
 func MakeRefreshToken() (string, error) {
 	key := make([]byte, 32)
-	rand.Read(key)
+	_, err := rand.Read(key)
+	if err != nil {
+		return "", commonerrors.Wrap(commonerrors.ErrInternal, err)
+	}
 	refreshToken := hex.EncodeToString(key)
 
 	return refreshToken, nil

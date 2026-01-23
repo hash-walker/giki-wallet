@@ -2,7 +2,6 @@ package auth
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"github.com/hash-walker/giki-wallet/internal/common"
@@ -49,7 +48,6 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// Start a transaction
 	tx, err := h.service.dbPool.Begin(r.Context())
 	if err != nil {
-		log.Printf("ERROR: requestID=%s, failed to begin transaction: %v", requestID, err)
 		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrTransactionBegin, err), requestID)
 		return
 	}
@@ -57,7 +55,6 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	res, err := h.service.AuthenticateAndIssueTokens(r.Context(), tx, params.Email, params.Password)
 	if err != nil {
-		log.Printf("ERROR: requestID=%s, authentication failed for email=%s: %v", requestID, params.Email, err)
 		middleware.HandleError(w, err, requestID)
 		return
 	}
@@ -65,7 +62,6 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// Commit transaction
 	err = tx.Commit(r.Context())
 	if err != nil {
-		log.Printf("ERROR: requestID=%s, failed to commit transaction: %v", requestID, err)
 		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrTransactionCommit, err), requestID)
 		return
 	}

@@ -33,7 +33,7 @@ func main() {
 
 	cfg := config.LoadConfig()
 
-	jazzcashClient := gateway.NewJazzCashClient(
+	jazzCashClient := gateway.NewJazzCashClient(
 		cfg.Jazzcash.MerchantID,
 		cfg.Jazzcash.Password,
 		cfg.Jazzcash.IntegritySalt,
@@ -57,7 +57,7 @@ func main() {
 	authService := auth.NewService(pool)
 	authHandler := auth.NewHandler(authService)
 	walletService := wallet.NewService(pool)
-	paymentService := payment.NewService(pool, jazzcashClient, walletService, inquiryRateLimiter)
+	paymentService := payment.NewService(pool, jazzCashClient, walletService, inquiryRateLimiter)
 	paymentHandler := payment.NewHandler(paymentService, walletService)
 
 	srv := api.NewServer(userHandler, authHandler, paymentHandler)

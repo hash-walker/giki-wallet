@@ -78,6 +78,10 @@ func (s *Service) executeDoubleEntryTransaction(
 		Description: common.StringToText(description),
 	})
 
+	if err != nil {
+		return commonerrors.Wrap(ErrDatabase, err)
+	}
+
 	// get current balances
 	senderBalance, _ := s.getWalletBalance(ctx, walletQ, senderWalletID)
 	receiverBalance, _ := s.getWalletBalance(ctx, walletQ, receiverWalletID)
@@ -203,8 +207,10 @@ func (s *Service) GetSystemWalletByName(ctx context.Context, walletName SystemWa
 func (s *Service) getWalletBalance(ctx context.Context, walletQ *wallet.Queries, walletID uuid.UUID) (int64, error) {
 
 	balance, err := walletQ.GetWalletBalanceSnapshot(ctx, walletID)
-
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, nil
+		}
 		return 0, commonerrors.Wrap(ErrDatabase, err)
 	}
 

@@ -222,15 +222,15 @@ func TestInitiateMWalletPayment_Success(t *testing.T) {
 
 	// Create a test transaction (this would normally come from DB)
 	gatewayTxn := paymentdb.GikiWalletGatewayTransaction{
-		ID:             uuid.New(),
-		UserID:         userID,
-		TxnRefNo:       "TEST_TXN_123",
-		BillRefID:      "TEST_BILL_123",
-		PaymentMethod:  "MWALLET",
-		Status:         paymentdb.CurrentStatus("PENDING"),
-		Amount:         50000,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:            uuid.New(),
+		UserID:        userID,
+		TxnRefNo:      "TEST_TXN_123",
+		BillRefID:     "TEST_BILL_123",
+		PaymentMethod: "MWALLET",
+		Status:        paymentdb.CurrentStatus("PENDING"),
+		Amount:        50000,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
 	}
 
 	payload := TopUpRequest{
@@ -770,8 +770,8 @@ func TestRateLimiter_Concurrent(t *testing.T) {
 
 func TestMapResponseCodeToStatus(t *testing.T) {
 	tests := []struct {
-		code   string
-		want   gateway.Status
+		code string
+		want gateway.Status
 	}{
 		{"000", gateway.StatusSuccess},
 		{"121", gateway.StatusSuccess},
@@ -812,7 +812,7 @@ func TestMapResponseCodeToStatus(t *testing.T) {
 			}
 
 			paymentStatus := gatewayStatusToPaymentStatus(gwStatus)
-			
+
 			var expectedPaymentStatus PaymentStatus
 			switch tt.want {
 			case gateway.StatusSuccess:
@@ -846,16 +846,16 @@ func TestBuildAutoSubmitForm(t *testing.T) {
 	}
 
 	fields := gateway.JazzCashFields{
-		"pp_Amount":      "100000",
-		"pp_TxnRefNo":    "TEST_TXN",
-		"pp_SecureHash":  "ABC123",
-		"pp_MerchantID":  "TEST_MERCHANT",
-		"pp_Password":    "TEST_PWD",
-		"pp_ReturnURL":   "http://localhost/callback",
-		"pp_TxnDateTime": "20240119120000",
+		"pp_Amount":            "100000",
+		"pp_TxnRefNo":          "TEST_TXN",
+		"pp_SecureHash":        "ABC123",
+		"pp_MerchantID":        "TEST_MERCHANT",
+		"pp_Password":          "TEST_PWD",
+		"pp_ReturnURL":         "http://localhost/callback",
+		"pp_TxnDateTime":       "20240119120000",
 		"pp_TxnExpiryDateTime": "20240120120000",
-		"pp_BillReference": "BILL_123",
-		"pp_Description": "Test Payment",
+		"pp_BillReference":     "BILL_123",
+		"pp_Description":       "Test Payment",
 	}
 
 	html := service.buildAutoSubmitForm(fields, "https://jazzcash.com/pay")
@@ -923,14 +923,14 @@ func TestGenerateTxnRefNo(t *testing.T) {
 		t.Fatalf("GenerateTxnRefNo() error = %v", err)
 	}
 
-	// Should start with "GIKITU"
-	if !strings.HasPrefix(refNo, "GIKITU") {
-		t.Errorf("GenerateTxnRefNo() = %v, should start with GIKITU", refNo)
+	// Should start with "T"
+	if !strings.HasPrefix(refNo, "T") {
+		t.Errorf("GenerateTxnRefNo() = %v, should start with T", refNo)
 	}
 
-	// Should contain date in format YYYYMMDD
-	if len(refNo) < 14 { // GIKITU (6) + YYYYMMDD (8) = 14 minimum
-		t.Errorf("GenerateTxnRefNo() = %v, too short", refNo)
+	// Format: T + YYYYMMDDHHMMSS (14) + rand (4) = 19
+	if len(refNo) != 19 {
+		t.Errorf("GenerateTxnRefNo() = %v, length = %d, want 19", refNo, len(refNo))
 	}
 
 	// Generate a few and check they're mostly unique
@@ -959,9 +959,14 @@ func TestGenerateBillRefNo(t *testing.T) {
 		t.Fatalf("GenerateBillRefNo() error = %v", err)
 	}
 
-	// Should start with "BILL"
-	if !strings.HasPrefix(refNo, "BILL") {
-		t.Errorf("GenerateBillRefNo() = %v, should start with BILL", refNo)
+	// Should start with "B"
+	if !strings.HasPrefix(refNo, "B") {
+		t.Errorf("GenerateBillRefNo() = %v, should start with B", refNo)
+	}
+
+	// Format: B + YYYYMMDDHHMMSS (14) + rand (4) = 19
+	if len(refNo) != 19 {
+		t.Errorf("GenerateBillRefNo() = %v, length = %d, want 19", refNo, len(refNo))
 	}
 
 	// Should be unique

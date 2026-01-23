@@ -9,7 +9,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/hash-walker/giki-wallet/internal/common/errors"
+	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
 	"github.com/hash-walker/giki-wallet/internal/middleware"
 )
 
@@ -33,7 +33,7 @@ func RequireAuth(next http.Handler) http.Handler {
 		tokenSecret := os.Getenv("TOKEN_SECRET")
 		userID, err := ValidateJWT(token, tokenSecret)
 		if err != nil {
-			middleware.HandleError(w, errors.Wrap(ErrInvalidToken, err), requestID)
+			middleware.HandleError(w, err, requestID)
 			return
 		}
 
@@ -72,7 +72,7 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 	})
 
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("invalid token: %w", err)
+		return uuid.Nil, commonerrors.Wrap(ErrInvalidToken, err)
 	}
 
 	claims, _ := token.Claims.(*CustomClaims)
@@ -80,7 +80,7 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 	userID, err := uuid.Parse(claims.Subject)
 
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, commonerrors.Wrap(ErrInvalidToken, fmt.Errorf("invalid user ID in token: %v", err))
 	}
 
 	return userID, nil

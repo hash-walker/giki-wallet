@@ -36,7 +36,21 @@ func TestMain(m *testing.M) {
 	dbURL := os.Getenv("DB_URL")
 	if dbURL == "" {
 		// Default test database URL
-		dbURL = "postgres://giki:giki@localhost:5432/giki_wallet_db?sslmode=disable"
+		dbURL = "postgres://giki:giki_wallet@localhost:5432/giki_wallet_db?sslmode=disable"
+		os.Setenv("DB_URL", dbURL) // Ensure it is set for service config
+
+		// Set dummy JazzCash credentials
+		os.Setenv("JAZZCASH_MERCHANT_ID", "test_merchant_id")
+		os.Setenv("JAZZCASH_PASSWORD", "test_password")
+		os.Setenv("JAZZCASH_INTEGRITY_SALT", "test_salt")
+		os.Setenv("JAZZCASH_MERCHANT_MPIN", "test_mpin")
+		os.Setenv("JAZZCASH_RETURN_URL", "http://localhost:8080/return")
+		os.Setenv("JAZZCASH_BASE_URL", "https://sandbox.jazzcash.com.pk")
+		os.Setenv("JAZZCASH_WALLET_PAYMENT_URL", "ApplicationAPI/API/2.0/Purchase/DoMWalletTransaction")
+		os.Setenv("JAZZCASH_STATUS_INQUIRY_URL", "ApplicationAPI/API/PaymentInquiry/Inquire")
+		os.Setenv("JAZZCASH_CARD_PAYMENT_URL", "CustomerPortal/transactionmanagement/merchantform/")
+		os.Setenv("JAZZCASH_WALLET_REFUND_URL", "ApplicationAPI/API/Purchase/domwalletrefundtransaction")
+		os.Setenv("JAZZCASH_CARD_REFUND_URL", "ApplicationAPI/API/authorize/Refund")
 	}
 
 	// Connect to database
