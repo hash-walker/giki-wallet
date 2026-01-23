@@ -7,57 +7,99 @@ package wallet_db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createLedgerEntry = `-- name: CreateLedgerEntry :one
 
-INSERT INTO giki_wallet.ledger (wallet_id, amount, transaction_type, reference_id)
-VALUES ($1, $2, $3, $4)
-RETURNING id, wallet_id, amount, transaction_type, reference_id, description, created_at
+INSERT INTO giki_wallet.ledger (wallet_id, amount, transaction_id, balance_after, row_hash)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, wallet_id, amount, balance_after, transaction_id, row_hash, created_at
 `
 
 type CreateLedgerEntryParams struct {
-	WalletID        uuid.UUID                         `json:"wallet_id"`
-	Amount          int64                             `json:"amount"`
-	TransactionType GikiWalletTransactionCategoryType `json:"transaction_type"`
-	ReferenceID     string                            `json:"reference_id"`
+	WalletID      uuid.UUID `json:"wallet_id"`
+	Amount        int64     `json:"amount"`
+	TransactionID uuid.UUID `json:"transaction_id"`
+	BalanceAfter  int64     `json:"balance_after"`
+	RowHash       string    `json:"row_hash"`
 }
 
 func (q *Queries) CreateLedgerEntry(ctx context.Context, arg CreateLedgerEntryParams) (GikiWalletLedger, error) {
 	row := q.db.QueryRow(ctx, createLedgerEntry,
 		arg.WalletID,
 		arg.Amount,
-		arg.TransactionType,
-		arg.ReferenceID,
+		arg.TransactionID,
+		arg.BalanceAfter,
+		arg.RowHash,
 	)
 	var i GikiWalletLedger
 	err := row.Scan(
 		&i.ID,
 		&i.WalletID,
 		&i.Amount,
-		&i.TransactionType,
-		&i.ReferenceID,
-		&i.Description,
+		&i.BalanceAfter,
+		&i.TransactionID,
+		&i.RowHash,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
-const createWallet = `-- name: CreateWallet :one
-
-INSERT INTO giki_wallet.wallets (user_id)
-VALUES ($1)
-RETURNING id, user_id, status, currency, created_at
+const createTransactionHeader = `-- name: CreateTransactionHeader :one
+INSERT INTO giki_wallet.transactions(type, reference_id, description)
+VALUES ($1, $2, $3)
+RETURNING id, created_at
 `
 
-func (q *Queries) CreateWallet(ctx context.Context, userID uuid.UUID) (GikiWalletWallet, error) {
-	row := q.db.QueryRow(ctx, createWallet, userID)
+type CreateTransactionHeaderParams struct {
+	Type        string      `json:"type"`
+	ReferenceID string      `json:"reference_id"`
+	Description pgtype.Text `json:"description"`
+}
+
+type CreateTransactionHeaderRow struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (q *Queries) CreateTransactionHeader(ctx context.Context, arg CreateTransactionHeaderParams) (CreateTransactionHeaderRow, error) {
+	row := q.db.QueryRow(ctx, createTransactionHeader, arg.Type, arg.ReferenceID, arg.Description)
+	var i CreateTransactionHeaderRow
+	err := row.Scan(&i.ID, &i.CreatedAt)
+	return i, err
+}
+
+const createWallet = `-- name: CreateWallet :one
+
+INSERT INTO giki_wallet.wallets (user_id, name, type, status)
+VALUES ($1, COALESCE(NULLIF($2, ''), 'Personal Wallet'), $3, $4)
+RETURNING id, user_id, name, type, status, currency, created_at
+`
+
+type CreateWalletParams struct {
+	UserID  pgtype.UUID `json:"user_id"`
+	Column2 interface{} `json:"column_2"`
+	Type    pgtype.Text `json:"type"`
+	Status  string      `json:"status"`
+}
+
+func (q *Queries) CreateWallet(ctx context.Context, arg CreateWalletParams) (GikiWalletWallet, error) {
+	row := q.db.QueryRow(ctx, createWallet,
+		arg.UserID,
+		arg.Column2,
+		arg.Type,
+		arg.Status,
+	)
 	var i GikiWalletWallet
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
+		&i.Name,
+		&i.Type,
 		&i.Status,
 		&i.Currency,
 		&i.CreatedAt,
@@ -66,28 +108,41 @@ func (q *Queries) CreateWallet(ctx context.Context, userID uuid.UUID) (GikiWalle
 }
 
 const getLedgerEntriesByReference = `-- name: GetLedgerEntriesByReference :many
-
-SELECT id, wallet_id, amount, transaction_type, reference_id, description, created_at FROM giki_wallet.ledger
-WHERE reference_id = $1
+SELECT
+    l.id, l.amount, l.balance_after, l.created_at,
+    t.type, t.reference_id, t.description
+FROM giki_wallet.ledger l
+         JOIN giki_wallet.transactions t ON l.transaction_id = t.id
+WHERE t.reference_id = $1
 `
 
-func (q *Queries) GetLedgerEntriesByReference(ctx context.Context, referenceID string) ([]GikiWalletLedger, error) {
+type GetLedgerEntriesByReferenceRow struct {
+	ID           uuid.UUID   `json:"id"`
+	Amount       int64       `json:"amount"`
+	BalanceAfter int64       `json:"balance_after"`
+	CreatedAt    time.Time   `json:"created_at"`
+	Type         string      `json:"type"`
+	ReferenceID  string      `json:"reference_id"`
+	Description  pgtype.Text `json:"description"`
+}
+
+func (q *Queries) GetLedgerEntriesByReference(ctx context.Context, referenceID string) ([]GetLedgerEntriesByReferenceRow, error) {
 	rows, err := q.db.Query(ctx, getLedgerEntriesByReference, referenceID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GikiWalletLedger
+	var items []GetLedgerEntriesByReferenceRow
 	for rows.Next() {
-		var i GikiWalletLedger
+		var i GetLedgerEntriesByReferenceRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.WalletID,
 			&i.Amount,
-			&i.TransactionType,
+			&i.BalanceAfter,
+			&i.CreatedAt,
+			&i.Type,
 			&i.ReferenceID,
 			&i.Description,
-			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -99,17 +154,26 @@ func (q *Queries) GetLedgerEntriesByReference(ctx context.Context, referenceID s
 	return items, nil
 }
 
-const getWallet = `-- name: GetWallet :one
-SELECT id, user_id, status, currency, created_at FROM giki_wallet.wallets
-WHERE user_id = $1
+const getSystemWalletByName = `-- name: GetSystemWalletByName :one
+SELECT id, user_id, name, type, status, currency, created_at FROM giki_wallet.wallets
+WHERE name = $1
+  AND type = $2
+LIMIT 1
 `
 
-func (q *Queries) GetWallet(ctx context.Context, userID uuid.UUID) (GikiWalletWallet, error) {
-	row := q.db.QueryRow(ctx, getWallet, userID)
+type GetSystemWalletByNameParams struct {
+	Name pgtype.Text `json:"name"`
+	Type pgtype.Text `json:"type"`
+}
+
+func (q *Queries) GetSystemWalletByName(ctx context.Context, arg GetSystemWalletByNameParams) (GikiWalletWallet, error) {
+	row := q.db.QueryRow(ctx, getSystemWalletByName, arg.Name, arg.Type)
 	var i GikiWalletWallet
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
+		&i.Name,
+		&i.Type,
 		&i.Status,
 		&i.Currency,
 		&i.CreatedAt,
@@ -117,16 +181,59 @@ func (q *Queries) GetWallet(ctx context.Context, userID uuid.UUID) (GikiWalletWa
 	return i, err
 }
 
-const getWalletBalance = `-- name: GetWalletBalance :one
-
-SELECT COALESCE(SUM(amount), 0)::bigint as balance
-FROM giki_wallet.ledger
-WHERE wallet_id = $1
+const getWallet = `-- name: GetWallet :one
+SELECT id, user_id, name, type, status, currency, created_at FROM giki_wallet.wallets
+WHERE user_id = $1
 `
 
-func (q *Queries) GetWalletBalance(ctx context.Context, walletID uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, getWalletBalance, walletID)
-	var balance int64
-	err := row.Scan(&balance)
-	return balance, err
+func (q *Queries) GetWallet(ctx context.Context, userID pgtype.UUID) (GikiWalletWallet, error) {
+	row := q.db.QueryRow(ctx, getWallet, userID)
+	var i GikiWalletWallet
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.Type,
+		&i.Status,
+		&i.Currency,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getWalletBalanceSnapshot = `-- name: GetWalletBalanceSnapshot :one
+SELECT balance_after
+FROM giki_wallet.ledger
+WHERE wallet_id = $1
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+func (q *Queries) GetWalletBalanceSnapshot(ctx context.Context, walletID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, getWalletBalanceSnapshot, walletID)
+	var balance_after int64
+	err := row.Scan(&balance_after)
+	return balance_after, err
+}
+
+const getWalletForUpdate = `-- name: GetWalletForUpdate :one
+
+SELECT id, user_id, name, type, status, currency, created_at FROM giki_wallet.wallets
+WHERE id = $1
+    FOR NO KEY UPDATE
+`
+
+func (q *Queries) GetWalletForUpdate(ctx context.Context, id uuid.UUID) (GikiWalletWallet, error) {
+	row := q.db.QueryRow(ctx, getWalletForUpdate, id)
+	var i GikiWalletWallet
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.Type,
+		&i.Status,
+		&i.Currency,
+		&i.CreatedAt,
+	)
+	return i, err
 }

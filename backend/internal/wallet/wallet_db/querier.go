@@ -8,14 +8,18 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
 	CreateLedgerEntry(ctx context.Context, arg CreateLedgerEntryParams) (GikiWalletLedger, error)
-	CreateWallet(ctx context.Context, userID uuid.UUID) (GikiWalletWallet, error)
-	GetLedgerEntriesByReference(ctx context.Context, referenceID string) ([]GikiWalletLedger, error)
-	GetWallet(ctx context.Context, userID uuid.UUID) (GikiWalletWallet, error)
-	GetWalletBalance(ctx context.Context, walletID uuid.UUID) (int64, error)
+	CreateTransactionHeader(ctx context.Context, arg CreateTransactionHeaderParams) (CreateTransactionHeaderRow, error)
+	CreateWallet(ctx context.Context, arg CreateWalletParams) (GikiWalletWallet, error)
+	GetLedgerEntriesByReference(ctx context.Context, referenceID string) ([]GetLedgerEntriesByReferenceRow, error)
+	GetSystemWalletByName(ctx context.Context, arg GetSystemWalletByNameParams) (GikiWalletWallet, error)
+	GetWallet(ctx context.Context, userID pgtype.UUID) (GikiWalletWallet, error)
+	GetWalletBalanceSnapshot(ctx context.Context, walletID uuid.UUID) (int64, error)
+	GetWalletForUpdate(ctx context.Context, id uuid.UUID) (GikiWalletWallet, error)
 }
 
 var _ Querier = (*Queries)(nil)
