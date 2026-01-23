@@ -2,11 +2,12 @@ package auth
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/hash-walker/giki-wallet/internal/common"
+	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
+	"github.com/hash-walker/giki-wallet/internal/middleware"
 	"github.com/hash-walker/giki-wallet/internal/user"
 )
 
@@ -21,6 +22,7 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
 
 	type parameters struct {
 		Email    string `json:"email"`
@@ -30,57 +32,41 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var params parameters
 
 	if r.Body == nil {
-		common.ResponseWithError(w, http.StatusBadRequest, "Request body is required")
+		middleware.HandleError(w, commonerrors.ErrMissingRequestBody, requestID)
 		return
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-		common.ResponseWithError(w, http.StatusBadRequest, fmt.Sprintf("Invalid JSON: %v", err))
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidJSON, err), requestID)
 		return
 	}
 
 	if params.Email == "" || params.Password == "" {
-		common.ResponseWithError(w, http.StatusBadRequest, "Email and password are required")
+		middleware.HandleError(w, commonerrors.ErrMissingField.WithDetails("fields", "email, password"), requestID)
 		return
 	}
 
-	// start a transaction
-
+	// Start a transaction
 	tx, err := h.service.dbPool.Begin(r.Context())
-
 	if err != nil {
-		fmt.Printf("DATABASE ERROR: %v\n", err)
-		common.ResponseWithError(w, http.StatusInternalServerError, "Internal Server Error")
+		log.Printf("ERROR: requestID=%s, failed to begin transaction: %v", requestID, err)
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrTransactionBegin, err), requestID)
 		return
 	}
-
 	defer tx.Rollback(r.Context())
 
 	res, err := h.service.AuthenticateAndIssueTokens(r.Context(), tx, params.Email, params.Password)
-
 	if err != nil {
-		switch {
-		case errors.Is(err, ErrUserNotFound):
-			common.ResponseWithError(w, http.StatusUnauthorized, "User not found")
-			return
-		case errors.Is(err, ErrInvalidPassword):
-			common.ResponseWithError(w, http.StatusUnauthorized, "Invalid email or password")
-			return
-		case errors.Is(err, ErrUserInactive):
-			common.ResponseWithError(w, http.StatusForbidden, "Account is inactive")
-			return
-		default:
-			// Database or other internal errors
-			common.ResponseWithError(w, http.StatusInternalServerError, "Internal Server Error")
-			return
-		}
+		log.Printf("ERROR: requestID=%s, authentication failed for email=%s: %v", requestID, params.Email, err)
+		middleware.HandleError(w, err, requestID)
+		return
 	}
 
-	// commit transaction
+	// Commit transaction
 	err = tx.Commit(r.Context())
-
 	if err != nil {
-		common.ResponseWithError(w, http.StatusInternalServerError, "Internal Server Error")
+		log.Printf("ERROR: requestID=%s, failed to commit transaction: %v", requestID, err)
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrTransactionCommit, err), requestID)
 		return
 	}
 

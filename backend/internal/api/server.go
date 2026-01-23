@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/hash-walker/giki-wallet/internal/auth"
+	"github.com/hash-walker/giki-wallet/internal/middleware"
 	"github.com/hash-walker/giki-wallet/internal/payment"
 	"github.com/hash-walker/giki-wallet/internal/user"
 )
@@ -29,7 +29,11 @@ func NewServer(userHandler *user.Handler, authHandler *auth.Handler, paymentHand
 func (s *Server) MountRoutes() {
 
 	r := s.Router
-	r.Use(middleware.Logger)
+
+	// Global middleware stack (order matters!)
+	r.Use(middleware.RequestID)    // 1. Generate request ID
+	r.Use(middleware.Logger)       // 2. Log requests/responses
+	r.Use(middleware.ErrorHandler) // 3. Recover from panics
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -49,4 +53,9 @@ func (s *Server) MountRoutes() {
 	})
 
 	r.Post("/booking/payment/response", s.Payment.CardCallBack)
+
+	r.Route("/admin", func(r chi.Router) {
+		r.Use(auth.RequireAuth)
+		// TODO: Add admin routes
+	})
 }

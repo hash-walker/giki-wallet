@@ -27,28 +27,6 @@ import (
 )
 
 // =============================================================================
-// SENTINEL ERRORS
-// =============================================================================
-
-var (
-	// ErrInvalidPaymentMethod Validation errors (400) - show to user
-	ErrInvalidPaymentMethod = errors.New("unsupported payment method")
-	ErrInvalidPhoneNumber   = errors.New("invalid phone number format")
-	ErrInvalidCNIC          = errors.New("invalid CNIC format")
-
-	// ErrGatewayUnavailable Gateway unreachable (502) - generic message
-	ErrGatewayUnavailable = errors.New("payment gateway unavailable")
-
-	// ErrInternal Internal errors (500) - generic message, log details
-	ErrInternal                = errors.New("internal error")
-	ErrUserIDNotFound          = errors.New("user id not found in context")
-	ErrTransactionCreation     = errors.New("failed to create transaction")
-	ErrTransactionUpdate       = errors.New("failed to update transaction status")
-	ErrDatabaseQuery           = errors.New("database query failed")
-	ErrDuplicateIdempotencyKey = errors.New("duplicate idempotency key")
-)
-
-// =============================================================================
 // TYPES
 // =============================================================================
 
@@ -303,7 +281,7 @@ func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.
 	}
 
 	if paymentStatus == PaymentStatusSuccess {
-		err = s.creditWalletIfNeeded(ctx, tx, gatewayTxn.UserID, gatewayTxn.Amount, callback.TxnRefNo, string(wallet.JazzcashDeposit))
+		err = s.creditWalletFromPayment(ctx, tx, gatewayTxn.UserID, gatewayTxn.Amount, gatewayTxn.TxnRefNo)
 		if err != nil {
 			return nil, err
 		}
@@ -417,15 +395,42 @@ func (s *Service) initiateCardPayment(
 	return html, nil
 }
 
-func (s *Service) creditWalletIfNeeded(ctx context.Context, tx pgx.Tx, userID uuid.UUID, amount int64, txnRefNo string, creditType string) error {
-	err := s.walletS.CreditWallet(ctx, tx, userID, amount, txnRefNo, creditType)
+func (s *Service) creditWalletFromPayment(ctx context.Context, tx pgx.Tx, userID uuid.UUID, amount int64, paymentTxnRefNo string) error {
+
+	// get user's wallet
+	userWallet, err := s.walletS.GetOrCreateWallet(ctx, tx, userID)
 	if err != nil {
-		// Check if it's a duplicate ledger entry (already credited) - this is OK
+		return fmt.Errorf("failed to get user wallet: %w", err)
+	}
+
+	// get system liability wallet (where top-up money comes from)
+	systemLiabilityWalletID, err := s.walletS.GetSystemWalletByName(ctx, wallet.GikiWallet, wallet.SystemWalletLiability)
+	if err != nil {
+		return fmt.Errorf("failed to get system liability wallet: %w", err)
+	}
+
+	// prepare transaction details
+	txnType := "JAZZCASH_DEPOSIT"
+	description := fmt.Sprintf("Wallet top-up via payment %s", paymentTxnRefNo)
+
+	err = s.walletS.ExecuteTransaction(
+		ctx, tx,
+		systemLiabilityWalletID,
+		userWallet.ID,
+		amount,
+		txnType,
+		paymentTxnRefNo,
+		description,
+	)
+
+	if err != nil {
+
 		if errors.Is(err, wallet.ErrDuplicateLedgerEntry) {
-			log.Printf("wallet already credited for transaction %s (idempotent)", txnRefNo)
-			return nil // Not an error - already credited
+			log.Printf("wallet already credited for transaction %s (idempotent)", paymentTxnRefNo)
+			return nil
 		}
-		log.Printf("failed to credit wallet for transaction %s: %v", txnRefNo, err)
+
+		log.Printf("failed to credit wallet for transaction %s: %v", paymentTxnRefNo, err)
 		return fmt.Errorf("wallet credit failed: %w", err)
 	}
 	return nil
@@ -507,7 +512,7 @@ func (s *Service) checkTransactionStatus(
 		}
 
 		// Credit wallet (must succeed or transaction rolls back)
-		err = s.creditWalletIfNeeded(ctx, tx, existing.UserID, existing.Amount, existing.TxnRefNo, string(wallet.JazzcashDeposit))
+		err = s.creditWalletFromPayment(ctx, tx, existing.UserID, existing.Amount, existing.TxnRefNo)
 		if err != nil {
 			return nil, err // Transaction will rollback via defer
 		}
@@ -702,7 +707,7 @@ func (s *Service) pollTransactionOnce(ctx context.Context, txRefNo string) bool 
 		}
 
 		// Credit wallet (must succeed or transaction rolls back)
-		err = s.creditWalletIfNeeded(ctx, tx, gatewayTxn.UserID, gatewayTxn.Amount, txRefNo, string(wallet.JazzcashDeposit))
+		err = s.creditWalletFromPayment(ctx, tx, gatewayTxn.UserID, gatewayTxn.Amount, gatewayTxn.TxnRefNo)
 		if err != nil {
 			log.Printf("failed to credit wallet during polling: %v", err)
 			s.rateLimiter.Release()

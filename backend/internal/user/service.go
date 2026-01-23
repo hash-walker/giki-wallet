@@ -2,12 +2,11 @@ package user
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/hash-walker/giki-wallet/internal/common"
+	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
 	"github.com/hash-walker/giki-wallet/internal/user/user_db"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -29,13 +28,12 @@ func NewService(dbPool *pgxpool.Pool) *Service {
 func (s *Service) CreateUser(ctx context.Context, tx pgx.Tx, payload CreateUserParams) (User, error) {
 
 	if !strings.HasSuffix(payload.Email, "@giki.edu.pk") {
-		return User{}, errors.New("only GIKI students allows")
+		return User{}, ErrEmailRestricted
 	}
 
 	passwordHash, err := HashPassword(payload.Password)
-
 	if err != nil {
-		return User{}, err
+		return User{}, commonerrors.Wrap(ErrUserCreationFailed, err)
 	}
 
 	userQ := s.userQ.WithTx(tx)
@@ -50,7 +48,7 @@ func (s *Service) CreateUser(ctx context.Context, tx pgx.Tx, payload CreateUserP
 	})
 
 	if err != nil {
-		return User{}, errors.New(fmt.Sprintf("error creating user in database %v", err))
+		return User{}, commonerrors.Wrap(ErrUserCreationFailed, err)
 	}
 
 	return mapDBUserToUser(user), nil
@@ -69,7 +67,7 @@ func (s *Service) CreateStudent(ctx context.Context, tx pgx.Tx, payload CreateSt
 	})
 
 	if err != nil {
-		return Student{}, errors.New("error creating user in database")
+		return Student{}, commonerrors.Wrap(ErrProfileCreationFailed, err)
 	}
 
 	return mapDBStudentToStudent(studentRow), nil
@@ -83,7 +81,7 @@ func (s *Service) CreateEmployee(ctx context.Context, tx pgx.Tx, payload CreateE
 	})
 
 	if err != nil {
-		return Employee{}, errors.New("error creating user in database")
+		return Employee{}, commonerrors.Wrap(ErrProfileCreationFailed, err)
 	}
 
 	return mapDBEmployeeToEmployee(employeeRow), nil

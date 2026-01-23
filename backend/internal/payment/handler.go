@@ -2,12 +2,13 @@ package payment
 
 import (
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/hash-walker/giki-wallet/internal/common"
+	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
+	"github.com/hash-walker/giki-wallet/internal/middleware"
 	"github.com/hash-walker/giki-wallet/internal/wallet"
 )
 
@@ -24,16 +25,17 @@ func NewHandler(pService *Service, wService *wallet.Service) *Handler {
 }
 
 func (h *Handler) TopUp(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
 	var params TopUpRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-		common.ResponseWithError(w, http.StatusBadRequest, "Invalid request body")
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidJSON, err), requestID)
 		return
 	}
 
 	response, err := h.pService.InitiatePayment(r.Context(), params)
 	if err != nil {
-		h.handleServiceError(w, err)
+		h.handleServiceError(w, err, requestID)
 		return
 	}
 
@@ -52,12 +54,12 @@ func (h *Handler) TopUp(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CardPaymentPage(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
 	txnRefNo := chi.URLParam(r, "txnRefNo")
 
 	html, err := h.pService.initiateCardPayment(r.Context(), txnRefNo)
-
 	if err != nil {
-		h.handleServiceError(w, err)
+		h.handleServiceError(w, err, requestID)
 		return
 	}
 
@@ -66,42 +68,41 @@ func (h *Handler) CardPaymentPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CardCallBack(w http.ResponseWriter, r *http.Request) {
-	err := r.ParseForm()
+	requestID := middleware.GetRequestID(r.Context())
 
+	err := r.ParseForm()
 	if err != nil {
-		log.Printf("cannot parse form data: %v", err)
-		common.ResponseWithError(w, http.StatusInternalServerError, "Internal Server Error")
+		log.Printf("ERROR: requestID=%s, cannot parse form data: %v", requestID, err)
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err), requestID)
 		return
 	}
 
 	auditID, err := h.pService.LogCardCallbackAudit(r.Context(), r.Form)
 	if err != nil {
-		log.Printf("CRITICAL: failed to write audit log: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		log.Printf("CRITICAL: requestID=%s, failed to write audit log: %v", requestID, err)
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInternal, err), requestID)
 		return
 	}
 
 	tx, err := h.pService.dbPool.Begin(r.Context())
-
 	if err != nil {
-		log.Printf("DATABASE ERROR: %v", err)
+		log.Printf("ERROR: requestID=%s, failed to begin transaction: %v", requestID, err)
 		h.pService.MarkAuditFailed(r.Context(), auditID, err.Error())
-
 		http.Redirect(w, r, "/payment/pending", http.StatusSeeOther)
 		return
 	}
-
 	defer tx.Rollback(r.Context())
 
 	result, err := h.pService.CompleteCardPayment(r.Context(), tx, r.Form, auditID)
 	if err != nil {
+		log.Printf("ERROR: requestID=%s, failed to complete card payment: %v", requestID, err)
 		h.pService.MarkAuditFailed(r.Context(), auditID, err.Error())
 		http.Redirect(w, r, "/payment/pending", http.StatusSeeOther)
 		return
 	}
 
 	if err := tx.Commit(r.Context()); err != nil {
-		log.Printf("failed to commit: %v", err)
+		log.Printf("ERROR: requestID=%s, failed to commit transaction: %v", requestID, err)
 		h.pService.MarkAuditFailed(r.Context(), auditID, err.Error())
 		http.Redirect(w, r, "/payment/error", http.StatusSeeOther)
 		return
@@ -114,32 +115,7 @@ func (h *Handler) CardCallBack(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handler) handleServiceError(w http.ResponseWriter, err error) {
-	switch {
-
-	// Validation errors (400) - show message to user
-	case errors.Is(err, ErrInvalidPhoneNumber):
-		common.ResponseWithError(w, http.StatusBadRequest, "Invalid phone number format. Please enter a valid Pakistani mobile number.")
-	case errors.Is(err, ErrInvalidCNIC):
-		common.ResponseWithError(w, http.StatusBadRequest, "Invalid CNIC format. Please enter the last 6 digits of your CNIC.")
-	case errors.Is(err, ErrInvalidPaymentMethod):
-		common.ResponseWithError(w, http.StatusBadRequest, "Invalid payment method selected.")
-
-	// Gateway unreachable (502)
-	case errors.Is(err, ErrGatewayUnavailable):
-		common.ResponseWithError(w, http.StatusBadGateway, "Payment service is temporarily unavailable. Please try again later.")
-
-	// Auth errors (401)
-	case errors.Is(err, ErrUserIDNotFound):
-		common.ResponseWithError(w, http.StatusUnauthorized, "Authentication required.")
-
-	// Duplicate/conflict (409)
-	case errors.Is(err, ErrDuplicateIdempotencyKey):
-		common.ResponseWithError(w, http.StatusConflict, "This request has already been processed.")
-
-	// Internal errors (500) - generic message, log details
-	default:
-		log.Printf("payment error: %v", err)
-		common.ResponseWithError(w, http.StatusInternalServerError, "An unexpected error occurred. Please try again later.")
-	}
+func (h *Handler) handleServiceError(w http.ResponseWriter, err error, requestID string) {
+	log.Printf("ERROR: requestID=%s, payment service error: %v", requestID, err)
+	middleware.HandleError(w, err, requestID)
 }
