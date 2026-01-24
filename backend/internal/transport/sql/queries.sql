@@ -1,9 +1,13 @@
--- name: GetAllRoutes :many
+-- =============================================
+-- 1. ROUTE & TRIP MANAGEMENT (Admin/System)
+-- =============================================
 
-SELECT id, name FROM giki_transport.routes WHERE is_active = TRUE ORDER BY name ASC;
+-- name: GetAllRoutes :many
+SELECT id, name FROM giki_transport.routes
+WHERE is_active = TRUE
+ORDER BY name ASC;
 
 -- name: GetRouteStopsDetails :many
-
 SELECT
     -- route details
     r.id as route_id, r.name as route_name,
@@ -14,27 +18,25 @@ SELECT
     -- route specific stops sequence
     rms.default_sequence_order,
     rms.is_default_active
-
 FROM giki_transport.routes as r
-JOIN giki_transport.route_master_stops as rms ON r.id = rms.route_id
-JOIN giki_transport.stops as s ON rms.stop_id = s.id
-
+         JOIN giki_transport.route_master_stops as rms ON r.id = rms.route_id
+         JOIN giki_transport.stops as s ON rms.stop_id = s.id
 WHERE r.id = $1
-
 ORDER BY rms.default_sequence_order ASC;
 
--- name: CreateTrip :one
-
-INSERT INTO giki_transport.trip(route_id, departure_time, booking_opens_at, booking_closes_at, total_capacity, available_seats, base_price, status)
-VALUES ($1, $2, $3, $4, $5, $6, $7, 'SCHEDULED')
-RETURNING id;
-
 -- name: GetRouteWeeklySchedule :many
-
-SELECT id, day_of_week, departure_time
+SELECT id, route_id, day_of_week, departure_time, created_at
 FROM giki_transport.route_weekly_schedules
 WHERE route_id = $1
-ORDER BY day_of_week, departure_time;
+ORDER BY day_of_week ASC, departure_time ASC;
+
+-- name: CreateTrip :one
+INSERT INTO giki_transport.trip(
+    route_id, departure_time, booking_opens_at, booking_closes_at,
+    total_capacity, available_seats, base_price, direction, status
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'SCHEDULED')
+RETURNING id;
 
 -- name: CreateTripStop :exec
 INSERT INTO giki_transport.trip_stops (trip_id, stop_id, sequence_order)
@@ -49,28 +51,137 @@ SELECT
     t.total_capacity,
     t.available_seats,
     t.base_price,
-    t.status,          -- e.g. 'SCHEDULED', 'CANCELLED'
-    t.booking_status,  -- e.g. 'OPEN', 'CLOSED'
+    t.status,
+    t.booking_status,
+    t.direction,
 
-    d.name as driver_name,
 
-    -- Stop Details for this specific trip
+
+    -- Stop Details
     ts.stop_id,
     s.address as stop_name,
     ts.sequence_order
-
 FROM giki_transport.trip t
-         JOIN giki_transport.driver d ON t.driver_id = d.id
          JOIN giki_transport.trip_stops ts ON t.id = ts.trip_id
          JOIN giki_transport.stops s ON ts.stop_id = s.id
-
 WHERE t.route_id = $1
-  AND t.departure_time > NOW() -- Only future trips
-  AND t.status != 'COMPLETED'  -- Hide finished trips
-
+  AND t.departure_time > NOW()
+  AND t.status != 'COMPLETED'
 ORDER BY t.departure_time ASC, ts.sequence_order ASC;
 
+-- name: GetTrip :one
+SELECT * FROM giki_transport.trip WHERE id = $1;
+
+-- name: GetTripPrice :one
+SELECT base_price FROM giki_transport.trip WHERE id = $1;
+
+
+-- =============================================
+-- 2. QUOTA & RULES (Smart Logic)
+-- =============================================
+
+-- name: GetQuotaRule :one
+SELECT weekly_limit, allow_dependent_booking
+FROM giki_transport.quota_rules
+WHERE user_role = $1 AND direction = $2;
 
 
 
+-- name: GetWeeklyTicketCountByDirection :one
+-- Counts CONFIRMED tickets + ACTIVE HOLDS for the last 7 days for a specific direction.
+SELECT COUNT(*) FROM (
+       -- Part 1: Confirmed Tickets
+       SELECT t.id
+       FROM giki_transport.tickets t
+                JOIN giki_transport.trip tr ON t.trip_id = tr.id
+       WHERE t.user_id = sqlc.arg(user_id)
+         AND t.status = 'CONFIRMED'
+         AND t.booking_time > NOW() - INTERVAL '7 days'
+         AND tr.direction = sqlc.arg(direction)
 
+       UNION ALL
+
+       -- Part 2: Active Holds
+       SELECT h.id
+       FROM giki_transport.trip_holds h
+                JOIN giki_transport.trip tr ON h.trip_id = tr.id
+       WHERE h.user_id = sqlc.arg(user_id)
+         AND tr.direction = sqlc.arg(direction)
+) as total_count;
+
+
+-- =============================================
+-- 3. HOLD SYSTEM (Locking Seats)
+-- =============================================
+
+-- name: DecreaseTripSeat :one
+-- Atomic lock. Returns new count to verify success.
+UPDATE giki_transport.trip
+SET available_seats = available_seats - 1
+WHERE id = $1 AND available_seats > 0
+RETURNING available_seats;
+
+-- name: CreateBlankHold :one
+-- Creates a hold WITHOUT name (Step 1: Lock)
+INSERT INTO giki_transport.trip_holds (
+    trip_id, user_id, pickup_stop_id, dropoff_stop_id, expires_at
+) VALUES ($1, $2, $3, $4, $5)
+RETURNING id, expires_at;
+
+-- name: GetHold :one
+SELECT * FROM giki_transport.trip_holds WHERE id = $1;
+
+-- name: DeleteHold :exec
+DELETE FROM giki_transport.trip_holds WHERE id = $1;
+
+
+-- =============================================
+-- 4. TICKET CONFIRMATION (Finalizing)
+-- =============================================
+
+-- name: ConfirmBookingWithDetails :one
+-- Moves Hold -> Ticket AND inserts the Passenger Names (Step 2: Fill & Pay)
+INSERT INTO giki_transport.tickets (
+    trip_id, user_id, pickup_stop_id, dropoff_stop_id,
+    status, passenger_name, passenger_relation
+) VALUES ($1, $2, $3, $4, 'CONFIRMED', $5, $6
+)
+RETURNING id;
+
+
+-- =============================================
+-- 5. CANCELLATION & REAPER (Cleanup)
+-- =============================================
+
+-- name: IncrementTripSeat :exec
+-- Used when Hold expires or Ticket is Cancelled.
+UPDATE giki_transport.trip
+SET available_seats = available_seats + 1
+WHERE id = $1 AND available_seats < total_capacity;
+
+-- name: GetExpiredHolds :many
+-- Uses SKIP LOCKED to allow multiple workers.
+SELECT id, trip_id FROM giki_transport.trip_holds
+WHERE expires_at < NOW()
+FOR UPDATE SKIP LOCKED LIMIT 50;
+
+-- name: GetTicketForCancellation :one
+-- Retrieves ticket ONLY IF:
+-- 1. It is currently CONFIRMED
+-- 2. The cancellation window is still OPEN (NOW < booking_closes_at)
+SELECT
+    t.id,
+    t.trip_id,
+    t.user_id,
+    t.status,
+    tr.base_price
+FROM giki_transport.tickets t
+         JOIN giki_transport.trip tr ON t.trip_id = tr.id
+WHERE t.id = sqlc.arg(ticket_id)
+  AND t.status = 'CONFIRMED'
+  AND NOW() < tr.booking_closes_at;
+
+-- name: SetTicketCancelled :exec
+UPDATE giki_transport.tickets
+SET status = 'CANCELLED'
+WHERE id = $1 AND status = 'CONFIRMED';
