@@ -34,8 +34,11 @@ go.work
 Thumbs.db
 
 # Generated code (sqlc)
-backend/internal/modules/*/repository/postgres/*.go
-!internal/sql/migrations/
+# Exclude all generated files in *_db directories
+backend/internal/**/*_db/*.go
+!backend/internal/**/*_db/
+# Keep SQL migrations
+!backend/sql/migrations/
 
 # Logs
 *.log
