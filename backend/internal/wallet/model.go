@@ -11,7 +11,7 @@ import (
 type SystemWalletType string
 
 const (
-	SystemWalletRevenue   SystemWalletType = "_SYS_REVENUE"  // Where ticket money goes
+	SystemWalletRevenue   SystemWalletType = "SYS_REVENUE"   // Where ticket money goes
 	SystemWalletLiability SystemWalletType = "SYS_LIABILITY" // Where top-up money comes from
 )
 

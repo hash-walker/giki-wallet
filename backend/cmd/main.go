@@ -5,12 +5,14 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/hash-walker/giki-wallet/internal/api"
 	"github.com/hash-walker/giki-wallet/internal/auth"
 	"github.com/hash-walker/giki-wallet/internal/config"
 	"github.com/hash-walker/giki-wallet/internal/payment"
 	"github.com/hash-walker/giki-wallet/internal/payment/gateway"
+	"github.com/hash-walker/giki-wallet/internal/transport"
 	"github.com/hash-walker/giki-wallet/internal/user"
 	"github.com/hash-walker/giki-wallet/internal/wallet"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -83,7 +85,10 @@ func main() {
 		Addr:    ":" + port,
 		Handler: handler,
 	}
+	// start the worker
+	transport.StartCleanupWorker(pool, 30*time.Second)
 
 	log.Printf("Server starting on port %s\n", port)
 	log.Fatal(server.ListenAndServe())
+
 }
