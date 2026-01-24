@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/hash-walker/giki-wallet/internal/auth"
 	"github.com/hash-walker/giki-wallet/internal/common"
 	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
 	"github.com/hash-walker/giki-wallet/internal/middleware"
@@ -19,6 +20,102 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{
 		service: service,
 	}
+}
+
+func (h *Handler) HoldTicket(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		middleware.HandleError(w, commonerrors.ErrUnauthorized, requestID)
+		return
+	}
+
+	userRole, ok := r.Context().Value("user_type").(string)
+	if !ok {
+		userRole = "STUDENT" // Default fallback
+	}
+
+	var req HoldTicketRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidJSON, err), requestID)
+		return
+	}
+
+	resp, err := h.service.HoldTicket(r.Context(), userID, userRole, req)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusCreated, resp)
+}
+
+func (h *Handler) ConfirmTicket(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		middleware.HandleError(w, commonerrors.ErrUnauthorized, requestID)
+		return
+	}
+
+	userRole, ok := r.Context().Value("user_type").(string)
+	if !ok {
+		userRole = "STUDENT" // Default fallback
+	}
+
+	holdIDParam := chi.URLParam(r, "hold_id")
+	holdID, err := uuid.Parse(holdIDParam)
+	if err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err).WithDetails("holdID", holdIDParam), requestID)
+		return
+	}
+
+	// For now, assume SELF booking with user's name from context
+	// TODO: Get passenger details from request body for family bookings
+	resp, err := h.service.ConfirmTicket(r.Context(), userID, userRole, holdID, "User Name", "SELF")
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handler) CancelTicket(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+	userRole, ok := r.Context().Value("user_type").(string)
+	if !ok {
+		userRole = "STUDENT" // Default fallback
+	}
+
+	ticketIDParam := chi.URLParam(r, "ticket_id")
+	ticketID, err := uuid.Parse(ticketIDParam)
+	if err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err).WithDetails("ticketID", ticketIDParam), requestID)
+		return
+	}
+
+	if err := h.service.CancelTicket(r.Context(), ticketID, userRole); err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"status": "CANCELLED"})
+}
+
+func (h *Handler) ReleaseHold(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+	holdIDParam := chi.URLParam(r, "hold_id")
+	holdID, err := uuid.Parse(holdIDParam)
+	if err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err).WithDetails("holdID", holdIDParam), requestID)
+		return
+	}
+
+	// We don't really care if it fails (e.g. already expired), just return OK
+	_ = h.service.ReleaseHold(r.Context(), holdID)
+
+	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"status": "RELEASED"})
 }
 
 func (h *Handler) ListRoutes(w http.ResponseWriter, r *http.Request) {

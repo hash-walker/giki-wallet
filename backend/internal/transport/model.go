@@ -77,7 +77,58 @@ type TripStopItem struct {
 	Sequence int32     `json:"sequence"`
 }
 
-func mapDBRouteTemplateToRouteTemplate(rows []transport_db.GetRouteStopsDetailsRow, weeklyScheduleRows []transport_db.GetRouteWeeklyScheduleRow) *RouteTemplateResponse {
+// --- Requests ---
+
+// Legacy single hold (kept for backward compatibility)
+type HoldTicketRequest struct {
+	TripID        uuid.UUID `json:"trip_id"`
+	PickupStopID  uuid.UUID `json:"pickup_stop_id"`
+	DropoffStopID uuid.UUID `json:"dropoff_stop_id"`
+}
+
+// Batch hold request (new flow)
+type HoldSeatsRequest struct {
+	TripID        uuid.UUID `json:"trip_id"`
+	Count         int       `json:"count"` // Number of seats to hold
+	PickupStopID  uuid.UUID `json:"pickup_stop_id"`
+	DropoffStopID uuid.UUID `json:"dropoff_stop_id"`
+}
+
+// Batch confirm request
+type ConfirmBatchRequest struct {
+	Confirmations []ConfirmItem `json:"confirmations"`
+}
+
+// Individual confirmation item with passenger details
+type ConfirmItem struct {
+	HoldID            uuid.UUID `json:"hold_id"`
+	PassengerName     string    `json:"passenger_name"`
+	PassengerRelation string    `json:"passenger_relation"` // SELF, SPOUSE, CHILD
+}
+
+// --- Responses ---
+
+type HoldTicketResponse struct {
+	HoldID    uuid.UUID `json:"hold_id"` // Frontend stores this to Confirm later
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// Batch hold response
+type HoldSeatsResponse struct {
+	Holds []HoldTicketResponse `json:"holds"`
+}
+
+type BookTicketResponse struct {
+	TicketID uuid.UUID `json:"ticket_id"`
+	Status   string    `json:"status"`
+}
+
+// Batch confirm response
+type ConfirmBatchResponse struct {
+	Tickets []BookTicketResponse `json:"tickets"`
+}
+
+func mapDBRouteTemplateToRouteTemplate(rows []transport_db.GetRouteStopsDetailsRow, weeklyScheduleRows []transport_db.GikiTransportRouteWeeklySchedule) *RouteTemplateResponse {
 	if len(rows) == 0 {
 		return nil
 	}
@@ -111,7 +162,6 @@ func mapDBRouteTemplateToRouteTemplate(rows []transport_db.GetRouteStopsDetailsR
 			DayOfWeek:     GetDayLabel(row.DayOfWeek),
 			DepartureTime: types.LocalTime{Time: row.DepartureTime},
 		}
-
 		response.QuickSlots = append(response.QuickSlots, slot)
 	}
 
