@@ -12,11 +12,30 @@ RETURNING *;
 
 -- name: CreateEmployee :one
 
-INSERT INTO giki_wallet.employee_profiles(user_id, employee_id)
-Values ($1, $2)
+INSERT INTO giki_wallet.employee_profiles(user_id)
+Values ($1)
 RETURNING *;
 
 -- name: GetUserByEmail :one
 
 SELECT * FROM giki_wallet.users
 WHERE giki_wallet.users.email = $1;
+
+-- name: GetUserByRegOrEmail :one
+SELECT * FROM giki_wallet.users as u
+JOIN giki_wallet.student_profiles as s ON u.id = s.user_id
+WHERE u.email = $1 or s.reg_id = $2;
+
+-- name: UpdateUnverifiedUser :one
+UPDATE giki_wallet.users
+SET
+    email = $2,
+    password_hash = $3,
+    updated_at = NOW()
+WHERE id = $1 AND is_verified = FALSE
+RETURNING *;
+
+-- name: DeleteAllTokensForUser :exec
+DELETE FROM giki_wallet.access_tokens
+WHERE user_id = $1;
+
