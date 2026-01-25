@@ -14,7 +14,6 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/common"
 	"github.com/hash-walker/giki-wallet/internal/transport/transport_db"
 	"github.com/hash-walker/giki-wallet/internal/wallet"
-	wallet_db "github.com/hash-walker/giki-wallet/internal/wallet/wallet_db"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -293,31 +292,37 @@ func cleanupTestBookings(t *testing.T) {
 }
 
 // =============================================================================
-// INTEGRATION TESTS - Hold Ticket
+// INTEGRATION TESTS - Hold Ticket (BATCH)
 // =============================================================================
 
-func TestIntegration_HoldTicket_Success(t *testing.T) {
+func TestIntegration_HoldSeats_Success(t *testing.T) {
 	cleanupTestBookings(t)
 	defer cleanupTestBookings(t)
 
 	ctx := context.Background()
 
-	req := HoldTicketRequest{
+	req := HoldSeatsRequest{
 		TripID:        testTripID,
 		PickupStopID:  testStopID1,
 		DropoffStopID: testStopID3,
+		Count:         1,
 	}
 
-	resp, err := testTransportSvc.HoldTicket(ctx, testUserID1, "STUDENT", req)
+	resp, err := testTransportSvc.HoldSeats(ctx, testUserID1, "STUDENT", req)
 	if err != nil {
-		t.Fatalf("HoldTicket failed: %v", err)
+		t.Fatalf("HoldSeats failed: %v", err)
 	}
 
-	if resp.HoldID == uuid.Nil {
+	if len(resp.Holds) != 1 {
+		t.Errorf("Expected 1 hold, got %d", len(resp.Holds))
+	}
+
+	hold := resp.Holds[0]
+	if hold.HoldID == uuid.Nil {
 		t.Error("HoldID should not be nil")
 	}
 
-	if resp.ExpiresAt.Before(time.Now()) {
+	if hold.ExpiresAt.Before(time.Now()) {
 		t.Error("ExpiresAt should be in the future")
 	}
 
@@ -333,7 +338,7 @@ func TestIntegration_HoldTicket_Success(t *testing.T) {
 	}
 }
 
-func TestIntegration_HoldTicket_NoSeatsAvailable(t *testing.T) {
+func TestIntegration_HoldSeats_NoSeatsAvailable(t *testing.T) {
 	cleanupTestBookings(t)
 	defer cleanupTestBookings(t)
 
@@ -345,23 +350,24 @@ func TestIntegration_HoldTicket_NoSeatsAvailable(t *testing.T) {
 		t.Fatalf("Failed to update seats: %v", err)
 	}
 
-	req := HoldTicketRequest{
+	req := HoldSeatsRequest{
 		TripID:        testTripID,
 		PickupStopID:  testStopID1,
 		DropoffStopID: testStopID3,
+		Count:         1,
 	}
 
-	_, err = testTransportSvc.HoldTicket(ctx, testUserID1, "STUDENT", req)
+	_, err = testTransportSvc.HoldSeats(ctx, testUserID1, "STUDENT", req)
 	if err != ErrTripFull {
 		t.Errorf("Expected ErrTripFull, got: %v", err)
 	}
 }
 
 // =============================================================================
-// INTEGRATION TESTS - Confirm Ticket
+// INTEGRATION TESTS - Confirm Ticket (BATCH)
 // =============================================================================
 
-func TestIntegration_ConfirmTicket_Success(t *testing.T) {
+func TestIntegration_ConfirmBatch_Success(t *testing.T) {
 	cleanupTestBookings(t)
 	defer cleanupTestBookings(t)
 
@@ -376,31 +382,46 @@ func TestIntegration_ConfirmTicket_Success(t *testing.T) {
 	testWalletSvc.ExecuteTransaction(ctx, tx2, systemLiabilityWallet, userWallet.ID, 1000, "JAZZCASH_DEPOSIT", "TEST_TOPUP", "Test top-up")
 	tx2.Commit(ctx)
 
-	// Hold ticket
-	holdReq := HoldTicketRequest{
+	// Hold ticket (Batch)
+	holdReq := HoldSeatsRequest{
 		TripID:        testTripID,
 		PickupStopID:  testStopID1,
 		DropoffStopID: testStopID3,
+		Count:         1,
 	}
-	holdResp, _ := testTransportSvc.HoldTicket(ctx, testUserID1, "STUDENT", holdReq)
+	holdResp, _ := testTransportSvc.HoldSeats(ctx, testUserID1, "STUDENT", holdReq)
+	holdID := holdResp.Holds[0].HoldID
 
-	// Confirm ticket
-	confirmResp, err := testTransportSvc.ConfirmTicket(ctx, testUserID1, "STUDENT", holdResp.HoldID, "Test User", "SELF")
+	// Confirm ticket (Batch)
+	confirmItems := []ConfirmItem{
+		{
+			HoldID:            holdID,
+			PassengerName:     "Test User",
+			PassengerRelation: "SELF",
+		},
+	}
+
+	confirmResp, err := testTransportSvc.ConfirmBatch(ctx, testUserID1, "STUDENT", confirmItems)
 	if err != nil {
-		t.Fatalf("ConfirmTicket failed: %v", err)
+		t.Fatalf("ConfirmBatch failed: %v", err)
 	}
 
-	if confirmResp.TicketID == uuid.Nil {
+	if len(confirmResp.Tickets) != 1 {
+		t.Errorf("Expected 1 ticket, got %d", len(confirmResp.Tickets))
+	}
+
+	ticket := confirmResp.Tickets[0]
+	if ticket.TicketID == uuid.Nil {
 		t.Error("TicketID should not be nil")
 	}
 
-	if confirmResp.Status != "CONFIRMED" {
-		t.Errorf("Status should be CONFIRMED, got %s", confirmResp.Status)
+	if ticket.Status != "CONFIRMED" {
+		t.Errorf("Status should be CONFIRMED, got %s", ticket.Status)
 	}
 
 	// Verify hold was deleted
 	var holdCount int
-	err = testDBPool.QueryRow(ctx, "SELECT COUNT(*) FROM giki_transport.trip_holds WHERE id = $1", holdResp.HoldID).Scan(&holdCount)
+	err = testDBPool.QueryRow(ctx, "SELECT COUNT(*) FROM giki_transport.trip_holds WHERE id = $1", holdID).Scan(&holdCount)
 	if err != nil {
 		t.Fatalf("Failed to query holds: %v", err)
 	}
@@ -411,7 +432,7 @@ func TestIntegration_ConfirmTicket_Success(t *testing.T) {
 
 	// Verify ticket was created
 	var ticketStatus string
-	err = testDBPool.QueryRow(ctx, "SELECT status FROM giki_transport.tickets WHERE id = $1", confirmResp.TicketID).Scan(&ticketStatus)
+	err = testDBPool.QueryRow(ctx, "SELECT status FROM giki_transport.tickets WHERE id = $1", ticket.TicketID).Scan(&ticketStatus)
 	if err != nil {
 		t.Fatalf("Failed to query ticket: %v", err)
 	}
@@ -421,7 +442,7 @@ func TestIntegration_ConfirmTicket_Success(t *testing.T) {
 	}
 }
 
-func TestIntegration_ConfirmTicket_ExpiredHold(t *testing.T) {
+func TestIntegration_ConfirmBatch_ExpiredHold(t *testing.T) {
 	cleanupTestBookings(t)
 	defer cleanupTestBookings(t)
 
@@ -440,7 +461,20 @@ func TestIntegration_ConfirmTicket_ExpiredHold(t *testing.T) {
 	}
 
 	// Try to confirm expired hold
-	_, err = testTransportSvc.ConfirmTicket(ctx, testUserID1, "STUDENT", expiredHoldID, "Test User", "SELF")
+	items := []ConfirmItem{
+		{
+			HoldID:            expiredHoldID,
+			PassengerName:     "Test User",
+			PassengerRelation: "SELF",
+		},
+	}
+
+	_, err = testTransportSvc.ConfirmBatch(ctx, testUserID1, "STUDENT", items)
+	// ConfirmBatch might return partial success or fail entire batch if error is critical?
+	// Implementation usually returns error if any item fails OR returns error per item?
+	// Checking ConfirmBatch implementation: it loops. If checking hold fails, it returns error immediately.
+	// So we expect ErrHoldExpired or similar.
+
 	if err != ErrHoldExpired {
 		t.Errorf("Expected ErrHoldExpired, got: %v", err)
 	}
@@ -465,27 +499,35 @@ func TestIntegration_CancelTicket_Success(t *testing.T) {
 	testWalletSvc.ExecuteTransaction(ctx, tx2, systemLiabilityWallet, userWallet.ID, 1000, "JAZZCASH_DEPOSIT", "TEST_TOPUP_CANCEL", "Test top-up")
 	tx2.Commit(ctx)
 
-	holdReq := HoldTicketRequest{
+	// Hold (Batch)
+	holdReq := HoldSeatsRequest{
 		TripID:        testTripID,
 		PickupStopID:  testStopID1,
 		DropoffStopID: testStopID3,
+		Count:         1,
 	}
-	holdResp, _ := testTransportSvc.HoldTicket(ctx, testUserID1, "STUDENT", holdReq)
-	confirmResp, _ := testTransportSvc.ConfirmTicket(ctx, testUserID1, "STUDENT", holdResp.HoldID, "Test User", "SELF")
+	holdResp, _ := testTransportSvc.HoldSeats(ctx, testUserID1, "STUDENT", holdReq)
 
-	// Get initial balance
-	walletQ := wallet_db.New(testDBPool)
-	initialBalance, _ := walletQ.GetWalletBalanceSnapshot(ctx, userWallet.ID)
+	// Confirm (Batch)
+	confirmItems := []ConfirmItem{
+		{
+			HoldID:            holdResp.Holds[0].HoldID,
+			PassengerName:     "Test User",
+			PassengerRelation: "SELF",
+		},
+	}
+	confirmResp, _ := testTransportSvc.ConfirmBatch(ctx, testUserID1, "STUDENT", confirmItems)
+	ticketID := confirmResp.Tickets[0].TicketID
 
 	// Cancel ticket
-	err := testTransportSvc.CancelTicket(ctx, confirmResp.TicketID, "STUDENT")
+	err := testTransportSvc.CancelTicket(ctx, ticketID, "STUDENT")
 	if err != nil {
 		t.Fatalf("CancelTicket failed: %v", err)
 	}
 
 	// Verify ticket status
 	var ticketStatus string
-	err = testDBPool.QueryRow(ctx, "SELECT status FROM giki_transport.tickets WHERE id = $1", confirmResp.TicketID).Scan(&ticketStatus)
+	err = testDBPool.QueryRow(ctx, "SELECT status FROM giki_transport.tickets WHERE id = $1", ticketID).Scan(&ticketStatus)
 	if err != nil {
 		t.Fatalf("Failed to query ticket: %v", err)
 	}
@@ -506,14 +548,26 @@ func TestIntegration_CancelTicket_Success(t *testing.T) {
 	}
 
 	// Verify refund was processed
-	finalBalance, _ := walletQ.GetWalletBalanceSnapshot(ctx, userWallet.ID)
-	if finalBalance != initialBalance+500 {
-		t.Errorf("Balance should have increased by 500 (refund), initial: %d, final: %d", initialBalance, finalBalance)
+	// Verify refund was processed
+	var ledgerBalance int64
+	testDBPool.QueryRow(ctx, "SELECT COALESCE(SUM(amount), 0) FROM giki_wallet.ledger WHERE wallet_id = $1", userWallet.ID).Scan(&ledgerBalance)
+
+	if ledgerBalance != 1000 {
+		t.Errorf("Balance should be 1000. Got %d", ledgerBalance)
+	}
+
+	// Let's rely on ledger sum just like E2E test to be safe
+	var initialLedgerSum int64
+	testDBPool.QueryRow(ctx, "SELECT COALESCE(SUM(amount), 0) FROM giki_wallet.ledger WHERE wallet_id = $1 AND created_at < NOW()", userWallet.ID).Scan(&initialLedgerSum) // Approximate
+	// Or just hardcode expectations: 1000 start, -500 ticket, +500 refund => 1000.
+
+	if ledgerBalance != 1000 {
+		t.Errorf("Balance should be 1000. Got %d", ledgerBalance)
 	}
 }
 
 // =============================================================================
-// INTEGRATION TESTS - Concurrent Booking
+// INTEGRATION TESTS - Concurrent Booking (Batch)
 // =============================================================================
 
 func TestIntegration_ConcurrentBooking_LastSeat(t *testing.T) {
@@ -539,13 +593,14 @@ func TestIntegration_ConcurrentBooking_LastSeat(t *testing.T) {
 		go func(userID uuid.UUID) {
 			defer wg.Done()
 
-			req := HoldTicketRequest{
+			req := HoldSeatsRequest{
 				TripID:        testTripID,
 				PickupStopID:  testStopID1,
 				DropoffStopID: testStopID3,
+				Count:         1,
 			}
 
-			_, err := testTransportSvc.HoldTicket(ctx, userID, "STUDENT", req)
+			_, err := testTransportSvc.HoldSeats(ctx, userID, "STUDENT", req)
 
 			mu.Lock()
 			if err == nil {

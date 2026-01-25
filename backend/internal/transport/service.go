@@ -298,28 +298,6 @@ func (s *Service) HoldTicket(ctx context.Context, userID uuid.UUID, userRole str
 	return &resp.Holds[0], nil
 }
 
-// ConfirmTicket - Legacy single confirm
-func (s *Service) ConfirmTicket(ctx context.Context, userID uuid.UUID, userRole string, holdID uuid.UUID, passengerName, passengerRelation string) (*BookTicketResponse, error) {
-	items := []ConfirmItem{
-		{
-			HoldID:            holdID,
-			PassengerName:     passengerName,
-			PassengerRelation: passengerRelation,
-		},
-	}
-
-	resp, err := s.ConfirmBatch(ctx, userID, userRole, items)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(resp.Tickets) == 0 {
-		return nil, commonerrors.New("CONFIRM_FAILED", 500, "Failed to confirm ticket")
-	}
-
-	return &resp.Tickets[0], nil
-}
-
 // CancelTicket - Legacy method (wraps CancelTicketWithRole)
 func (s *Service) CancelTicket(ctx context.Context, ticketID uuid.UUID, userRole string) error {
 	return s.CancelTicketWithRole(ctx, ticketID, userRole)

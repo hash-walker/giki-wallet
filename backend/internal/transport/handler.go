@@ -22,7 +22,7 @@ func NewHandler(service *Service) *Handler {
 	}
 }
 
-func (h *Handler) HoldTicket(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HoldSeats(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
@@ -35,13 +35,13 @@ func (h *Handler) HoldTicket(w http.ResponseWriter, r *http.Request) {
 		userRole = "STUDENT" // Default fallback
 	}
 
-	var req HoldTicketRequest
+	var req HoldSeatsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidJSON, err), requestID)
 		return
 	}
 
-	resp, err := h.service.HoldTicket(r.Context(), userID, userRole, req)
+	resp, err := h.service.HoldSeats(r.Context(), userID, userRole, req)
 	if err != nil {
 		middleware.HandleError(w, err, requestID)
 		return
@@ -50,7 +50,7 @@ func (h *Handler) HoldTicket(w http.ResponseWriter, r *http.Request) {
 	common.ResponseWithJSON(w, http.StatusCreated, resp)
 }
 
-func (h *Handler) ConfirmTicket(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ConfirmBatch(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
 	userID, ok := auth.GetUserIDFromContext(r.Context())
 	if !ok {
@@ -63,16 +63,13 @@ func (h *Handler) ConfirmTicket(w http.ResponseWriter, r *http.Request) {
 		userRole = "STUDENT" // Default fallback
 	}
 
-	holdIDParam := chi.URLParam(r, "hold_id")
-	holdID, err := uuid.Parse(holdIDParam)
-	if err != nil {
-		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err).WithDetails("holdID", holdIDParam), requestID)
+	var req ConfirmBatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidJSON, err), requestID)
 		return
 	}
 
-	// For now, assume SELF booking with user's name from context
-	// TODO: Get passenger details from request body for family bookings
-	resp, err := h.service.ConfirmTicket(r.Context(), userID, userRole, holdID, "User Name", "SELF")
+	resp, err := h.service.ConfirmBatch(r.Context(), userID, userRole, req.Confirmations)
 	if err != nil {
 		middleware.HandleError(w, err, requestID)
 		return

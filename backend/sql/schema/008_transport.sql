@@ -145,6 +145,7 @@ CREATE TABLE giki_transport.trip_holds (
 
 
 -- +goose down
+DROP TABLE IF EXISTS giki_transport.quota_rules;
 DROP TABLE IF EXISTS giki_transport.trip_holds;
 DROP TABLE IF EXISTS giki_transport.tickets;
 DROP TABLE IF EXISTS giki_transport.trip_stops;
