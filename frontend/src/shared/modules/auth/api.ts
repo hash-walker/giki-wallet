@@ -1,4 +1,4 @@
-import { normalizePhone } from './utils';
+import { apiClient } from '@/lib/axios';
 
 export type SignUpPayload = {
     name: string;
@@ -14,20 +14,32 @@ export type SignInPayload = {
     password: string;
 };
 
+// Backend Response Types
+export type AuthResponse = {
+    id: string;
+    name: string;
+    email: string;
+    user_type: 'student' | 'employee';
+    auth?: {
+        access_token: string;
+        refresh_token: string;
+        expires_at: string;
+    };
+    token?: string; // Fallback or legacy
+};
+
 /**
- * Temporary mock API.
- * Replace with `apiClient.post(...)` once backend auth endpoints are finalized.
+ * Register a new user
  */
 export async function signUp(payload: SignUpPayload) {
-    console.log('signUp payload:', { ...payload, phone_number: normalizePhone(payload.phone_number) });
-    await new Promise((r) => setTimeout(r, 800));
-    return { ok: true };
+    const res = await apiClient.post<AuthResponse>('/auth/register', payload);
+    return res.data;
 }
 
+/**
+ * Sign in existing user
+ */
 export async function signIn(payload: SignInPayload) {
-    console.log('signIn payload:', payload);
-    await new Promise((r) => setTimeout(r, 600));
-    return { ok: true, token: 'mock_token' };
+    const res = await apiClient.post<AuthResponse>('/auth/signin', payload);
+    return res.data;
 }
-
-

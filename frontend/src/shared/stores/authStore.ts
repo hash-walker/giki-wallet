@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { apiClient } from '@/lib/axios';
+import { signUp, signIn, type SignUpPayload, type SignInPayload, type AuthResponse } from '@/shared/modules/auth/api';
 
 export type AuthUserType = 'student' | 'employee';
 
@@ -14,15 +14,6 @@ export type AuthUser = {
     updated_at?: string;
 };
 
-type RegisterInput = {
-    name: string;
-    email: string;
-    phone_number: string;
-    password: string;
-    user_type: 'student' | 'employee';
-    reg_id: string; // Required for students, empty string for employees
-};
-
 type AuthState = {
     token: string | null;
     user: AuthUser | null;
@@ -32,7 +23,8 @@ type AuthState = {
     setToken: (token: string | null) => void;
     signOut: () => void;
 
-    registerUser: (input: RegisterInput) => Promise<AuthUser>;
+    registerUser: (input: SignUpPayload) => Promise<AuthUser>;
+    login: (input: SignInPayload) => Promise<void>;
 };
 
 function getApiErrorMessage(err: unknown): string {
@@ -46,6 +38,15 @@ function getApiErrorMessage(err: unknown): string {
         maybeAxios.response?.data?.message ||
         maybeAxios.message;
     return typeof msg === 'string' && msg.trim() ? msg : 'Something went wrong';
+}
+
+function mapAuthResponseToUser(data: AuthResponse): AuthUser {
+    return {
+        id: data.id,
+        name: data.name,
+        email: data.email,
+        user_type: data.user_type,
+    };
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -70,16 +71,33 @@ export const useAuthStore = create<AuthState>()(
             registerUser: async (input) => {
                 set({ isLoading: true, error: null });
                 try {
-                    const res = await apiClient.post<AuthUser>('/auth/register', {
-                        name: input.name,
-                        email: input.email,
-                        user_type: input.user_type,
-                        reg_id: input.reg_id,
-                        password: input.password,
-                        phone_number: input.phone_number,
-                    });
-                    set({ user: res.data, isLoading: false });
-                    return res.data;
+                    const data = await signUp(input);
+                    const user = mapAuthResponseToUser(data);
+
+                    set({ user, isLoading: false });
+                    return user;
+                } catch (e) {
+                    const message = getApiErrorMessage(e);
+                    set({ error: message, isLoading: false });
+                    throw new Error(message);
+                }
+            },
+
+            login: async (input) => {
+                set({ isLoading: true, error: null });
+                try {
+                    const data = await signIn(input);
+
+                    // Backend response structure: { ..., auth: { access_token: "..." }, ... }
+                    // Also handles legacy/fallback structure if needed
+                    const token = data.auth?.access_token || data.token;
+
+                    if (!token) throw new Error("No token received");
+
+                    localStorage.setItem('auth_token', token);
+
+                    const user = mapAuthResponseToUser(data);
+                    set({ token: token, user: user, isLoading: false, error: null });
                 } catch (e) {
                     const message = getApiErrorMessage(e);
                     set({ error: message, isLoading: false });
@@ -93,5 +111,3 @@ export const useAuthStore = create<AuthState>()(
         }
     )
 );
-
-

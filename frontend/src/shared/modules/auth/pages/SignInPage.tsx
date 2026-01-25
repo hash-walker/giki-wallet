@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/Input';
 import { toast } from '@/lib/toast';
-import { signIn } from '../api';
+import { useAuthStore } from '@/shared/stores/authStore';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { signInSchema, type SignInFormData } from '../validators';
@@ -11,6 +11,7 @@ import { signInSchema, type SignInFormData } from '../validators';
 export const SignInPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { login, isLoading } = useAuthStore();
 
     const redirectTo = useMemo(() => {
         const params = new URLSearchParams(location.search);
@@ -20,7 +21,7 @@ export const SignInPage = () => {
     const {
         register,
         handleSubmit,
-        formState: { errors, isSubmitting },
+        formState: { errors },
     } = useForm<SignInFormData>({
         resolver: zodResolver(signInSchema),
         mode: 'onTouched',
@@ -28,12 +29,11 @@ export const SignInPage = () => {
         defaultValues: { email: '', password: '' },
     });
 
+    const isSubmitting = isLoading;
+
     const onSubmit = async (data: SignInFormData) => {
         try {
-            const res = await signIn({ email: data.email.trim(), password: data.password });
-            if (res?.token) {
-                localStorage.setItem('auth_token', res.token);
-            }
+            await login({ email: data.email.trim(), password: data.password });
             toast.success('Signed in');
             navigate(redirectTo, { replace: true });
         } catch {
