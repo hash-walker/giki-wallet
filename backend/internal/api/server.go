@@ -56,6 +56,12 @@ func (s *Server) MountRoutes() {
 
 	r.Route("/admin", func(r chi.Router) {
 		r.Use(auth.RequireAuth)
-		// TODO: Add admin routes
+		// Protect all admin routes with RBAC
+		// Base level: Must be at least some kind of Admin
+		r.Use(auth.RequireRole(auth.RoleSuperAdmin, auth.RoleTransportAdmin, auth.RoleFinanceAdmin))
+
+		r.Get("/dashboard", func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte("Admin Dashboard"))
+		})
 	})
 }

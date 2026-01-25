@@ -10,11 +10,13 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/api"
 	"github.com/hash-walker/giki-wallet/internal/auth"
 	"github.com/hash-walker/giki-wallet/internal/config"
+	"github.com/hash-walker/giki-wallet/internal/mailer"
 	"github.com/hash-walker/giki-wallet/internal/payment"
 	"github.com/hash-walker/giki-wallet/internal/payment/gateway"
 	"github.com/hash-walker/giki-wallet/internal/transport"
 	"github.com/hash-walker/giki-wallet/internal/user"
 	"github.com/hash-walker/giki-wallet/internal/wallet"
+	"github.com/hash-walker/giki-wallet/internal/worker"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/go-chi/cors"
@@ -47,6 +49,13 @@ func main() {
 		cfg.Jazzcash.StatusInquiryURL,
 	)
 
+	newMailer := mailer.NewGraphSender(
+		cfg.Mailer.ClientID,
+		cfg.Mailer.TenantID,
+		cfg.Mailer.ClientSecret,
+		cfg.Mailer.SenderEmail,
+	)
+
 	pool, err := pgxpool.New(ctx, dbURL)
 	if err != nil {
 		log.Fatalf("Unable to connect to database: %v\n", err)
@@ -54,7 +63,13 @@ func main() {
 	defer pool.Close()
 
 	inquiryRateLimiter := payment.NewRateLimiter(10)
-	userService := user.NewService(pool)
+
+	// Initialize Worker first
+	newWorker := worker.NewWorker(pool, newMailer)
+	go newWorker.Start(ctx)
+
+	// Initialize Services with dependencies
+	userService := user.NewService(pool, newWorker)
 	userHandler := user.NewHandler(userService)
 	authService := auth.NewService(pool)
 	authHandler := auth.NewHandler(authService)

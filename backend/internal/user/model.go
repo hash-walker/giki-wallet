@@ -9,6 +9,27 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type RegisterRequest struct {
+	Name        string `json:"name"`
+	Email       string `json:"email"`
+	UserType    string `json:"user_type"`
+	RegID       string `json:"reg_id,omitempty"`      // For students
+	EmployeeID  string `json:"employee_id,omitempty"` // For employees
+	Password    string `json:"password"`
+	PhoneNumber string `json:"phone_number"`
+}
+
+type StudentVerifyPayload struct {
+	Email string `json:"email"`
+	Name  string `json:"name"`
+	Link  string `json:"link"`
+}
+
+type EmployeeWaitPayload struct {
+	Email string `json:"email"`
+	Name  string `json:"name"`
+}
+
 type User struct {
 	ID           uuid.UUID `json:"id"`
 	Name         string    `json:"name"`
@@ -17,14 +38,6 @@ type User struct {
 	AccessToken  string    `json:"access_token,omitempty"`
 	RefreshToken string    `json:"refresh_token,omitempty"`
 	CreatedAt    time.Time `json:"created_at,omitempty"`
-}
-
-type CreateUserParams struct {
-	Name        string
-	Email       string
-	UserType    string
-	Password    string
-	PhoneNumber string
 }
 
 type CreateStudentParams struct {
@@ -36,7 +49,7 @@ type CreateStudentParams struct {
 
 type CreateEmployeeParams struct {
 	UserID      uuid.UUID
-	EmployeeID  pgtype.Text
+	EmployeeID  string // Auto-generated UUID string
 	Designation pgtype.Text
 	Department  pgtype.Text
 }
@@ -46,6 +59,7 @@ func mapDBUserToUser(u userdb.GikiWalletUser) User {
 		ID:        u.ID,
 		Name:      u.Name,
 		Email:     u.Email,
+		UserType:  u.UserType,
 		CreatedAt: u.CreatedAt,
 	}
 }
@@ -55,12 +69,6 @@ type Student struct {
 	RegID         string      `json:"reg_id"`
 	DegreeProgram pgtype.Text `json:"degree_program"`
 	BatchYear     pgtype.Int4 `json:"batch_year"`
-}
-
-type AuthPayload struct {
-	AccessToken  string
-	RefreshToken string
-	ExpiresAt    time.Duration
 }
 
 // Mapper: DB -> Domain
@@ -87,20 +95,4 @@ func mapDBEmployeeToEmployee(e userdb.GikiWalletEmployeeProfile) Employee {
 		Designation:  common.TextToString(e.Designation),
 		Department:   common.TextToString(e.Department),
 	}
-}
-
-func DatabaseUserToUser(dbUser userdb.GikiWalletUser, payload interface{}) User {
-
-	user := User{
-		ID:       dbUser.ID,
-		Email:    dbUser.Email,
-		UserType: dbUser.UserType,
-	}
-
-	if auth, ok := payload.(AuthPayload); ok {
-		user.AccessToken = auth.AccessToken
-		user.RefreshToken = auth.RefreshToken
-	}
-
-	return user
 }
