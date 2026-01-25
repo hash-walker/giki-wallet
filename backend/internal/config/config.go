@@ -9,6 +9,7 @@ type Config struct {
 	Database DatabaseConfig
 	Server   ServerConfig
 	Jazzcash JazzcashConfig
+	Mailer   GraphSenderConfig
 }
 
 type DatabaseConfig struct {
@@ -31,6 +32,13 @@ type JazzcashConfig struct {
 	StatusInquiryURL string
 }
 
+type GraphSenderConfig struct {
+	ClientID     string
+	TenantID     string
+	ClientSecret string
+	SenderEmail  string
+}
+
 func LoadConfig() *Config {
 	cfg := &Config{
 		Database: DatabaseConfig{
@@ -49,6 +57,13 @@ func LoadConfig() *Config {
 			WalletPaymentURl: getRequiredEnv("JAZZCASH_WALLET_PAYMENT_URL"),
 			CardPaymentURL:   getRequiredEnv("JAZZCASH_CARD_PAYMENT_URL"),
 			StatusInquiryURL: getRequiredEnv("JAZZCASH_STATUS_INQUIRY_URL"),
+		},
+
+		Mailer: GraphSenderConfig{
+			ClientID:     getRequiredEnv("MS_GRAPH_CLIENT_ID"),
+			TenantID:     getRequiredEnv("MS_GRAPH_TENANT_ID"),
+			ClientSecret: getRequiredEnv("MS_GRAPH_CLIENT_SECRET"),
+			SenderEmail:  getRequiredEnv("MS_GRAPH_SENDER_EMAIL"),
 		},
 	}
 
