@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"crypto/rand"
@@ -33,34 +34,54 @@ func NewService(dbPool *pgxpool.Pool) *Service {
 	}
 }
 
-func (s *Service) AuthenticateAndIssueTokens(ctx context.Context, tx pgx.Tx, email string, password string) (LoginResult, error) {
+func (s *Service) Login(ctx context.Context, req LoginParams) (*LoginResult, error) {
 
-	user, err := s.CheckUserAndPassword(ctx, email, password)
+	tx, err := s.dbPool.Begin(ctx)
 
 	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrTransactionBegin, err)
+	}
+	defer tx.Rollback(ctx)
 
+	res, err := s.authenticateAndIssueTokens(ctx, tx, req.Email, req.Password)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrTransactionCommit, err)
+	}
+
+	return res, nil
+
+}
+
+func (s *Service) authenticateAndIssueTokens(ctx context.Context, tx pgx.Tx, email string, password string) (*LoginResult, error) {
+
+	user, err := s.checkUserAndPassword(ctx, tx, email, password)
+
+	if err != nil {
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):
-			return LoginResult{}, commonerrors.Wrap(ErrUserNotFound, err)
+			return nil, commonerrors.Wrap(ErrUserNotFound, err)
 		case errors.Is(err, ErrInvalidPassword):
-			return LoginResult{}, commonerrors.Wrap(ErrInvalidPassword, err)
+			return nil, err
 		default:
-			return LoginResult{}, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 		}
-
 	}
 
 	if !user.IsActive || !user.IsVerified {
-		return LoginResult{}, commonerrors.Wrap(ErrUserInactive, fmt.Errorf("user status inactive: active=%v, verified=%v", user.IsActive, user.IsVerified))
+		return nil, commonerrors.Wrap(ErrUserInactive, fmt.Errorf("user status inactive: active=%v, verified=%v", user.IsActive, user.IsVerified))
 	}
 
 	expireTime := time.Duration(3600) * time.Second
-	tokenSecret := "Hello"
 
-	tokenPair, err := s.IssueTokenPair(ctx, tx, user, tokenSecret, expireTime)
+	tokenPair, err := s.issueTokenPair(ctx, tx, user, expireTime)
 
 	if err != nil {
-		return LoginResult{}, commonerrors.Wrap(ErrTokenCreation, err)
+		return nil, commonerrors.Wrap(ErrTokenCreation, err)
 	}
 
 	res := LoginResult{
@@ -68,10 +89,16 @@ func (s *Service) AuthenticateAndIssueTokens(ctx context.Context, tx pgx.Tx, ema
 		Tokens: tokenPair,
 	}
 
-	return res, nil
+	return &res, nil
 }
 
-func (s *Service) IssueTokenPair(ctx context.Context, tx pgx.Tx, user user_db.GikiWalletUser, tokenSecret string, expiresIn time.Duration) (TokenPairs, error) {
+func (s *Service) issueTokenPair(ctx context.Context, tx pgx.Tx, user user_db.GikiWalletUser, expiresIn time.Duration) (TokenPairs, error) {
+
+	tokenSecret := os.Getenv("TOKEN_SECRET")
+
+	if tokenSecret == "" {
+		return TokenPairs{}, commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("TOKEN_SECRET environment variable not set"))
+	}
 
 	claims := CustomClaims{
 		UserType: user.UserType,
@@ -120,12 +147,14 @@ func (s *Service) IssueTokenPair(ctx context.Context, tx pgx.Tx, user user_db.Gi
 	return tokenPairs, nil
 }
 
-func (s *Service) CheckUserAndPassword(ctx context.Context, email string, password string) (user_db.GikiWalletUser, error) {
+func (s *Service) checkUserAndPassword(ctx context.Context, tx pgx.Tx, email string, password string) (user_db.GikiWalletUser, error) {
 
-	user, err := s.userQ.GetUserByEmail(ctx, email)
+	userQ := s.userQ.WithTx(tx)
+
+	user, err := userQ.GetUserByEmail(ctx, email)
 
 	if err != nil {
-		return user_db.GikiWalletUser{}, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		return user_db.GikiWalletUser{}, err
 	}
 
 	passwordHash := user.PasswordHash
@@ -133,16 +162,16 @@ func (s *Service) CheckUserAndPassword(ctx context.Context, email string, passwo
 	err = bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password))
 
 	if err != nil {
-		return user_db.GikiWalletUser{}, commonerrors.Wrap(ErrInvalidPassword, err)
+		return user_db.GikiWalletUser{}, ErrInvalidPassword
 	}
 
 	return user, nil
-
 }
 
 func MakeRefreshToken() (string, error) {
 	key := make([]byte, 32)
 	_, err := rand.Read(key)
+
 	if err != nil {
 		return "", commonerrors.Wrap(commonerrors.ErrInternal, err)
 	}
