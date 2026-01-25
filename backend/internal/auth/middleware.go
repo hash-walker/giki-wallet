@@ -2,9 +2,9 @@ package auth
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -15,7 +15,10 @@ import (
 
 type contextKey string
 
-const userIDKey contextKey = "user_id"
+const (
+	userIDKey   contextKey = "user_id"
+	userRoleKey contextKey = "user_role"
+)
 
 func RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -31,17 +34,56 @@ func RequireAuth(next http.Handler) http.Handler {
 
 		// Validate token
 		tokenSecret := os.Getenv("TOKEN_SECRET")
-		userID, err := ValidateJWT(token, tokenSecret)
+		claims, err := ValidateJWT(token, tokenSecret)
 		if err != nil {
 			middleware.HandleError(w, err, requestID)
 			return
 		}
 
+		userID, err := uuid.Parse(claims.Subject)
+		if err != nil {
+			middleware.HandleError(w, commonerrors.Wrap(ErrInvalidToken, err), requestID)
+			return
+		}
+
+		// Set UserID and UserRole in context
 		ctx := context.WithValue(r.Context(), userIDKey, userID)
+		ctx = context.WithValue(ctx, userRoleKey, claims.UserType)
+
 		r = r.WithContext(ctx)
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// RequireRole creates middleware that ensures the user has one of the allowed roles
+func RequireRole(allowedRoles ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestID := middleware.GetRequestID(r.Context())
+
+			userRole, ok := GetUserRoleFromContext(r.Context())
+			if !ok {
+				middleware.HandleError(w, commonerrors.ErrUnauthorized, requestID)
+				return
+			}
+
+			// Check if user has one of the allowed roles
+			// Super Admin is always allowed (fail-safe)
+			if userRole == RoleSuperAdmin {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			if slices.Contains(allowedRoles, userRole) {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// If we get here, user does not have permission
+			middleware.HandleError(w, commonerrors.ErrForbidden, requestID)
+		})
+	}
 }
 
 func GetBearerToken(authHeader string) (string, error) {
@@ -63,7 +105,7 @@ func GetBearerToken(authHeader string) (string, error) {
 	return authorizationSplit[1], nil
 }
 
-func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
+func ValidateJWT(tokenString, tokenSecret string) (*CustomClaims, error) {
 
 	parsedClaims := &CustomClaims{}
 
@@ -72,19 +114,15 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 	})
 
 	if err != nil {
-		return uuid.Nil, commonerrors.Wrap(ErrInvalidToken, err)
+		return nil, commonerrors.Wrap(ErrInvalidToken, err)
 	}
 
-	claims, _ := token.Claims.(*CustomClaims)
-
-	userID, err := uuid.Parse(claims.Subject)
-
-	if err != nil {
-		return uuid.Nil, commonerrors.Wrap(ErrInvalidToken, fmt.Errorf("invalid user ID in token: %v", err))
+	claims, ok := token.Claims.(*CustomClaims)
+	if !ok || !token.Valid {
+		return nil, ErrInvalidToken
 	}
 
-	return userID, nil
-
+	return claims, nil
 }
 
 func GetUserIDFromContext(ctx context.Context) (uuid.UUID, bool) {
@@ -92,7 +130,13 @@ func GetUserIDFromContext(ctx context.Context) (uuid.UUID, bool) {
 	return userID, ok
 }
 
-// SetUserIDInContext sets a user ID in context (for testing purposes)
-func SetUserIDInContext(ctx context.Context, userID uuid.UUID) context.Context {
-	return context.WithValue(ctx, userIDKey, userID)
+func GetUserRoleFromContext(ctx context.Context) (string, bool) {
+	role, ok := ctx.Value(userRoleKey).(string)
+	return role, ok
+}
+
+// SetUserInContext sets user ID and Role in context (for testing)
+func SetUserInContext(ctx context.Context, userID uuid.UUID, role string) context.Context {
+	ctx = context.WithValue(ctx, userIDKey, userID)
+	return context.WithValue(ctx, userRoleKey, role)
 }

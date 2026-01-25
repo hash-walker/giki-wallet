@@ -2,7 +2,6 @@ package auth
 
 import (
 	"encoding/json"
-	stdErrors "errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,7 +10,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/hash-walker/giki-wallet/internal/common/errors"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -69,6 +67,7 @@ func TestValidateJWT(t *testing.T) {
 
 	// Generate valid token
 	validClaims := CustomClaims{
+		UserType: "STUDENT",
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   validUserID.String(),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
@@ -79,6 +78,7 @@ func TestValidateJWT(t *testing.T) {
 
 	// Generate expired token
 	expiredClaims := CustomClaims{
+		UserType: "STUDENT",
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   validUserID.String(),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
@@ -92,6 +92,7 @@ func TestValidateJWT(t *testing.T) {
 		tokenString    string
 		tokenSecret    string
 		expectedUserID uuid.UUID
+		expectedRole   string
 		expectError    bool
 	}{
 		{
@@ -99,6 +100,7 @@ func TestValidateJWT(t *testing.T) {
 			tokenString:    validTokenString,
 			tokenSecret:    secret,
 			expectedUserID: validUserID,
+			expectedRole:   "STUDENT",
 			expectError:    false,
 		},
 		{
@@ -126,24 +128,67 @@ func TestValidateJWT(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			userID, err := ValidateJWT(tt.tokenString, tt.tokenSecret)
+			claims, err := ValidateJWT(tt.tokenString, tt.tokenSecret)
 			if tt.expectError {
 				assert.Error(t, err)
-				// Check if error is of type AppError or wrapped AppError
-				var appErr *errors.AppError
-				isAppErr := stdErrors.As(err, &appErr)
-				// Or check if it wraps ErrInvalidToken
-				isWrapped := helpersIsWrapped(err, ErrInvalidToken)
-				if !isAppErr && !isWrapped {
-					// It's acceptable if it returns ErrInvalidToken directly or wrapped
-					// In our refactor, we wrap it: errors.Wrap(ErrInvalidToken, err)
-					// Verify that it contains ErrInvalidToken code
-					// But our test helpers might not be available here, so rely on standard assertions
-				}
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedUserID, userID)
+				assert.NotNil(t, claims)
+				assert.Equal(t, tt.expectedUserID.String(), claims.Subject)
+				assert.Equal(t, tt.expectedRole, claims.UserType)
 			}
+		})
+	}
+}
+
+func TestRequireRole(t *testing.T) {
+	tests := []struct {
+		name           string
+		userRole       string
+		allowedRoles   []string
+		expectedStatus int
+	}{
+		{
+			name:           "Authorized Role",
+			userRole:       "ADMIN",
+			allowedRoles:   []string{"ADMIN"},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "Unauthorized Role",
+			userRole:       "STUDENT",
+			allowedRoles:   []string{"ADMIN"},
+			expectedStatus: http.StatusForbidden,
+		},
+		{
+			name:           "Super Admin Override",
+			userRole:       RoleSuperAdmin,
+			allowedRoles:   []string{"TRANSPORT_ADMIN"},
+			expectedStatus: http.StatusOK, // Super Admin should pass
+		},
+		{
+			name:           "Multiple Allowed Roles",
+			userRole:       "FINANCE",
+			allowedRoles:   []string{"ADMIN", "FINANCE"},
+			expectedStatus: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			ctx := SetUserInContext(req.Context(), uuid.New(), tt.userRole)
+			req = req.WithContext(ctx)
+
+			rr := httptest.NewRecorder()
+
+			handler := func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}
+
+			RequireRole(tt.allowedRoles...)(http.HandlerFunc(handler)).ServeHTTP(rr, req)
+
+			assert.Equal(t, tt.expectedStatus, rr.Code)
 		})
 	}
 }
