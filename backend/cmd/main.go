@@ -74,12 +74,13 @@ func main() {
 	authService := auth.NewService(pool)
 	authHandler := auth.NewHandler(authService)
 	walletService := wallet.NewService(pool)
+	walletHandler := wallet.NewHandler(walletService)
 	paymentService := payment.NewService(pool, jazzCashClient, walletService, inquiryRateLimiter)
 	paymentHandler := payment.NewHandler(paymentService, walletService)
 	transportService := transport.NewService(pool, walletService)
 	transportHandler := transport.NewHandler(transportService)
 
-	srv := api.NewServer(userHandler, authHandler, paymentHandler, transportHandler)
+	srv := api.NewServer(userHandler, authHandler, paymentHandler, transportHandler, walletHandler)
 	srv.MountRoutes()
 
 	c := cors.New(cors.Options{

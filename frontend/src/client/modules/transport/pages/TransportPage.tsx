@@ -20,7 +20,7 @@ import { TransportRouteSelector } from '../components/TransportRouteSelector';
 import { TripList } from '../components/TripList';
 import { BookingForm } from '../components/BookingForm';
 import { BookingConfirmationModal, Passenger, HeldSeat } from '../components/BookingConfirmationModal';
-import { formatDateTime, getStopById } from '../utils';
+import { formatDateTime, getStopById, isFromGIKI, isToGIKI, getGikiStop } from '../utils';
 
 function getApiErrorMessage(err: unknown): string {
     if (typeof err !== 'object' || err === null) return 'Something went wrong';
@@ -348,25 +348,24 @@ export const TransportPage = () => {
     return (
         <div className="space-y-6">
             {/* Header Section */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary/90 to-primary-dark p-8 text-white shadow-xl shadow-primary/20">
+            <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-primary via-primary/90 to-primary-dark p-8 text-white shadow-xl shadow-primary/20">
                 {/* Decorative Elements */}
                 <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-white/10 blur-3xl pointer-events-none" />
-                <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-48 h-48 rounded-full bg-accent/20 blur-2xl pointer-events-none" />
+                <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-48 h-48 rounded-full bg-accent/30 blur-2xl pointer-events-none" />
 
                 <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
-                            <Bus className="w-6 h-6 text-white" />
+                        <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
+                            <Bus className="w-7 h-7 text-white" />
                         </div>
                         <div>
-                            <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow-sm">Book Transport</h1>
-                            <p className="text-blue-100 font-medium opacity-90">Schedule your ride with ease</p>
+                            <h1 className="text-3xl font-black tracking-tighter text-white drop-shadow-sm uppercase">Transport</h1>
+                            <p className="text-accent-light text-[10px] font-black uppercase tracking-[0.2em] opacity-90">Schedule your ride with ease</p>
                         </div>
                     </div>
                     <Button
                         onClick={() => navigate('/')}
-                        className="bg-white/10 hover:bg-white/20 border-white/20 text-white backdrop-blur-md transition-all self-start md:self-center"
-                        size="sm"
+                        className="h-12 px-6 rounded-2xl bg-white/10 hover:bg-white/20 border-white/20 text-white backdrop-blur-md transition-all self-start md:self-center font-bold text-xs"
                     >
                         <ArrowLeft className="w-4 h-4 mr-2" />
                         Back to Home
@@ -393,9 +392,9 @@ export const TransportPage = () => {
                     }}
                 />
 
-                <div className="bg-white/80 backdrop-blur-xl border border-white/40 rounded-3xl p-5 md:p-8 shadow-sm relative overflow-hidden ring-1 ring-black/5">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-800 mb-3">
-                        <Clock className="w-4 h-4 text-primary" />
+                <div className="bg-white/80 backdrop-blur-xl border border-white/40 rounded-[2rem] p-5 md:p-8 shadow-sm relative overflow-hidden ring-1 ring-primary/5">
+                    <div className="flex items-center gap-2.5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">
+                        <Clock className="w-3.5 h-3.5 text-primary" />
                         {stage === 'select_outbound' ? 'Select departure' : 'Select return'}
                     </div>
 
@@ -404,8 +403,33 @@ export const TransportPage = () => {
                         loading={tripsLoading}
                         selectedTripId={stage === 'select_outbound' ? selectedTripId : returnTripId}
                         onSelectTrip={(id) => {
-                            if (stage === 'select_outbound') setSelectedTripId(id);
-                            else setReturnTripId(id);
+                            if (stage === 'select_outbound') {
+                                setSelectedTripId(id);
+                                const trip = trips.find(t => t.trip_id === id);
+                                if (trip && isFromGIKI(trip.stops)) {
+                                    setPickupStopId(getGikiStop(trip.stops));
+                                    setDropoffStopId(null);
+                                } else if (trip && isToGIKI(trip.stops)) {
+                                    setDropoffStopId(getGikiStop(trip.stops));
+                                    setPickupStopId(null);
+                                } else {
+                                    setPickupStopId(null);
+                                    setDropoffStopId(null);
+                                }
+                            } else {
+                                setReturnTripId(id);
+                                const trip = returnTrips.find(t => t.trip_id === id);
+                                if (trip && isFromGIKI(trip.stops)) {
+                                    setReturnPickupStopId(getGikiStop(trip.stops));
+                                    setReturnDropoffStopId(null);
+                                } else if (trip && isToGIKI(trip.stops)) {
+                                    setReturnDropoffStopId(getGikiStop(trip.stops));
+                                    setReturnPickupStopId(null);
+                                } else {
+                                    setReturnPickupStopId(null);
+                                    setReturnDropoffStopId(null);
+                                }
+                            }
                         }}
                     />
 

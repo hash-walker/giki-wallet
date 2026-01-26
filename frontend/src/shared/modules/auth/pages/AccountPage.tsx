@@ -26,48 +26,51 @@ export const AccountPage = () => {
         <div className="w-full pb-20 md:pb-6 pt-6">
             <h1 className="text-2xl font-bold text-gray-900 mb-6">My Account</h1>
 
-            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden group">
                 {/* Profile Header */}
-                <div className="bg-primary/5 p-8 flex flex-col items-center justify-center border-b border-gray-100">
-                    <div className="w-24 h-24 rounded-full bg-white border-4 border-white shadow-md flex items-center justify-center mb-4">
-                        <span className="text-3xl font-bold text-primary">
+                <div className="bg-primary/5 p-10 flex flex-col items-center justify-center border-b border-gray-100 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full -mr-16 -mt-16 blur-2xl" />
+                    <div className="absolute bottom-0 left-0 w-24 h-24 bg-primary/5 rounded-full -ml-12 -mb-12 blur-xl" />
+
+                    <div className="relative w-24 h-24 rounded-3xl bg-white border border-primary/10 shadow-xl shadow-primary/5 flex items-center justify-center mb-4 transform transition-transform group-hover:scale-105 duration-300">
+                        <span className="text-4xl font-black text-primary">
                             {user.name.charAt(0).toUpperCase()}
                         </span>
                     </div>
-                    <h2 className="text-xl font-bold text-gray-900">{user.name}</h2>
-                    <p className="text-sm text-gray-500">{user.user_type}</p>
+                    <h2 className="text-2xl font-black text-primary tracking-tight">{user.name}</h2>
+                    <p className="text-xs font-bold text-accent uppercase tracking-[0.2em] mt-1">{user.user_type}</p>
                 </div>
 
                 {/* Account Details */}
-                <div className="p-6 space-y-6">
+                <div className="p-8 space-y-6">
                     <div className="space-y-4">
-                        <div className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
-                            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-gray-500 shadow-sm">
+                        <div className="flex items-center gap-4 p-5 rounded-2xl bg-gray-50/50 border border-gray-100/50 hover:bg-white hover:shadow-md transition-all duration-300">
+                            <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-accent shadow-sm border border-gray-100">
                                 <Mail className="w-5 h-5" />
                             </div>
                             <div>
-                                <p className="text-xs text-gray-500 uppercase font-semibold">Email</p>
-                                <p className="text-sm font-medium text-gray-900">{user.email}</p>
+                                <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Email Address</p>
+                                <p className="text-base font-bold text-primary">{user.email}</p>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
-                            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-gray-500 shadow-sm">
+                        <div className="flex items-center gap-4 p-5 rounded-2xl bg-gray-50/50 border border-gray-100/50 hover:bg-white hover:shadow-md transition-all duration-300">
+                            <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-accent shadow-sm border border-gray-100">
                                 <Phone className="w-5 h-5" />
                             </div>
                             <div>
-                                <p className="text-xs text-gray-500 uppercase font-semibold">Phone</p>
-                                <p className="text-sm font-medium text-gray-900">{user.phone_number || 'Not provided'}</p>
+                                <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Phone Number</p>
+                                <p className="text-base font-bold text-primary">{user.phone_number || 'Not provided'}</p>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
-                            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-gray-500 shadow-sm">
+                        <div className="flex items-center gap-4 p-5 rounded-2xl bg-gray-50/50 border border-gray-100/50 hover:bg-white hover:shadow-md transition-all duration-300">
+                            <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-accent shadow-sm border border-gray-100">
                                 <ShieldCheck className="w-5 h-5" />
                             </div>
                             <div>
-                                <p className="text-xs text-gray-500 uppercase font-semibold">Role</p>
-                                <p className="text-sm font-medium text-gray-900 capitalize">{user.user_type.toLowerCase()}</p>
+                                <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Account Role</p>
+                                <p className="text-base font-bold text-primary capitalize">{user.user_type.toLowerCase()}</p>
                             </div>
                         </div>
                     </div>

@@ -9,6 +9,7 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/payment"
 	"github.com/hash-walker/giki-wallet/internal/transport"
 	"github.com/hash-walker/giki-wallet/internal/user"
+	"github.com/hash-walker/giki-wallet/internal/wallet"
 )
 
 type Server struct {
@@ -17,15 +18,23 @@ type Server struct {
 	Auth      *auth.Handler
 	Payment   *payment.Handler
 	Transport *transport.Handler
+	Wallet    *wallet.Handler
 }
 
-func NewServer(userHandler *user.Handler, authHandler *auth.Handler, paymentHandler *payment.Handler, transportHandler *transport.Handler) *Server {
+func NewServer(
+	userHandler *user.Handler,
+	authHandler *auth.Handler,
+	paymentHandler *payment.Handler,
+	transportHandler *transport.Handler,
+	walletHandler *wallet.Handler,
+) *Server {
 	return &Server{
 		Router:    chi.NewRouter(),
 		User:      userHandler,
 		Auth:      authHandler,
 		Payment:   paymentHandler,
 		Transport: transportHandler,
+		Wallet:    walletHandler,
 	}
 }
 
@@ -71,6 +80,12 @@ func (s *Server) MountRoutes() {
 		r.Post("/confirm", s.Transport.ConfirmBatch)
 		r.Delete("/holds/{hold_id}", s.Transport.ReleaseHold)
 		r.Delete("/tickets/{ticket_id}", s.Transport.CancelTicket)
+	})
+
+	r.Route("/wallet", func(r chi.Router) {
+		r.Use(auth.RequireAuth)
+		r.Get("/balance", s.Wallet.GetBalance)
+		r.Get("/history", s.Wallet.GetHistory)
 	})
 
 	r.Route("/admin", func(r chi.Router) {

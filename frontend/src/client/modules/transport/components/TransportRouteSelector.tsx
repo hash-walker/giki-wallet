@@ -54,7 +54,7 @@ export function TransportRouteSelector({
                     <label className="text-sm font-medium text-gray-700">Round trip</label>
                     <button
                         type="button"
-                        className={`w-11 h-6 rounded-full transition-colors ${roundTrip ? 'bg-primary' : 'bg-gray-300'}`}
+                        className={`w-11 h-6 rounded-full transition-colors ${roundTrip ? 'bg-accent shadow-sm' : 'bg-gray-300'}`}
                         onClick={onToggleRoundTrip}
                         aria-label="Toggle round trip"
                     >

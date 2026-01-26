@@ -45,3 +45,12 @@ SELECT * FROM giki_wallet.wallets
 WHERE name = $1
   AND type = $2
 LIMIT 1;
+
+-- name: GetLedgerEntriesByWallet :many
+SELECT
+    l.id, l.amount, l.balance_after, l.created_at,
+    t.type, t.reference_id, t.description
+FROM giki_wallet.ledger l
+         JOIN giki_wallet.transactions t ON l.transaction_id = t.id
+WHERE l.wallet_id = $1
+ORDER BY l.created_at DESC;

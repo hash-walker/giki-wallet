@@ -104,7 +104,7 @@ export const MyTicketsModal = ({
                                     "p-2 rounded-lg",
                                     direction === 'from-giki'
                                         ? "bg-primary/10 text-primary"
-                                        : "bg-teal-100 text-teal-700"
+                                        : "bg-accent/10 text-accent"
                                 )}>
                                     {direction === 'from-giki' ? (
                                         <ArrowRight className="w-5 h-5" />

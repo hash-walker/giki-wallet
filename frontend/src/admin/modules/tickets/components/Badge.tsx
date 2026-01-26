@@ -17,9 +17,9 @@ export const Badge = ({ status, category }: BadgeProps) => {
 
 const StatusBadge = ({ status }: { status: 'confirmed' | 'pending' | 'cancelled' }) => {
     const styles = {
-        confirmed: 'bg-green-100 text-green-800',
+        confirmed: 'bg-accent/10 text-accent',
         pending: 'bg-yellow-100 text-yellow-800',
-        cancelled: 'bg-red-100 text-red-800',
+        cancelled: 'bg-destructive/10 text-destructive',
     };
 
     const labels = {
@@ -37,9 +37,9 @@ const StatusBadge = ({ status }: { status: 'confirmed' | 'pending' | 'cancelled'
 
 const CategoryBadge = ({ category }: { category: 'employee' | 'family' | 'student' }) => {
     const styles = {
-        employee: 'bg-blue-100 text-blue-800',
+        employee: 'bg-primary/10 text-primary',
         family: 'bg-purple-100 text-purple-800',
-        student: 'bg-green-100 text-green-800',
+        student: 'bg-accent/10 text-accent',
     };
 
     const labels = {

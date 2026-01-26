@@ -6,11 +6,11 @@ export const PageHeader = () => {
                 <h1 className="text-2xl md:text-3xl font-bold text-primary">Bus Schedules</h1>
                 <div className="flex gap-4 text-sm">
                     <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500" aria-label="Employee bus type" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-primary" aria-label="Employee bus type" />
                         <span className="text-gray-600">Employee</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-green-500" aria-label="Student bus type" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-accent" aria-label="Student bus type" />
                         <span className="text-gray-600">Student</span>
                     </div>
                 </div>

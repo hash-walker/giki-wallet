@@ -51,3 +51,30 @@ export function filterDropoffOptions(stops: TripStop[], pickupId: string | null)
         .sort((a, b) => a.sequence - b.sequence)
         .map((s) => ({ value: s.stop_id, label: s.stop_name }));
 }
+
+/**
+ * Returns true if the first stop is GIKI (Outbound)
+ */
+export function isFromGIKI(stops: TripStop[] | undefined): boolean {
+    if (!stops || stops.length === 0) return false;
+    const sorted = [...stops].sort((a, b) => a.sequence - b.sequence);
+    return sorted[0].stop_name.toLowerCase().includes('giki');
+}
+
+/**
+ * Returns true if the last stop is GIKI (Inbound)
+ */
+export function isToGIKI(stops: TripStop[] | undefined): boolean {
+    if (!stops || stops.length === 0) return false;
+    const sorted = [...stops].sort((a, b) => a.sequence - b.sequence);
+    return sorted[sorted.length - 1].stop_name.toLowerCase().includes('giki');
+}
+
+/**
+ * Returns the stop ID for GIKI if found
+ */
+export function getGikiStop(stops: TripStop[] | undefined): string | null {
+    if (!stops) return null;
+    const giki = stops.find(s => s.stop_name.toLowerCase().includes('giki'));
+    return giki ? giki.stop_id : null;
+}

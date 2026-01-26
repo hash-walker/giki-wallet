@@ -15,26 +15,26 @@ export interface Transaction {
 export const getTransactionIcon = (type: TransactionType): ReactNode => {
     switch (type) {
         case 'ticket':
-            return <Ticket className="w-5 h-5 text-slate-600" />;
+            return <Ticket className="w-5 h-5 text-primary" />;
         case 'topup':
-            return <ArrowUpCircle className="w-5 h-5 text-emerald-500" />;
+            return <ArrowUpCircle className="w-5 h-5 text-accent" />;
         case 'transfer':
-            return <ArrowRightLeft className="w-5 h-5 text-blue-500" />;
+            return <ArrowRightLeft className="w-5 h-5 text-primary" />;
         case 'received':
-            return <ArrowDownCircle className="w-5 h-5 text-rose-500" />;
+            return <ArrowDownCircle className="w-5 h-5 text-destructive" />;
     }
 };
 
 export const getIconBackground = (type: TransactionType): string => {
     switch (type) {
         case 'ticket':
-            return "bg-slate-100";
+            return "bg-primary/10";
         case 'topup':
-            return "bg-emerald-50";
+            return "bg-accent/10";
         case 'transfer':
-            return "bg-blue-50";
+            return "bg-primary/10";
         case 'received':
-            return "bg-rose-50";
+            return "bg-destructive/10";
     }
 };
 

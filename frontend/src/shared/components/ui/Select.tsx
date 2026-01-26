@@ -1,3 +1,5 @@
+import { cn } from '@/lib/utils';
+
 interface SelectOption {
     value: string;
     label: string;
@@ -10,7 +12,9 @@ interface SelectProps {
     placeholder: string;
     disabledPlaceholder?: string;
     label?: string;
+    labelClassName?: string;
     className?: string;
+    selectClassName?: string;
     disabled?: boolean;
     showLabel?: boolean;
 }
@@ -22,7 +26,9 @@ export const Select = ({
     placeholder,
     disabledPlaceholder,
     label,
+    labelClassName,
     className = "",
+    selectClassName = "",
     disabled = false,
     showLabel = true
 }: SelectProps) => {
@@ -31,12 +37,15 @@ export const Select = ({
     return (
         <div className={className}>
             {showLabel && label && (
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block md:hidden">
+                <label className={cn("text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block md:hidden", labelClassName)}>
                     {label}
                 </label>
             )}
             <select
-                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 bg-white focus:ring-2 focus:ring-primary focus:border-transparent text-sm transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className={cn(
+                    "w-full border border-gray-300 rounded-lg px-3 py-2.5 bg-white focus:ring-2 focus:ring-primary focus:border-transparent text-sm transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed",
+                    selectClassName
+                )}
                 value={value || ''}
                 onChange={(e) => onChange(e.target.value)}
                 disabled={disabled || options.length === 0}

@@ -58,7 +58,7 @@ export const ClientLayout = ({ children }: ClientLayoutProps) => {
             onMyTicketsClick={handleMyTicketsClick}
             onMyAccountClick={handleMyAccountClick}
         >
-            <div className="min-h-screen flex flex-col bg-light-background font-inter pb-20 md:pb-0">
+            <div className="min-h-screen flex flex-col bg-background font-inter pb-20 md:pb-0 transition-colors duration-500">
                 <div className="hidden md:block">
                     <ClientNavbar
                         onMyBookingsClick={handleMyTicketsClick}
@@ -71,13 +71,14 @@ export const ClientLayout = ({ children }: ClientLayoutProps) => {
                 </div>
 
                 {/* Mobile Top Bar */}
-                <div className="md:hidden sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-gray-100/50 h-14 flex items-center justify-center px-4 shadow-sm">
-                    <div className="flex items-center gap-2">
-                        <div className="bg-primary/10 p-1.5 rounded-xl">
+                <div className="md:hidden sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-gray-100/40 h-16 flex items-center justify-center px-4 shadow-sm relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-24 h-full bg-accent/5 blur-xl pointer-events-none" />
+                    <div className="flex items-center gap-2.5">
+                        <div className="bg-primary/5 p-2 rounded-xl border border-primary/10 shadow-inner">
                             <Wallet className="w-5 h-5 text-primary" />
                         </div>
-                        <span className="font-bold text-lg text-gray-900 tracking-tight">
-                            GIKI <span className="text-primary">Wallet</span>
+                        <span className="font-black text-xl text-gray-900 tracking-tighter">
+                            GIKI <span className="text-accent">Wallet</span>
                         </span>
                     </div>
                 </div>

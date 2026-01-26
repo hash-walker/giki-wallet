@@ -150,7 +150,10 @@ func (s *Service) ExecuteTransaction(
 
 func (s *Service) GetOrCreateWallet(ctx context.Context, tx pgx.Tx, userID uuid.UUID) (*Wallet, error) {
 
-	walletQ := s.q.WithTx(tx)
+	walletQ := s.q
+	if tx != nil {
+		walletQ = s.q.WithTx(tx)
+	}
 
 	w, err := walletQ.GetWallet(ctx, common.GoogleUUIDtoPgUUID(userID, true))
 
@@ -186,6 +189,50 @@ func (s *Service) GetOrCreateWallet(ctx context.Context, tx pgx.Tx, userID uuid.
 	}
 
 	return MapDBWalletToWallet(w), nil
+}
+
+func (s *Service) GetUserBalance(ctx context.Context, userID uuid.UUID) (*BalanceResponse, error) {
+	w, err := s.GetOrCreateWallet(ctx, nil, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	balance, err := s.getWalletBalance(ctx, s.q, w.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &BalanceResponse{
+		Balance:  balance,
+		Currency: w.Currency,
+	}, nil
+}
+
+func (s *Service) GetUserHistory(ctx context.Context, userID uuid.UUID) ([]TransactionHistoryItem, error) {
+	w, err := s.GetOrCreateWallet(ctx, nil, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	entries, err := s.q.GetLedgerEntriesByWallet(ctx, w.ID)
+	if err != nil {
+		return nil, commonerrors.Wrap(ErrDatabase, err)
+	}
+
+	items := make([]TransactionHistoryItem, 0, len(entries))
+	for _, e := range entries {
+		items = append(items, TransactionHistoryItem{
+			ID:           e.ID,
+			Amount:       e.Amount,
+			BalanceAfter: e.BalanceAfter,
+			Type:         e.Type,
+			ReferenceID:  e.ReferenceID,
+			Description:  common.TextToString(e.Description),
+			CreatedAt:    e.CreatedAt,
+		})
+	}
+
+	return items, nil
 }
 
 func (s *Service) GetSystemWalletByName(ctx context.Context, walletName SystemWalletName, walletType SystemWalletType) (uuid.UUID, error) {

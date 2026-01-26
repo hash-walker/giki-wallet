@@ -39,7 +39,7 @@ export const BookingSection = ({
         <section>
             {/* Section Header */}
             <div className="flex items-center gap-2 mb-7">
-                <span className={isFromGIKI ? "bg-blue-100 p-2 rounded-lg text-blue-700" : "bg-green-100 p-2 rounded-lg text-green-700"}>
+                <span className={isFromGIKI ? "bg-primary/10 p-2 rounded-lg text-primary" : "bg-accent/10 p-2 rounded-lg text-accent"}>
                     {icon}
                 </span>
                 <h2 className="text-xl font-bold text-gray-800">{title}</h2>

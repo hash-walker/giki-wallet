@@ -54,63 +54,88 @@ export function BookingConfirmationModal({
             onClose={onClose}
             title="Confirm booking"
             footer={
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                     <Button
                         variant="outline"
-                        className="flex-1 rounded-full border-gray-200"
+                        className="flex-1 h-14 rounded-2xl border-slate-200 font-bold text-xs text-slate-500 uppercase tracking-widest hover:bg-slate-50"
                         disabled={confirming}
                         onClick={onClose}
                     >
                         Cancel
                     </Button>
-                    <Button className="flex-1 font-semibold rounded-full shadow-lg shadow-primary/20" disabled={confirming} onClick={onConfirm}>
+                    <Button
+                        className="flex-1 h-14 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-primary/20 hover:shadow-primary/30 transition-all duration-300"
+                        disabled={confirming}
+                        onClick={onConfirm}
+                    >
                         {confirming ? 'Confirming…' : 'Confirm'}
                     </Button>
                 </div>
             }
         >
-            <div className="space-y-4">
+            <div className="space-y-6">
                 {outboundSummary && (
-                    <div className="p-4 rounded-2xl border border-gray-200 bg-gray-50">
-                        <p className="font-semibold text-gray-900">Outbound</p>
-                        <p className="text-sm text-gray-700 mt-1">{outboundSummary.route}</p>
-                        <p className="text-xs text-gray-600 mt-1">
-                            {outboundSummary.when} · {outboundSummary.pickup} → {outboundSummary.dropoff} · {outboundSummary.seats}{' '}
-                            seat(s)
+                    <div className="p-5 rounded-2xl border border-slate-100 bg-slate-50/50 shadow-sm">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Outbound Trip</p>
+                        <h4 className="text-sm font-bold text-slate-900 tracking-tight">{outboundSummary.route}</h4>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
+                            <p className="text-xs text-slate-500 font-medium">
+                                {outboundSummary.when}
+                            </p>
+                            <div className="w-1 h-1 rounded-full bg-slate-300" />
+                            <p className="text-xs text-slate-500 font-bold">
+                                {outboundSummary.seats} Seat(s)
+                            </p>
+                        </div>
+                        <p className="text-[10px] font-black text-primary/60 uppercase tracking-widest mt-3 flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+                            {outboundSummary.pickup} → {outboundSummary.dropoff}
                         </p>
                     </div>
                 )}
 
                 {returnSummary && (
-                    <div className="p-4 rounded-2xl border border-gray-200 bg-gray-50">
-                        <p className="font-semibold text-gray-900">Return</p>
-                        <p className="text-sm text-gray-700 mt-1">{returnSummary.route}</p>
-                        <p className="text-xs text-gray-600 mt-1">
-                            {returnSummary.when} · {returnSummary.pickup} → {returnSummary.dropoff} · {returnSummary.seats} seat(s)
+                    <div className="p-5 rounded-2xl border border-slate-100 bg-slate-50/50 shadow-sm">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Return Trip</p>
+                        <h4 className="text-sm font-bold text-slate-900 tracking-tight">{returnSummary.route}</h4>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
+                            <p className="text-xs text-slate-500 font-medium">
+                                {returnSummary.when}
+                            </p>
+                            <div className="w-1 h-1 rounded-full bg-slate-300" />
+                            <p className="text-xs text-slate-500 font-bold">
+                                {returnSummary.seats} Seat(s)
+                            </p>
+                        </div>
+                        <p className="text-[10px] font-black text-primary/60 uppercase tracking-widest mt-3 flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                            {returnSummary.pickup} → {returnSummary.dropoff}
                         </p>
                     </div>
                 )}
 
-                <div className="border-t pt-4">
-                    <p className="text-sm font-semibold text-gray-900 mb-2">Passenger details</p>
-                    <div className="space-y-3">
+                <div className="pt-2">
+                    <div className="flex items-center gap-2.5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">
+                        Passenger Details
+                    </div>
+                    <div className="space-y-4">
                         {allHolds.map((h, idx) => {
                             const p = passengers[h.hold_id] || { name: '', relation: 'SELF' as const };
                             return (
-                                <div key={h.hold_id} className="p-3 rounded-xl border border-gray-200">
-                                    <p className="text-xs font-semibold text-gray-600 mb-2">Seat {idx + 1}</p>
-                                    <input
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
-                                        placeholder="Passenger name"
-                                        value={p.name}
-                                        onChange={(e) =>
-                                            setPassengers((prev) => ({
-                                                ...prev,
-                                                [h.hold_id]: { ...p, name: e.target.value },
-                                            }))
-                                        }
-                                    />
-                                    <div className="mt-2">
+                                <div key={h.hold_id} className="p-5 rounded-2xl border border-slate-100 bg-white shadow-sm ring-1 ring-slate-200/5">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Seat #{idx + 1}</p>
+                                    <div className="space-y-3">
+                                        <input
+                                            className="w-full h-12 border border-slate-100 rounded-xl px-4 text-sm font-bold text-slate-900 placeholder:text-slate-300 focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all bg-slate-50/50 shadow-inner"
+                                            placeholder="Enter passenger name"
+                                            value={p.name}
+                                            onChange={(e) =>
+                                                setPassengers((prev) => ({
+                                                    ...prev,
+                                                    [h.hold_id]: { ...p, name: e.target.value },
+                                                }))
+                                            }
+                                        />
                                         <Select
                                             options={[
                                                 { value: 'SELF', label: 'Self' },
@@ -124,7 +149,8 @@ export function BookingConfirmationModal({
                                                     [h.hold_id]: { ...p, relation: v as Passenger['relation'] },
                                                 }))
                                             }
-                                            placeholder="Relation"
+                                            placeholder="Select relation"
+                                            className="h-12 rounded-xl bg-slate-50/50 border-slate-100 font-bold text-sm shadow-inner"
                                             showLabel={false}
                                         />
                                     </div>

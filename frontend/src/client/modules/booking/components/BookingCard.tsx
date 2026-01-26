@@ -9,9 +9,9 @@ import { getAvailableTimeSlotsForCity, getAvailableStopsForCityAndTime, getSched
 // Badge component - defined outside to avoid recreation on each render
 const Badge = ({ type, children }: { type: 'employee' | 'student' | 'full'; children: React.ReactNode }) => {
     const colors = {
-        employee: 'bg-blue-500',
-        student: 'bg-green-500',
-        full: 'bg-red-500'
+        employee: 'bg-primary',
+        student: 'bg-accent',
+        full: 'bg-destructive'
     };
     return (
         <span className={cn("px-2 py-0.5 text-white text-[0.65rem] rounded-full font-medium", colors[type])}>
@@ -22,23 +22,23 @@ const Badge = ({ type, children }: { type: 'employee' | 'student' | 'full'; chil
 
 // Availability component - defined outside
 const Availability = ({ isFull, tickets }: { isFull: boolean; tickets?: number }) => (
-    <span className={cn("font-semibold text-sm", isFull ? "text-red-500" : "text-primary")}>
+    <span className={cn("font-semibold text-sm", isFull ? "text-destructive" : "text-primary")}>
         {isFull ? "Sold Out" : `${tickets} Left`}
     </span>
 );
 
 // TicketSelect component - defined outside
-const TicketSelect = ({ 
-    ticketCount, 
-    setTicketCount, 
-    isStudent, 
+const TicketSelect = ({
+    ticketCount,
+    setTicketCount,
+    isStudent,
     maxTickets,
     mode,
     onSelectionReset
-}: { 
-    ticketCount: number; 
-    setTicketCount: (n: number) => void; 
-    isStudent: boolean; 
+}: {
+    ticketCount: number;
+    setTicketCount: (n: number) => void;
+    isStudent: boolean;
     maxTickets: number;
     mode: 'immediate' | 'collect';
     onSelectionReset?: () => void;
@@ -227,7 +227,7 @@ export const BookingCard = ({
                             <Availability isFull={isFull} tickets={currentSchedule?.tickets} />
                         </div>
                         <div className="flex gap-3 items-center">
-                            <TicketSelect 
+                            <TicketSelect
                                 ticketCount={ticketCount}
                                 setTicketCount={setTicketCount}
                                 isStudent={isStudent}
@@ -323,7 +323,7 @@ export const BookingCard = ({
 
                 <div className={cn(sharedCityId === undefined ? "w-[8%]" : "w-[9%]", "flex justify-center")}>
                     {hasCompleteSelection ? (
-                        <TicketSelect 
+                        <TicketSelect
                             ticketCount={ticketCount}
                             setTicketCount={setTicketCount}
                             isStudent={isStudent}

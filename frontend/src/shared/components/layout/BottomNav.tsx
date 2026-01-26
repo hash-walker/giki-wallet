@@ -24,13 +24,13 @@ export const BottomNav = () => {
                 <button
                     onClick={() => navigate('/')}
                     className={cn(
-                        "flex flex-col items-center gap-1 transition-colors duration-200",
-                        isActive('/') ? "text-primary" : "text-gray-400 hover:text-gray-600"
+                        "flex flex-col items-center gap-1 transition-all duration-300",
+                        isActive('/') ? "text-accent scale-110" : "text-gray-400 hover:text-gray-600"
                     )}
                 >
                     <div className={cn(
-                        "p-1.5 rounded-xl transition-all",
-                        isActive('/') ? "bg-primary/10" : "bg-transparent"
+                        "p-2 rounded-2xl transition-all",
+                        isActive('/') ? "bg-accent/10 shadow-sm" : "bg-transparent"
                     )}>
                         <Home className={cn("w-6 h-6", isActive('/') && "fill-current")} />
                     </div>
@@ -40,13 +40,13 @@ export const BottomNav = () => {
                 <button
                     onClick={() => navigate('/transport')}
                     className={cn(
-                        "flex flex-col items-center gap-1 transition-colors duration-200",
-                        isActive('/transport') ? "text-primary" : "text-gray-400 hover:text-gray-600"
+                        "flex flex-col items-center gap-1 transition-all duration-300",
+                        isActive('/transport') ? "text-accent scale-110" : "text-gray-400 hover:text-gray-600"
                     )}
                 >
                     <div className={cn(
-                        "p-1.5 rounded-xl transition-all",
-                        isActive('/transport') ? "bg-primary/10" : "bg-transparent"
+                        "p-2 rounded-2xl transition-all",
+                        isActive('/transport') ? "bg-accent/10 shadow-sm" : "bg-transparent"
                     )}>
                         {/* Swapped Bus for a more generic 'Ticket' or 'Commute' icon if desired, but user hated "Bus" wording. Let's keep icon simple. */}
                         <svg
@@ -54,7 +54,7 @@ export const BottomNav = () => {
                             viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
-                            strokeWidth="2"
+                            strokeWidth="2.5"
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             className={cn("w-6 h-6", isActive('/transport') && "fill-current")}
@@ -73,13 +73,13 @@ export const BottomNav = () => {
                 <button
                     onClick={() => navigate('/tickets')}
                     className={cn(
-                        "flex flex-col items-center gap-1 transition-colors duration-200",
-                        isActive('/tickets') ? "text-primary" : "text-gray-400 hover:text-gray-600"
+                        "flex flex-col items-center gap-1 transition-all duration-300",
+                        isActive('/tickets') ? "text-accent scale-110" : "text-gray-400 hover:text-gray-600"
                     )}
                 >
                     <div className={cn(
-                        "p-1.5 rounded-xl transition-all",
-                        isActive('/tickets') ? "bg-primary/10" : "bg-transparent"
+                        "p-2 rounded-2xl transition-all",
+                        isActive('/tickets') ? "bg-accent/10 shadow-sm" : "bg-transparent"
                     )}>
                         <Ticket className={cn("w-6 h-6", isActive('/tickets') && "fill-current")} />
                     </div>
@@ -88,13 +88,13 @@ export const BottomNav = () => {
                 <button
                     onClick={() => navigate('/account')}
                     className={cn(
-                        "flex flex-col items-center gap-1 transition-colors duration-200",
-                        isActive('/account') ? "text-primary" : "text-gray-400 hover:text-gray-600"
+                        "flex flex-col items-center gap-1 transition-all duration-300",
+                        isActive('/account') ? "text-accent scale-110" : "text-gray-400 hover:text-gray-600"
                     )}
                 >
                     <div className={cn(
-                        "p-1.5 rounded-xl transition-all",
-                        isActive('/account') ? "bg-primary/10" : "bg-transparent"
+                        "p-2 rounded-2xl transition-all",
+                        isActive('/account') ? "bg-accent/10 shadow-sm" : "bg-transparent"
                     )}>
                         <User className={cn("w-6 h-6", isActive('/account') && "fill-current")} />
                     </div>

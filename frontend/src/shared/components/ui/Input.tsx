@@ -3,15 +3,16 @@ import { cn } from '@/lib/utils';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
     label?: string;
+    labelClassName?: string;
     error?: string;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-    ({ label, error, className, ...props }, ref) => {
+    ({ label, labelClassName, error, className, ...props }, ref) => {
         return (
             <div className="w-full">
                 {label && (
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    <label className={cn("block text-sm font-medium text-gray-700 mb-1.5", labelClassName)}>
                         {label}
                     </label>
                 )}

@@ -1,11 +1,13 @@
 import { cn } from '@/lib/utils';
 import { Transaction, getTransactionIcon, getIconBackground } from '../utils/transactionHelpers';
+import { useWalletStore } from '../walletStore';
 
 interface TransactionCardProps {
     transaction: Transaction;
 }
 
 export const TransactionCard = ({ transaction }: TransactionCardProps) => {
+    const { currency } = useWalletStore();
     const isDebit = transaction.amount < 0;
     const amount = Math.abs(transaction.amount);
 
@@ -33,7 +35,7 @@ export const TransactionCard = ({ transaction }: TransactionCardProps) => {
                     "text-base font-bold tracking-tight",
                     isDebit ? "text-gray-900" : "text-green-600"
                 )}>
-                    {isDebit ? '-' : '+'} <span className="text-sm font-medium text-gray-400 mr-0.5">Rs</span>{amount.toLocaleString()}
+                    {isDebit ? '-' : '+'} <span className="text-sm font-medium text-gray-400 mr-0.5">{currency}</span>{amount.toLocaleString()}
                 </p>
             </div>
         </div>

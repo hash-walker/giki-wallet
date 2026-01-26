@@ -24,7 +24,7 @@ export const TopUpModal = ({ isOpen, onClose }: TopUpModalProps) => {
             toast.error('Please fill in all fields');
             return;
         }
-        
+
         if (cnicLastSix.length !== 6) {
             toast.error('CNIC last 6 digits must be exactly 6 digits');
             return;
@@ -75,7 +75,7 @@ export const TopUpModal = ({ isOpen, onClose }: TopUpModalProps) => {
                 <Button
                     onClick={paymentMethod === 'jazzcash' ? handleJazzcashPayment : handleCardPayment}
                     disabled={isLoading || !amount}
-                    className="w-full font-semibold text-base md:text-lg py-5 md:py-6 shadow-md hover:shadow-lg transition-all"
+                    className="w-full h-14 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-primary/20 hover:shadow-primary/30 transition-all duration-300"
                 >
                     {isLoading ? 'Processing...' : paymentMethod === 'jazzcash' ? 'Pay with Jazzcash' : 'Proceed to Payment Gateway'}
                 </Button>
@@ -87,10 +87,11 @@ export const TopUpModal = ({ isOpen, onClose }: TopUpModalProps) => {
                 onPaymentMethodChange={setPaymentMethod}
             />
 
-            {/* Amount Input */}
             <div className="mb-6">
                 <Input
                     label="Amount (RS)"
+                    labelClassName="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3"
+                    className="h-12 rounded-xl bg-slate-50/50 border-slate-100 font-bold text-sm shadow-inner transition-all focus:ring-2 focus:ring-primary/10 focus:border-primary"
                     type="number"
                     min="1"
                     step="0.01"
@@ -105,6 +106,8 @@ export const TopUpModal = ({ isOpen, onClose }: TopUpModalProps) => {
                 <div className="space-y-4 mb-6">
                     <Input
                         label="Mobile Number"
+                        labelClassName="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3"
+                        className="h-12 rounded-xl bg-slate-50/50 border-slate-100 font-bold text-sm shadow-inner transition-all focus:ring-2 focus:ring-primary/10 focus:border-primary"
                         type="tel"
                         value={mobileNumber}
                         onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, ''))}
@@ -114,6 +117,8 @@ export const TopUpModal = ({ isOpen, onClose }: TopUpModalProps) => {
 
                     <Input
                         label="Last 6 Digits of CNIC"
+                        labelClassName="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3"
+                        className="h-12 rounded-xl bg-slate-50/50 border-slate-100 font-bold text-sm shadow-inner transition-all focus:ring-2 focus:ring-primary/10 focus:border-primary"
                         type="text"
                         value={cnicLastSix}
                         onChange={(e) => setCnicLastSix(e.target.value.replace(/\D/g, '').slice(0, 6))}

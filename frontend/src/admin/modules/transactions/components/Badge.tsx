@@ -20,9 +20,9 @@ export const Badge = ({ type, category, status }: BadgeProps) => {
 
 const StatusBadge = ({ status }: { status: 'completed' | 'pending' | 'failed' }) => {
     const styles = {
-        completed: 'bg-green-100 text-green-800',
+        completed: 'bg-accent/10 text-accent',
         pending: 'bg-yellow-100 text-yellow-800',
-        failed: 'bg-red-100 text-red-800',
+        failed: 'bg-destructive/10 text-destructive',
     };
 
     return (
@@ -63,22 +63,22 @@ const TypeBadge = ({ type, category }: { type: TransactionType; category: Transa
         if (category === 'wallet') {
             switch (type) {
                 case 'topup':
-                    return 'bg-blue-100 text-blue-800';
+                    return 'bg-accent/10 text-accent';
                 case 'transfer':
-                    return 'bg-purple-100 text-purple-800';
+                    return 'bg-primary/10 text-primary';
                 case 'received':
-                    return 'bg-green-100 text-green-800';
+                    return 'bg-accent/10 text-accent';
                 default:
                     return 'bg-gray-100 text-gray-800';
             }
         } else {
             switch (type) {
                 case 'purchase':
-                    return 'bg-indigo-100 text-indigo-800';
+                    return 'bg-primary/10 text-primary';
                 case 'cancellation':
                     return 'bg-orange-100 text-orange-800';
                 case 'refund':
-                    return 'bg-teal-100 text-teal-800';
+                    return 'bg-accent/10 text-accent';
                 default:
                     return 'bg-gray-100 text-gray-800';
             }

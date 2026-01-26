@@ -1,9 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* --- 1. SHADCN CSS VARIABLES (Fixed for Tailwind v4) --- */
-/* We wrap these in hsl() so they are valid colors.
-   This allows Dark Mode switching to work automatically. */
 :root {
     /* Deep Midnight Blue (#0F172A - Slate 900-ish but richer) */
     --primary: hsl(222 47% 11%);
@@ -145,6 +142,6 @@
     }
 
     body {
-        @apply bg-background text-foreground;
+        @apply bg-background text-foreground font-inter;
     }
 }
