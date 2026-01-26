@@ -11,3 +11,5 @@ FROM giki_wallet.access_tokens
 WHERE token_hash = $1;
 
 -- name: CreateAccessToken :one
+
+

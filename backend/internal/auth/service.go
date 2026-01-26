@@ -79,49 +79,66 @@ func (s *Service) VerifyEmailAndIssueTokens(ctx context.Context, token string) (
 	if err != nil {
 		return nil, commonerrors.Wrap(commonerrors.ErrTransactionBegin, err)
 	}
+
 	defer tx.Rollback(ctx)
 
-	var userID uuid.UUID
-	var tokenType string
-	var expiresAt time.Time
+	var res *LoginResult
 
-	if tokenType != "EMAIL_VERIFICATION" {
-		return nil, ErrInvalidVerificationToken
-	}
+	err = common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
+		authQ := s.authQ.WithTx(tx)
 
-	if time.Now().UTC().After(expiresAt.UTC()) {
-		return nil, ErrVerificationTokenExpired
-	}
+		u, err := authQ.GetUserByTokenHash(ctx, tokenHash)
 
-	u, err := s.userQ.UpdateUserVerification(ctx, userID)
-
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrUserNotFound
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrInvalidVerificationToken
+			}
+			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
 		}
-		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
 
-	if _, err := tx.Exec(ctx, ``, tokenHash); err != nil {
-		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
+		if u.Type != "EMAIL_VERIFICATION" {
+			return ErrInvalidVerificationToken
+		}
 
-	expireTime := time.Duration(3600) * time.Second
-	tokenPair, err := s.issueTokenPair(ctx, tx, u, expireTime)
+		if time.Now().UTC().After(u.ExpiresAt.UTC()) {
+			return ErrVerificationTokenExpired
+		}
+
+		userQ := s.userQ.WithTx(tx)
+
+		updatedUser, err := userQ.UpdateUserVerification(ctx, u.UserID)
+
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrUserNotFound
+			}
+			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
+
+		expireTime := time.Duration(3600) * time.Second
+		tokenPair, err := s.issueTokenPair(ctx, tx, updatedUser, expireTime)
+
+		if err != nil {
+			return commonerrors.Wrap(ErrTokenCreation, err)
+		}
+
+		res = &LoginResult{
+			User:   updatedUser,
+			Tokens: tokenPair,
+		}
+
+		return nil
+	})
+
 	if err != nil {
-		return nil, commonerrors.Wrap(ErrTokenCreation, err)
-	}
-
-	res := LoginResult{
-		User:   u,
-		Tokens: tokenPair,
+		return nil, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, commonerrors.Wrap(commonerrors.ErrTransactionCommit, err)
 	}
 
-	return &res, nil
+	return res, nil
 }
 
 func (s *Service) authenticateAndIssueTokens(ctx context.Context, tx pgx.Tx, email string, password string) (*LoginResult, error) {
