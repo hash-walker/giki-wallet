@@ -66,7 +66,7 @@ export const TransactionFilters = ({
                     onChange={(value) => onCategoryChange(value)}
                     options={[
                         { value: 'all', label: 'All Categories' },
-                        { value: 'schema', label: 'Wallet' },
+                        { value: 'wallet', label: 'Wallet' },
                         { value: 'ticket', label: 'Ticket' },
                     ]}
                     placeholder="Category"

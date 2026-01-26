@@ -17,7 +17,7 @@ export interface BaseTransaction {
 }
 
 export interface WalletTransaction extends BaseTransaction {
-    category: 'schema';
+    category: 'wallet';
     type: WalletTransactionType;
     // For topup
     paymentMethod?: 'jazzcash' | 'card';

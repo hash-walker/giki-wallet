@@ -56,7 +56,7 @@ export const TransactionsTable = ({ transactions, category }: TransactionsTableP
             );
 
             // Details (varies by category)
-            if (transaction.category === 'schema') {
+            if (transaction.category === 'wallet') {
                 cells.push(
                     <WalletTransactionDetails key="details" transaction={transaction} />
                 );
@@ -105,7 +105,7 @@ export const TransactionsTable = ({ transactions, category }: TransactionsTableP
 };
 
 // Wallet Transaction Details Component
-const WalletTransactionDetails = ({ transaction }: { transaction: Extract<Transaction, { category: 'schema' }> }) => {
+const WalletTransactionDetails = ({ transaction }: { transaction: Extract<Transaction, { category: 'wallet' }> }) => {
     if (transaction.type === 'topup') {
         return (
             <div className="text-sm text-gray-600">

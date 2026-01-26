@@ -48,3 +48,6 @@ backend/internal/**/*_db/*.go
 *.sqlite
 *.sqlite3
 
+# Local TLS certs/keys (never commit)
+certs/
+

@@ -14,7 +14,7 @@ export const TransactionsPage = () => {
             // Wallet Transactions
             {
                 id: '1',
-                category: 'schema',
+                category: 'wallet',
                 type: 'topup',
                 userId: 1,
                 userName: 'John Doe',
@@ -26,7 +26,7 @@ export const TransactionsPage = () => {
             },
             {
                 id: '2',
-                category: 'schema',
+                category: 'wallet',
                 type: 'transfer',
                 userId: 1,
                 userName: 'John Doe',
@@ -40,7 +40,7 @@ export const TransactionsPage = () => {
             },
             {
                 id: '3',
-                category: 'schema',
+                category: 'wallet',
                 type: 'received',
                 userId: 2,
                 userName: 'Jane Smith',
@@ -184,7 +184,7 @@ export const TransactionsPage = () => {
                 />
                 <SummaryCard
                     title="Wallet Transactions"
-                    value={filteredTransactions.filter(t => t.category === 'schema').length}
+                    value={filteredTransactions.filter(t => t.category === 'wallet').length}
                     icon={<FileText className="w-5 h-5" />}
                 />
                 <SummaryCard

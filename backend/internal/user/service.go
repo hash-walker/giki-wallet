@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -54,8 +53,8 @@ func (s *Service) CreateUser(ctx context.Context, req RegisterRequest) (User, er
 
 	err = common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
 		userQ := s.userQ.WithTx(tx)
-		var createErr error
 
+		var createErr error
 		user, createErr = userQ.CreateUser(ctx, user_db.CreateUserParams{
 			Name:         req.Name,
 			Email:        req.Email,
@@ -66,26 +65,9 @@ func (s *Service) CreateUser(ctx context.Context, req RegisterRequest) (User, er
 		})
 
 		if createErr != nil {
-			dbErr := translateDBError(createErr)
-			if errors.Is(dbErr, ErrDuplicateEmail) || errors.Is(dbErr, ErrDuplicateRegID) {
-
-				existingUser, findErr := userQ.GetUserByRegOrEmail(ctx, user_db.GetUserByRegOrEmailParams{
-					Email: req.Email,
-					RegID: req.RegID,
-				})
-
-				if findErr != nil {
-					return commonerrors.Wrap(commonerrors.ErrDatabase, err)
-				}
-
-				if existingUser.IsVerified {
-					return commonerrors.New("USER_EXISTS", http.StatusConflict, "Account already exists. Please login.")
-				}
-
-				if existingUser.Email != req.Email {
-					return commonerrors.New("CONFLICT", http.StatusConflict, "Registration ID already linked to a different email.")
-				}
-			}
+			// IMPORTANT: once a statement fails (e.g. unique constraint), the SQL transaction is aborted
+			// and we MUST return immediately (any further queries will fail with "current transaction is aborted").
+			return translateDBError(createErr)
 		}
 
 		return s.createRoleProfile(ctx, tx, user.ID, req)
@@ -138,52 +120,6 @@ func (s *Service) CreateEmployee(ctx context.Context, tx pgx.Tx, payload CreateE
 	}
 
 	return mapDBEmployeeToEmployee(employeeRow), nil
-}
-
-func (s *Service) VerifyUserEmail(ctx context.Context, tokenPlain string) (string, error) {
-
-	// 1. Find Token
-	tokenDB, err := s.userQ.GetAccessToken(ctx, tokenPlain)
-	if err != nil {
-		return "", errors.New("Invalid or expired link")
-	}
-
-	// 2. Get User Details (To check role)
-	user, err := s.repo.GetUser(ctx, tokenDB.UserID)
-	if err != nil {
-		return "", err
-	}
-
-	// 3. LOGIC FORK based on Role
-	var newActiveState bool
-
-	if user.UserType == "STUDENT" {
-		newActiveState = true // Students get full access immediately
-	} else {
-		newActiveState = false // Employees must still wait for Admin
-	}
-
-	// 4. Update DB
-	err = s.repo.UpdateUserStatus(ctx, worker.UpdateUserStatusParams{
-		ID:         user.ID,
-		IsVerified: true,           // ALWAYS true (Email is proven)
-		IsActive:   newActiveState, // Depends on Role
-	})
-	if err != nil {
-		return "", err
-	}
-
-	// 5. Delete Token
-	s.repo.DeleteAccessToken(ctx, tokenHash)
-
-	// 6. If Employee, Trigger "Notify Admin" Job here (Optional)
-	if user.UserType == "EMPLOYEE" {
-		s.jobs.Enqueue("NOTIFY_ADMIN_NEW_VERIFIED_EMPLOYEE", map[string]string{
-			"email": user.Email,
-		})
-	}
-
-	return user.UserType, nil
 }
 
 func HashPassword(password string) (string, error) {
