@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -20,27 +21,38 @@ type GraphSender struct {
 	ClientSecret string
 	SenderEmail  string
 	httpClient   *http.Client
-	tmpl         *template.Template
 }
 
 func NewGraphSender(clientID, tenantID, clientSecret, senderEmail string) *GraphSender {
-	tmpls := template.Must(template.ParseFS(templateFS, "templates/*.html"))
-
 	return &GraphSender{
 		ClientID:     clientID,
 		TenantID:     tenantID,
 		ClientSecret: clientSecret,
 		SenderEmail:  senderEmail,
 		httpClient:   &http.Client{Timeout: 10 * time.Second},
-		tmpl:         tmpls,
 	}
 }
 
 func (g *GraphSender) SendTemplate(to, subject, templateName string, data interface{}) error {
+	log.Printf("[MAILER] Parsing templates for %s", templateName)
+
+	tmpl := template.New("mail")
+	_, err := tmpl.ParseFS(templateFS, "templates/base.html", "templates/"+templateName)
+	if err != nil {
+		return fmt.Errorf("failed to parse templates: %w", err)
+	}
+
+	// Debug: list all templates in the set
+	var names []string
+	for _, t := range tmpl.Templates() {
+		names = append(names, t.Name())
+	}
+	log.Printf("[MAILER] Templates in set: %s", strings.Join(names, ", "))
+
 	var body bytes.Buffer
 
-	// Render HTML
-	if err := g.tmpl.ExecuteTemplate(&body, templateName, data); err != nil {
+	// Render HTML - execute the "base" template which includes our specific template
+	if err := tmpl.ExecuteTemplate(&body, "base", data); err != nil {
 		return fmt.Errorf("failed to render template %s: %w", templateName, err)
 	}
 

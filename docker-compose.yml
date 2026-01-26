@@ -26,7 +26,7 @@ services:
         condition: service_healthy
     environment:
       - GOOSE_DRIVER=postgres
-      - GOOSE_DBSTRING=host=db port=5432 user=${DB_USER} password=${DB_PASSWORD} dbname=${DB_NAME} sslmode=${DB_SSL_MODE:-disable}
+      - GOOSE_DBSTRING=host=${DB_HOST} port=5432 user=${DB_USER} password=${DB_PASSWORD} dbname=${DB_NAME} sslmode=${DB_SSL_MODE:-disable}
       - GOOSE_VERBOSE=true
     volumes:
       - ./backend/sql/schema:/migrations:ro

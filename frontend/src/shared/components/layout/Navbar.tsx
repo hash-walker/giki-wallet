@@ -1,6 +1,7 @@
 import { ClientNavbar } from './navbar/ClientNavbar';
 import { AdminNavbar } from './navbar/AdminNavbar';
 import { LucideIcon } from 'lucide-react';
+import { useAuthStore } from '@/shared/stores/authStore';
 
 interface NavbarProps {
     variant?: 'client' | 'admin';
@@ -29,11 +30,14 @@ export const Navbar = ({
         return <AdminNavbar navItems={navItems} onLogout={onLogout} />;
     }
 
+    const { user } = useAuthStore();
+
     return (
         <ClientNavbar
             onMyBookingsClick={onMyBookingsClick}
             onSignInClick={onSignInClick}
             onSignUpClick={onSignUpClick}
+            isAuthenticated={!!user}
         />
     );
 };

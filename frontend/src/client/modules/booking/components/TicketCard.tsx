@@ -11,125 +11,106 @@ export const TicketCard = ({ ticket }: TicketCardProps) => {
     const categoryBadge = getTicketCategoryBadge(ticket);
 
     return (
-        <div className="flex items-start gap-4 p-4 rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all bg-white">
-            {/* Icon */}
-            <div className={cn(
-                "w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0",
-                ticket.busType === 'Student' ? "bg-green-50" : "bg-blue-50"
-            )}>
-                <Ticket className={cn(
-                    "w-5 h-5",
-                    ticket.busType === 'Student' ? "text-green-600" : "text-blue-600"
-                )} />
-            </div>
-
-            {/* Ticket Details */}
-            <div className="flex-1 min-w-0 overflow-hidden">
-                <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                        {/* Serial Number and Ticket Number - Prominent */}
-                        <div className="flex items-center gap-4 mb-3 flex-wrap">
-                            <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-gray-500">Serial:</span>
-                                <span className="text-lg font-bold text-gray-900">
-                                    #{ticket.serialNumber}
-                                </span>
-                                {ticket.routeSerial && (
-                                    <span className="text-sm text-gray-500">({ticket.routeSerial})</span>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-gray-500">Ticket:</span>
-                                <span className="text-lg font-bold font-mono text-primary bg-primary/10 px-3 py-1 rounded-md">
-                                    {ticket.ticketNumber}
-                                </span>
-                            </div>
-                        </div>
-                        
-                        {/* Route Direction */}
-                        <p className="text-base font-bold text-gray-900 mb-2">
-                            {ticket.fromLocation} → {ticket.toLocation}
-                        </p>
-                        
-                        {/* Pickup or Drop Location based on direction */}
-                        {ticket.direction === 'to-giki' && ticket.pickupLocation && (
-                            <p className="text-sm text-gray-600 mb-2">
-                                <span className="font-medium">Pickup:</span> {ticket.pickupLocation}
-                            </p>
-                        )}
-                        {ticket.direction === 'from-giki' && ticket.dropLocation && (
-                            <p className="text-sm text-gray-600 mb-2">
-                                <span className="font-medium">Drop:</span> {ticket.dropLocation}
-                            </p>
-                        )}
-                        
-                        {/* Time */}
-                        <p className="text-sm text-gray-600 mb-2">
-                            {ticket.date} • {ticket.time}
-                        </p>
-                        
-                        {/* Passenger Info - Based on isSelf */}
-                        <div className="mt-2 space-y-1">
-                            {ticket.isSelf ? (
-                                <p className="text-sm font-medium text-gray-900">{ticket.fullName}</p>
-                            ) : (
-                                <>
-                                    <p className="text-sm font-medium text-gray-900">{ticket.relativeName}</p>
-                                    {ticket.relativeRelation && (
-                                        <p className="text-xs text-gray-500">Relation: {ticket.relativeRelation}</p>
-                                    )}
-                                    {ticket.fullName && (
-                                        <p className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded inline-block mt-1">
-                                            Family of {ticket.fullName}
-                                        </p>
-                                    )}
-                                </>
-                            )}
-                        </div>
-                        
-                        {/* Refund Information */}
-                        {refundBadge && (
-                            <div className="mt-2">
-                                <span className={cn(
-                                    "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
-                                    refundBadge.className
-                                )}>
-                                    {refundBadge.label}
-                                </span>
-                                {ticket.refundInfo?.amount && (
-                                    <p className="text-xs text-gray-600 mt-1">
-                                        Amount: PKR {ticket.refundInfo.amount}
-                                    </p>
-                                )}
-                            </div>
-                        )}
+        <div className="relative overflow-hidden rounded-3xl border border-gray-200 bg-white hover:shadow-md transition-all duration-300 group">
+            <div className="p-5">
+                <div className="flex items-start gap-4">
+                    {/* Icon */}
+                    <div className={cn(
+                        "w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm transition-colors",
+                        ticket.busType === 'Student' ? "bg-green-50 group-hover:bg-green-100" : "bg-blue-50 group-hover:bg-blue-100"
+                    )}>
+                        <Ticket className={cn(
+                            "w-6 h-6",
+                            ticket.busType === 'Student' ? "text-green-600" : "text-blue-600"
+                        )} />
                     </div>
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0 ml-2">
-                        <span className={cn(
-                            "px-2.5 py-1 rounded-full text-xs font-medium border whitespace-nowrap",
-                            getStatusColor(ticket.status)
-                        )}>
-                            {ticket.status}
-                        </span>
-                        {categoryBadge && (
-                            <span className={cn(
-                                "px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap",
-                                categoryBadge.className
-                            )}>
-                                {categoryBadge.label}
-                            </span>
-                        )}
+
+                    {/* Ticket Details */}
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                                {/* Route Direction */}
+                                <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="text-base font-bold text-gray-900">
+                                        {ticket.fromLocation} → {ticket.toLocation}
+                                    </h3>
+                                    <span className={cn(
+                                        "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border",
+                                        getStatusColor(ticket.status)
+                                    )}>
+                                        {ticket.status}
+                                    </span>
+                                </div>
+
+                                {/* Serial & Ticket Number */}
+                                <div className="flex items-center gap-3 text-sm text-gray-500 mb-3">
+                                    <span className="bg-gray-100 px-2 py-0.5 rounded-md font-mono text-xs font-medium">#{ticket.serialNumber}</span>
+                                    <span className="font-mono font-bold text-primary">T-{ticket.ticketNumber}</span>
+                                </div>
+
+                                {/* Time & Date */}
+                                <div className="flex flex-wrap gap-y-1 gap-x-4 text-sm text-gray-700 mb-3">
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-gray-300"></span>
+                                        {ticket.date}
+                                    </span>
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-gray-300"></span>
+                                        {ticket.time}
+                                    </span>
+                                </div>
+
+                                {/* Pickup/Drop */}
+                                {(ticket.pickupLocation || ticket.dropLocation) && (
+                                    <div className="text-sm text-gray-600 bg-gray-50 rounded-xl px-3 py-2 mb-3 inline-block">
+                                        <span className="font-semibold text-gray-900 mr-1">
+                                            {ticket.direction === 'to-giki' ? 'Pickup:' : 'Drop:'}
+                                        </span>
+                                        {ticket.direction === 'to-giki' ? ticket.pickupLocation : ticket.dropLocation}
+                                    </div>
+                                )}
+
+                                {/* Passenger Info */}
+                                <div className="flex items-center gap-2">
+                                    <div className="text-sm font-medium text-gray-900">
+                                        {ticket.isSelf ? ticket.fullName : ticket.relativeName}
+                                    </div>
+                                    {!ticket.isSelf && (
+                                        <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                                            {ticket.relativeRelation}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                
-                {/* Cancel Button */}
-                <div className="mt-3 pt-3 border-t border-gray-200">
+            </div>
+
+            {/* Footer Actions */}
+            <div className="bg-gray-50/50 px-5 py-3 border-t border-gray-100 flex items-center justify-between">
+                <div>
+                    {refundBadge && (
+                        <div className="flex items-center gap-2">
+                            <span className={cn(
+                                "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
+                                refundBadge?.className
+                            )}>
+                                {refundBadge?.label}
+                            </span>
+                            {ticket.refundInfo?.amount && (
+                                <span className="text-xs text-gray-500">Rs. {ticket.refundInfo.amount}</span>
+                            )}
+                        </div>
+                    )}
+                </div>
+                <div>
                     {ticket.canCancel ? (
-                        <button className="text-sm text-red-600 hover:text-red-700 font-medium">
-                            Cancel Ticket
+                        <button className="text-xs font-semibold text-red-600 hover:text-red-700 hover:underline transition-all">
+                            Cancel Booking
                         </button>
                     ) : (
-                        <span className="text-sm text-gray-500">Cannot cancel now</span>
+                        <span className="text-xs text-gray-400 italic">Non-cancellable</span>
                     )}
                 </div>
             </div>

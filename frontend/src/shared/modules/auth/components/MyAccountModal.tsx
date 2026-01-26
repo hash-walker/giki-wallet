@@ -19,25 +19,18 @@ interface MyAccountModalProps {
     isOpen: boolean;
     onClose: () => void;
     userAccount?: UserAccount;
+    onLogout?: () => void;
 }
 
 export const MyAccountModal = ({ 
     isOpen, 
     onClose,
-    userAccount 
+    userAccount,
+    onLogout,
 }: MyAccountModalProps) => {
-    // Mock user data - replace with actual user data from auth context
-    const defaultUser: UserAccount = {
-        name: 'John Doe',
-        email: 'john.doe@giki.edu.pk',
-        phoneNumber: undefined, // Missing phone number to test prompt
-        regNo: '2021-CS-123', // Student reg number
-        userType: 'student'
-    };
-
-    const [currentUser, setCurrentUser] = useState<UserAccount>(userAccount || defaultUser);
-    const [phoneNumber, setPhoneNumber] = useState(currentUser.phoneNumber || '');
-    const [isEditingPhone, setIsEditingPhone] = useState(!currentUser.phoneNumber);
+    const [currentUser, setCurrentUser] = useState<UserAccount | undefined>(userAccount);
+    const [phoneNumber, setPhoneNumber] = useState(userAccount?.phoneNumber || '');
+    const [isEditingPhone, setIsEditingPhone] = useState(!userAccount?.phoneNumber);
     const [isSaving, setIsSaving] = useState(false);
 
     // Update state when userAccount prop changes
@@ -46,10 +39,14 @@ export const MyAccountModal = ({
             setCurrentUser(userAccount);
             setPhoneNumber(userAccount.phoneNumber || '');
             setIsEditingPhone(!userAccount.phoneNumber);
+        } else {
+            setCurrentUser(undefined);
+            setPhoneNumber('');
+            setIsEditingPhone(false);
         }
     }, [userAccount]);
 
-    const hasPhoneNumber = currentUser.phoneNumber || phoneNumber;
+    const hasPhoneNumber = currentUser?.phoneNumber || phoneNumber;
     const showPhonePrompt = !hasPhoneNumber && !isEditingPhone;
 
     const handleSavePhone = async () => {
@@ -73,7 +70,7 @@ export const MyAccountModal = ({
             toast.success('Phone number updated successfully');
             setIsEditingPhone(false);
             // Update current user state
-            setCurrentUser(prev => ({ ...prev, phoneNumber }));
+            setCurrentUser((prev) => (prev ? { ...prev, phoneNumber } : prev));
         } catch (error) {
             console.error('Error updating phone number:', error);
             toast.error('Failed to update phone number. Please try again.');
@@ -88,8 +85,14 @@ export const MyAccountModal = ({
             onClose={onClose}
             title="My Account"
         >
+                    {!currentUser && (
+                        <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                            <p className="text-sm text-gray-700">You are not signed in.</p>
+                        </div>
+                    )}
+
                     {/* Phone Number Prompt (if missing) */}
-                    {showPhonePrompt && (
+                    {currentUser && showPhonePrompt && (
                         <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                             <div className="flex items-start gap-3">
                                 <Phone className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
@@ -112,7 +115,7 @@ export const MyAccountModal = ({
                     )}
 
                     {/* Phone Number Form (when editing) */}
-                    {isEditingPhone && (
+                    {currentUser && isEditingPhone && (
                         <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
                             <label htmlFor="phone" className="text-sm font-semibold text-gray-700 mb-2 block">
                                 Phone Number
@@ -138,7 +141,7 @@ export const MyAccountModal = ({
                                         variant="outline"
                                         onClick={() => {
                                             setIsEditingPhone(false);
-                                            setPhoneNumber(currentUser.phoneNumber || '');
+                                            setPhoneNumber(currentUser?.phoneNumber || '');
                                         }}
                                     >
                                         Cancel
@@ -152,13 +155,14 @@ export const MyAccountModal = ({
                     )}
 
                     {/* Account Details */}
+                    {currentUser && (
                     <div className="space-y-4">
                         {/* Name */}
                         <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg">
                             <User className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
                             <div className="flex-1 min-w-0">
                                 <p className="text-xs text-gray-500 mb-1">Full Name</p>
-                                <p className="text-base font-semibold text-gray-900">{currentUser.name}</p>
+                                <p className="text-base font-semibold text-gray-900">{currentUser?.name}</p>
                             </div>
                         </div>
 
@@ -167,12 +171,12 @@ export const MyAccountModal = ({
                             <Mail className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
                             <div className="flex-1 min-w-0">
                                 <p className="text-xs text-gray-500 mb-1">Email</p>
-                                <p className="text-base font-semibold text-gray-900 break-all">{currentUser.email}</p>
+                                <p className="text-base font-semibold text-gray-900 break-all">{currentUser?.email}</p>
                             </div>
                         </div>
 
                         {/* Registration Number (Students only) */}
-                        {currentUser.userType === 'student' && currentUser.regNo && (
+                        {currentUser?.userType === 'student' && currentUser.regNo && (
                             <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg">
                                 <GraduationCap className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
                                 <div className="flex-1 min-w-0">
@@ -190,14 +194,14 @@ export const MyAccountModal = ({
                                     <p className="text-xs text-gray-500 mb-1">Phone Number</p>
                                     <div className="flex items-center justify-between">
                                         <p className="text-base font-semibold text-gray-900">
-                                            {currentUser.phoneNumber || phoneNumber}
+                                            {currentUser?.phoneNumber || phoneNumber}
                                         </p>
                                         <Button
                                             variant="ghost"
                                             size="sm"
                                             onClick={() => {
                                                 setIsEditingPhone(true);
-                                                setPhoneNumber(currentUser.phoneNumber || phoneNumber);
+                                                setPhoneNumber(currentUser?.phoneNumber || phoneNumber);
                                             }}
                                             className="text-primary hover:text-primary/80 text-sm"
                                         >
@@ -208,6 +212,15 @@ export const MyAccountModal = ({
                             </div>
                         )}
                     </div>
+                    )}
+
+                    {currentUser && onLogout && (
+                        <div className="pt-6">
+                            <Button variant="outline" className="w-full font-semibold" onClick={onLogout}>
+                                Logout
+                            </Button>
+                        </div>
+                    )}
         </Modal>
     );
 };

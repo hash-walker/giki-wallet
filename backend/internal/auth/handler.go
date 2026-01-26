@@ -3,6 +3,7 @@ package auth
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/hash-walker/giki-wallet/internal/common"
 	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
@@ -48,4 +49,48 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 	response := ToLoginResponse(*res)
 	common.ResponseWithJSON(w, http.StatusOK, response)
+}
+
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+	// Stateless logout for Bearer-token auth; client just deletes token.
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	userID, ok := GetUserIDFromContext(r.Context())
+	if !ok {
+		middleware.HandleError(w, commonerrors.ErrUnauthorized, requestID)
+		return
+	}
+
+	u, err := h.service.GetUserByID(r.Context(), userID)
+
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, ToLoginResponse(LoginResult{User: u}))
+}
+
+func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
+
+	requestID := middleware.GetRequestID(r.Context())
+
+	token := strings.TrimSpace(r.URL.Query().Get("token"))
+	if token == "" {
+		middleware.HandleError(w, commonerrors.ErrMissingField.WithDetails("fields", "token"), requestID)
+		return
+	}
+
+	res, err := h.service.VerifyEmailAndIssueTokens(r.Context(), token)
+
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, ToLoginResponse(*res))
 }

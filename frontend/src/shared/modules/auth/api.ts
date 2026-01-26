@@ -19,13 +19,13 @@ export type AuthResponse = {
     id: string;
     name: string;
     email: string;
+    phone_number?: string;
     user_type: 'student' | 'employee';
     auth?: {
         access_token: string;
         refresh_token: string;
-        expires_at: string;
+        expires_at: number;
     };
-    token?: string; // Fallback or legacy
 };
 
 /**
@@ -42,4 +42,27 @@ export async function signUp(payload: SignUpPayload) {
 export async function signIn(payload: SignInPayload) {
     const res = await apiClient.post<AuthResponse>('/auth/signin', payload);
     return res.data;
+}
+
+/**
+ * Get current signed-in user (Bearer auth)
+ */
+export async function getMe() {
+    const res = await apiClient.get<AuthResponse>('/auth/me');
+    return res.data;
+}
+
+/**
+ * Verify email token and sign in
+ */
+export async function verifyEmail(token: string) {
+    const res = await apiClient.get<AuthResponse>('/auth/verify', { params: { token } });
+    return res.data;
+}
+
+/**
+ * Sign out current user (stateless; client clears token)
+ */
+export async function signOut() {
+    await apiClient.post('/auth/signout');
 }

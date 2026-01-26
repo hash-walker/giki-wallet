@@ -5,11 +5,12 @@
 /* We wrap these in hsl() so they are valid colors.
    This allows Dark Mode switching to work automatically. */
 :root {
-    /* Your Brand Blue (#08125C) */
-    --primary: hsl(233 84% 20%);
+    /* Deep Midnight Blue (#0F172A - Slate 900-ish but richer) */
+    --primary: hsl(222 47% 11%);
     --primary-foreground: hsl(210 40% 98%);
 
-    --background: hsl(0 0% 100%);
+    --background: hsl(210 40% 98%);
+    /* Slightly off-white */
     --foreground: hsl(222.2 84% 4.9%);
 
     --card: hsl(0 0% 100%);
@@ -24,17 +25,19 @@
     --muted: hsl(210 40% 96.1%);
     --muted-foreground: hsl(215.4 16.3% 46.9%);
 
-    --accent: hsl(210 40% 96.1%);
-    --accent-foreground: hsl(222.2 47.4% 11.2%);
+    /* Vibrant Teal for Accent */
+    --accent: hsl(173 58% 39%);
+    --accent-foreground: hsl(0 0% 100%);
 
     --destructive: hsl(0 84.2% 60.2%);
     --destructive-foreground: hsl(210 40% 98%);
 
     --border: hsl(214.3 31.8% 91.4%);
     --input: hsl(214.3 31.8% 91.4%);
-    --ring: hsl(233 84% 20%);
+    --ring: hsl(222 47% 11%);
 
-    --radius: 0.5rem;
+    --radius: 1rem;
+    /* More rounded default */
 }
 
 .dark {
@@ -67,8 +70,8 @@
     --ring: hsl(212.7 26.8% 83.9%);
 }
 
+/* --- 2. YOUR CUSTOM COLORS --- */
 @theme {
-    /* --- 2. YOUR CUSTOM COLORS --- */
     /* These map the CSS variables above to Tailwind classes */
 
     --color-primary: var(--primary);
@@ -100,21 +103,34 @@
     --color-ring: var(--ring);
 
     /* Your Static Custom Colors (from Django) */
-    --color-light-background: #F8F9FA;
-    --color-dark-text: #1F1F1F;
+    --color-light-background: #F8FAFC;
+    /* Slightly cooler gray */
+    --color-dark-text: #0F172A;
     --color-light-text: #ffffff;
-    --color-border-gray: #E5E7EB;
-    --color-light-gray: #BEBEBE;
+    --color-border-gray: #E2E8F0;
+    --color-light-gray: #94A3B8;
 
     /* --- FONTS --- */
-    --font-inter: "Inter", sans-serif;
-    --font-dmsans: "DM Sans", sans-serif;
+    --font-inter: "Inter",
+        sans-serif;
+    --font-dmsans: "DM Sans",
+        sans-serif;
 
     /* --- RADIUS --- */
     --radius-sm: calc(var(--radius) - 4px);
     --radius-md: calc(var(--radius) - 2px);
     --radius-lg: var(--radius);
     --radius-xl: calc(var(--radius) + 4px);
+    --radius-2xl: calc(var(--radius) + 8px);
+    --radius-3xl: calc(var(--radius) + 12px);
+
+    /* Semantic Colors */
+    --color-primary-dark: hsl(222 47% 8%);
+    /* Darker than primary */
+    --color-accent-light: hsl(173 58% 50%);
+    /* Lighter accent for text */
+    --color-footer-bg: hsl(240 4% 9%);
+    /* Zinc 900 equivalent */
 }
 
 /* --- 3. UTILITIES --- */
@@ -127,6 +143,7 @@
     * {
         @apply border-border outline-ring/50;
     }
+
     body {
         @apply bg-background text-foreground;
     }

@@ -48,6 +48,12 @@ backend/internal/**/*_db/*.go
 *.sqlite
 *.sqlite3
 
+# TypeScript build info
+*.tsbuildinfo
+
+# Local build artifacts
+backend/main
+
 # Local TLS certs/keys (never commit)
 certs/
 

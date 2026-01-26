@@ -98,11 +98,7 @@ func (w *JobWorker) processNextJob(ctx context.Context) {
 
 func (w *JobWorker) handleStudentVerification(payload json.RawMessage) error {
 
-	var data struct {
-		Name  string `json:"name"`
-		Email string `json:"email"`
-		Link  string `json:"link"`
-	}
+	var data StudentVerifyPayload
 	if err := json.Unmarshal(payload, &data); err != nil {
 		return err
 	}
@@ -111,10 +107,8 @@ func (w *JobWorker) handleStudentVerification(payload json.RawMessage) error {
 }
 
 func (w *JobWorker) handleEmployeeWait(payload json.RawMessage) error {
-	var data struct {
-		Name  string `json:"name"`
-		Email string `json:"email"`
-	}
+	var data EmployeeWaitPayload
+
 	if err := json.Unmarshal(payload, &data); err != nil {
 		return err
 	}
@@ -123,10 +117,7 @@ func (w *JobWorker) handleEmployeeWait(payload json.RawMessage) error {
 }
 
 func (w *JobWorker) handleEmployeeApproved(payload json.RawMessage) error {
-	var data struct {
-		Name  string `json:"name"`
-		Email string `json:"email"`
-	}
+	var data EmployeeWaitPayload
 	if err := json.Unmarshal(payload, &data); err != nil {
 		return err
 	}

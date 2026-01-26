@@ -27,7 +27,7 @@ export const SignUpPage = () => {
         reValidateMode: 'onChange',
         defaultValues: {
             userType: 'student',
-            fullName: '',
+            name: '',
             email: '',
             phoneNumber: '',
             password: '',
@@ -53,17 +53,22 @@ export const SignUpPage = () => {
 
         try {
             await registerUser({
-                name: data.userType === 'student' ? (data.fullName || '').trim() : data.email.trim(),
+                name: (data.name || '').trim(),
                 email: data.email.trim(),
                 phone_number: data.phoneNumber.trim(),
                 password: data.password,
                 user_type: data.userType,
                 reg_id: regId || '',
             });
-            toast.success('Account created. Please sign in.');
+            if (data.userType === 'student') {
+                toast.success('Account created. Please check your email to verify, then sign in.');
+            } else {
+                toast.success('Account created. Your account may require approval before you can sign in.');
+            }
             navigate('/auth/sign-in', { replace: true });
-        } catch {
-            toast.error('Sign up failed. Please try again.');
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Sign up failed. Please try again.';
+            toast.error(msg);
         }
     };
 
@@ -101,15 +106,13 @@ export const SignUpPage = () => {
                 </div>
 
                 <form className="space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
-                    {userType === 'student' && (
-                        <Input
-                            label="Full name"
-                            placeholder="Your full name"
-                            autoComplete="name"
-                            {...register('fullName')}
-                            error={errors.fullName?.message}
-                        />
-                    )}
+                    <Input
+                        label="Full name"
+                        placeholder="Your full name"
+                        autoComplete="name"
+                        {...register('name')}
+                        error={errors.name?.message}
+                    />
 
                     <Input
                         label="Email"
@@ -148,16 +151,14 @@ export const SignUpPage = () => {
                         error={errors.password?.message}
                     />
 
-                    {userType === 'student' && (
-                        <Input
-                            label="Confirm password"
-                            type="password"
-                            placeholder="Re-enter your password"
-                            autoComplete="new-password"
-                            {...register('confirmPassword')}
-                            error={errors.confirmPassword?.message}
-                        />
-                    )}
+                    <Input
+                        label="Confirm password"
+                        type="password"
+                        placeholder="Re-enter your password"
+                        autoComplete="new-password"
+                        {...register('confirmPassword')}
+                        error={errors.confirmPassword?.message}
+                    />
 
                     <Button className="w-full font-semibold" disabled={isSubmitting || isFormSubmitting} type="submit">
                         {isSubmitting || isFormSubmitting ? 'Creating account...' : 'Sign Up'}

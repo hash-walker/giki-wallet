@@ -23,9 +23,8 @@ const (
 func RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestID := middleware.GetRequestID(r.Context())
-		authHeader := r.Header.Get("Authorization")
 
-		// Get bearer token
+		authHeader := r.Header.Get("Authorization")
 		token, err := GetBearerToken(authHeader)
 		if err != nil {
 			middleware.HandleError(w, err, requestID)

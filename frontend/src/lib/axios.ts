@@ -11,24 +11,21 @@ export const apiClient = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
-    withCredentials: true, // Important for cookies/CSRF tokens
+    withCredentials: false,
 });
 
 // Request interceptor - Add auth token if available
 apiClient.interceptors.request.use(
     (config) => {
-        // Get token from localStorage (or wherever you store it)
         const token = localStorage.getItem('auth_token');
-        
+
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
-        
+
         return config;
     },
-    (error) => {
-        return Promise.reject(error);
-    }
+    (error) => Promise.reject(error)
 );
 
 // Response interceptor - Handle errors globally
@@ -39,9 +36,8 @@ apiClient.interceptors.response.use(
     (error) => {
         // Handle common errors
         if (error.response?.status === 401) {
-            // Unauthorized - clear token and redirect to login
+            // Unauthorized - clear token (expired/invalid)
             localStorage.removeItem('auth_token');
-            // You can add redirect logic here
         }
         
         if (error.response?.status === 403) {

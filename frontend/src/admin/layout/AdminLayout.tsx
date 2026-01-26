@@ -1,6 +1,9 @@
 import { ReactNode } from 'react';
 import { AdminNavbar } from '@/shared/components/layout';
 import { LayoutDashboard, Bus, Users, Settings, Clock, Receipt, Ticket, History } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '@/shared/stores/authStore';
+import { toast } from '@/lib/toast';
 
 interface AdminLayoutProps {
     children: ReactNode;
@@ -24,9 +27,13 @@ const adminNavItems = [
 ];
 
 export const AdminLayout = ({ children }: AdminLayoutProps) => {
+    const navigate = useNavigate();
+    const { signOut } = useAuthStore();
+
     const handleLogout = () => {
-        // TODO: Implement logout
-        console.log('Logout clicked');
+        signOut();
+        toast.success('Signed out');
+        navigate('/auth/sign-in?redirect=/admin', { replace: true });
     };
 
     return (

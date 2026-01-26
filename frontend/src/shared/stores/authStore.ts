@@ -1,6 +1,14 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { signUp, signIn, type SignUpPayload, type SignInPayload, type AuthResponse } from '@/shared/modules/auth/api';
+import {
+    signUp,
+    signIn,
+    signOut as apiSignOut,
+    getMe,
+    verifyEmail,
+    type SignUpPayload,
+    type SignInPayload,
+    type AuthResponse,
+} from '@/shared/modules/auth/api';
 
 export type AuthUserType = 'student' | 'employee';
 
@@ -18,10 +26,12 @@ type AuthState = {
     token: string | null;
     user: AuthUser | null;
     isLoading: boolean;
+    initialized: boolean;
     error: string | null;
 
-    setToken: (token: string | null) => void;
     signOut: () => void;
+    loadMe: () => Promise<void>;
+    verifyAndLogin: (token: string) => Promise<void>;
 
     registerUser: (input: SignUpPayload) => Promise<AuthUser>;
     login: (input: SignInPayload) => Promise<void>;
@@ -30,10 +40,11 @@ type AuthState = {
 function getApiErrorMessage(err: unknown): string {
     if (typeof err !== 'object' || err === null) return 'Something went wrong';
     const maybeAxios = err as {
-        response?: { data?: { error?: unknown; message?: unknown } };
+        response?: { data?: { code?: unknown; error?: unknown; message?: unknown } };
         message?: unknown;
     };
     const msg =
+        maybeAxios.response?.data?.message ||
         maybeAxios.response?.data?.error ||
         maybeAxios.response?.data?.message ||
         maybeAxios.message;
@@ -45,69 +56,83 @@ function mapAuthResponseToUser(data: AuthResponse): AuthUser {
         id: data.id,
         name: data.name,
         email: data.email,
+        phone_number: data.phone_number ?? null,
         user_type: data.user_type,
     };
 }
 
 export const useAuthStore = create<AuthState>()(
-    persist(
-        (set) => ({
-            token: localStorage.getItem('auth_token'),
-            user: null,
-            isLoading: false,
-            error: null,
+    (set) => ({
+        token: localStorage.getItem('auth_token'),
+        user: null,
+        isLoading: false,
+        initialized: false,
+        error: null,
 
-            setToken: (token) => {
-                if (token) localStorage.setItem('auth_token', token);
-                else localStorage.removeItem('auth_token');
-                set({ token });
-            },
+        signOut: () => {
+            void apiSignOut().catch(() => {});
+            localStorage.removeItem('auth_token');
+            set({ token: null, user: null, error: null, isLoading: false, initialized: true });
+        },
 
-            signOut: () => {
+        loadMe: async () => {
+            try {
+                const token = localStorage.getItem('auth_token');
+                if (!token) {
+                    set({ token: null, user: null, initialized: true });
+                    return;
+                }
+                const data = await getMe();
+                set({ token, user: mapAuthResponseToUser(data), initialized: true });
+            } catch {
                 localStorage.removeItem('auth_token');
-                set({ token: null, user: null, error: null, isLoading: false });
-            },
+                set({ token: null, user: null, initialized: true });
+            }
+        },
 
-            registerUser: async (input) => {
-                set({ isLoading: true, error: null });
-                try {
-                    const data = await signUp(input);
-                    const user = mapAuthResponseToUser(data);
+        verifyAndLogin: async (token: string) => {
+            set({ isLoading: true, error: null });
+            try {
+                const data = await verifyEmail(token);
+                const accessToken = data.auth?.access_token;
+                if (!accessToken) throw new Error('No token received');
+                localStorage.setItem('auth_token', accessToken);
+                set({ token: accessToken, user: mapAuthResponseToUser(data), isLoading: false, error: null, initialized: true });
+            } catch (e) {
+                const message = getApiErrorMessage(e);
+                set({ error: message, isLoading: false });
+                throw new Error(message);
+            }
+        },
 
-                    set({ user, isLoading: false });
-                    return user;
-                } catch (e) {
-                    const message = getApiErrorMessage(e);
-                    set({ error: message, isLoading: false });
-                    throw new Error(message);
-                }
-            },
+        registerUser: async (input) => {
+            set({ isLoading: true, error: null });
+            try {
+                const data = await signUp(input);
+                const user = mapAuthResponseToUser(data);
+                // Register does not sign in (students must verify; employees may need approval).
+                set({ isLoading: false, error: null });
+                return user;
+            } catch (e) {
+                const message = getApiErrorMessage(e);
+                set({ error: message, isLoading: false });
+                throw new Error(message);
+            }
+        },
 
-            login: async (input) => {
-                set({ isLoading: true, error: null });
-                try {
-                    const data = await signIn(input);
-
-                    // Backend response structure: { ..., auth: { access_token: "..." }, ... }
-                    // Also handles legacy/fallback structure if needed
-                    const token = data.auth?.access_token || data.token;
-
-                    if (!token) throw new Error("No token received");
-
-                    localStorage.setItem('auth_token', token);
-
-                    const user = mapAuthResponseToUser(data);
-                    set({ token: token, user: user, isLoading: false, error: null });
-                } catch (e) {
-                    const message = getApiErrorMessage(e);
-                    set({ error: message, isLoading: false });
-                    throw new Error(message);
-                }
-            },
-        }),
-        {
-            name: 'giki-wallet-auth',
-            partialize: (state) => ({ token: state.token, user: state.user }),
-        }
-    )
+        login: async (input) => {
+            set({ isLoading: true, error: null });
+            try {
+                const data = await signIn(input);
+                const accessToken = data.auth?.access_token;
+                if (!accessToken) throw new Error('No token received');
+                localStorage.setItem('auth_token', accessToken);
+                set({ token: accessToken, user: mapAuthResponseToUser(data), isLoading: false, error: null, initialized: true });
+            } catch (e) {
+                const message = getApiErrorMessage(e);
+                set({ error: message, isLoading: false });
+                throw new Error(message);
+            }
+        },
+    })
 );

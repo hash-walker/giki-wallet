@@ -3,6 +3,7 @@ package transport
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -22,6 +23,24 @@ func NewHandler(service *Service) *Handler {
 	}
 }
 
+func getUserRoleForTransport(r *http.Request) string {
+	role, ok := auth.GetUserRoleFromContext(r.Context())
+	if !ok || strings.TrimSpace(role) == "" {
+		// Default fallback
+		return "STUDENT"
+	}
+
+	switch strings.ToLower(role) {
+	case "student":
+		return "STUDENT"
+	case "employee":
+		return "EMPLOYEE"
+	default:
+		// Keep it uppercase for DB lookups if custom values appear
+		return strings.ToUpper(role)
+	}
+}
+
 func (h *Handler) HoldSeats(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
 	userID, ok := auth.GetUserIDFromContext(r.Context())
@@ -30,10 +49,7 @@ func (h *Handler) HoldSeats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userRole, ok := r.Context().Value("user_type").(string)
-	if !ok {
-		userRole = "STUDENT" // Default fallback
-	}
+	userRole := getUserRoleForTransport(r)
 
 	var req HoldSeatsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -58,10 +74,7 @@ func (h *Handler) ConfirmBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userRole, ok := r.Context().Value("user_type").(string)
-	if !ok {
-		userRole = "STUDENT" // Default fallback
-	}
+	userRole := getUserRoleForTransport(r)
 
 	var req ConfirmBatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -80,10 +93,7 @@ func (h *Handler) ConfirmBatch(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CancelTicket(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
-	userRole, ok := r.Context().Value("user_type").(string)
-	if !ok {
-		userRole = "STUDENT" // Default fallback
-	}
+	userRole := getUserRoleForTransport(r)
 
 	ticketIDParam := chi.URLParam(r, "ticket_id")
 	ticketID, err := uuid.Parse(ticketIDParam)

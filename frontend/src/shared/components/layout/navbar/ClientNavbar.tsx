@@ -1,140 +1,110 @@
-import { useState } from 'react';
-import { BaseNavbar } from './BaseNavbar';
+import { useNavigate } from 'react-router-dom';
+import { User } from 'lucide-react';
+import { Logo } from '@/shared/components/ui/Logo';
 import { Button } from '@/shared/components/ui/button';
-import { cn } from '@/lib/utils';
-import { X } from 'lucide-react';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu';
 
 interface ClientNavbarProps {
     onMyBookingsClick?: () => void;
+    onMyAccountClick?: () => void;
     onSignInClick?: () => void;
     onSignUpClick?: () => void;
+    onLogoutClick?: () => void;
+    isAuthenticated: boolean;
 }
 
-export const ClientNavbar = ({ 
-    onMyBookingsClick, 
+export const ClientNavbar = ({
+    onMyBookingsClick,
+    onMyAccountClick,
     onSignInClick,
-    onSignUpClick
+    onSignUpClick,
+    onLogoutClick,
+    isAuthenticated,
 }: ClientNavbarProps) => {
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-    const handleMyBookingsClick = (e: React.MouseEvent) => {
-        e.preventDefault();
-        onMyBookingsClick?.();
-        setIsMobileMenuOpen(false);
-    };
-
-    const handleSignInClick = (e: React.MouseEvent) => {
-        e.preventDefault();
-        onSignInClick?.();
-        setIsMobileMenuOpen(false);
-    };
-
-    const handleSignUpClick = (e: React.MouseEvent) => {
-        e.preventDefault();
-        onSignUpClick?.();
-        setIsMobileMenuOpen(false);
-    };
-
-    const navContent = (
-        <>
-            <a 
-                href="#" 
-                onClick={handleMyBookingsClick}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-white/80 hover:text-white hover:bg-white/10 text-sm font-medium cursor-pointer"
-            >
-                My Bookings
-            </a>
-            <Button
-                variant="ghost"
-                size="sm"
-                className="text-white hover:bg-white/10 font-medium"
-                onClick={handleSignInClick}
-            >
-                Sign In
-            </Button>
-            <Button
-                variant="outline"
-                size="sm"
-                className="border-white/30 text-white bg-transparent hover:bg-white/10 hover:text-white font-medium"
-                onClick={handleSignUpClick}
-            >
-                Sign Up
-            </Button>
-        </>
-    );
-
-    const mobileMenu = (
-        <div className={cn(
-            "md:hidden fixed inset-0 z-50 transition-all duration-300",
-            isMobileMenuOpen ? "visible" : "invisible delay-300"
-        )}>
-            {/* Backdrop */}
-            <div
-                className={cn(
-                    "absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300",
-                    isMobileMenuOpen ? "opacity-100" : "opacity-0"
-                )}
-                onClick={() => setIsMobileMenuOpen(false)}
-            />
-
-            {/* Drawer */}
-            <nav className={cn(
-                "absolute right-0 top-0 h-full w-72 bg-white shadow-xl transition-transform duration-300 ease-in-out flex flex-col",
-                isMobileMenuOpen ? "translate-x-0" : "translate-x-full"
-            )}>
-                {/* Header */}
-                <div className="flex justify-between items-center p-4 border-b border-gray-200">
-                    <span className="font-bold text-primary text-lg">Menu</span>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                        <X className="h-5 w-5" />
-                    </Button>
-                </div>
-
-                {/* Nav Links */}
-                <div className="flex-1 p-4">
-                    <div className="space-y-1">
-                        <a 
-                            href="#" 
-                            onClick={handleMyBookingsClick}
-                            className="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-xl font-medium transition-colors"
-                        >
-                            My Bookings
-                        </a>
-                    </div>
-                </div>
-
-                {/* Footer */}
-                <div className="p-4 border-t border-gray-200">
-                    <Button
-                        className="w-full font-semibold"
-                        onClick={handleSignInClick}
-                    >
-                        Sign In
-                    </Button>
-                    <Button
-                        variant="outline"
-                        className="w-full font-semibold mt-2"
-                        onClick={handleSignUpClick}
-                    >
-                        Sign Up
-                    </Button>
-                </div>
-            </nav>
-        </div>
-    );
+    const navigate = useNavigate();
 
     return (
-        <BaseNavbar
-            logoLink="/"
-            navContent={navContent}
-            mobileMenu={mobileMenu}
-            onMobileMenuToggle={() => setIsMobileMenuOpen(true)}
-        />
+        <nav className="sticky top-0 z-50 w-full border-b border-gray-200/50 bg-white/80 backdrop-blur-xl transition-all shadow-sm">
+            <div className="max-w-5xl mx-auto px-4 lg:px-6 h-16 flex items-center justify-between">
+                {/* Logo */}
+                <button
+                    onClick={() => navigate('/')}
+                    className="flex items-center gap-2.5 group focus:outline-none"
+                    aria-label="Go to home"
+                >
+                    <Logo />
+                </button>
+
+                {/* Actions */}
+                <div className="flex items-center gap-3">
+                    {isAuthenticated ? (
+                        <>
+                            <div className="hidden md:flex items-center gap-2 mr-2">
+                                <Button
+                                    variant="ghost"
+                                    className="text-gray-600 hover:text-gray-900 hover:bg-gray-100/50 rounded-full h-9 px-4 text-sm font-medium"
+                                    onClick={onMyBookingsClick}
+                                >
+                                    My Tickets
+                                </Button>
+                            </div>
+
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-10 w-10 rounded-full bg-gray-100/50 text-gray-700 hover:bg-gray-100 border border-gray-200/50 shadow-sm transition-all"
+                                    >
+                                        <User className="w-5 h-5" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56 mt-2 rounded-2xl p-2 border-gray-200 shadow-xl bg-white/95 backdrop-blur-sm">
+                                    <DropdownMenuLabel className="px-2 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                        Account
+                                    </DropdownMenuLabel>
+                                    <DropdownMenuItem onClick={onMyAccountClick} className="rounded-lg cursor-pointer font-medium text-gray-700 hover:bg-gray-50">
+                                        Profile settings
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={onMyBookingsClick} className="rounded-lg md:hidden cursor-pointer font-medium text-gray-700 hover:bg-gray-50">
+                                        My Tickets
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                                    <DropdownMenuItem
+                                        onClick={onLogoutClick}
+                                        className="text-red-600 focus:text-red-700 focus:bg-red-50 rounded-lg cursor-pointer font-medium"
+                                    >
+                                        Sign out
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </>
+                    ) : (
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="ghost"
+                                className="hidden sm:flex text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full font-medium"
+                                onClick={onSignInClick}
+                            >
+                                Sign in
+                            </Button>
+                            <Button
+                                className="bg-primary text-white hover:bg-primary/90 rounded-full font-semibold shadow-md shadow-primary/20 border-0"
+                                onClick={onSignUpClick}
+                            >
+                                Sign up
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </nav>
     );
 };
-

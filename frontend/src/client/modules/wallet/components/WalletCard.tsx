@@ -1,4 +1,4 @@
-import { ArrowUpCircle, ArrowRightLeft, ChevronRight } from 'lucide-react';
+import { ChevronRight, Wallet } from 'lucide-react';
 import { useWallet } from '@/context/WalletContext';
 
 interface WalletCardProps {
@@ -8,61 +8,53 @@ interface WalletCardProps {
 export const WalletCard = ({
     balance = 1000
 }: WalletCardProps) => {
-    const { onHistoryClick, onTopUpClick, onTransferClick } = useWallet();
+    const { onHistoryClick } = useWallet();
     return (
-        <div className="flex flex-row gap-4">
-            {/* Main Wallet Card */}
-            <button
-                onClick={onHistoryClick}
-                className="flex-1 bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300 text-left cursor-pointer"
-                aria-label="View transaction history"
-            >
-                <div className="p-6 flex flex-col min-h-[180px] h-full">
-                    {/* Current Balance Label */}
-                    <p className="text-sm text-gray-500 mb-3">Current Balance</p>
-                    
-                    {/* Balance Amount */}
-                    <div className="flex-1 flex items-start">
-                        <p className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900">
-                            RS <span className="text-primary">{balance.toLocaleString()}</span>
+        <button
+            onClick={onHistoryClick}
+            className="group w-full text-left cursor-pointer relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary to-primary-dark shadow-xl shadow-primary/20 hover:shadow-2xl hover:shadow-primary/30 transition-all duration-300 transform hover:-translate-y-1"
+            aria-label="View transaction history"
+        >
+            {/* Decorative background circles */}
+            <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-white/5 blur-3xl pointer-events-none" />
+            <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-48 h-48 rounded-full bg-accent/10 blur-2xl pointer-events-none" />
+
+            <div className="relative p-6 md:p-8 flex flex-col justify-between h-full min-h-[220px]">
+                <div className="flex items-start justify-between">
+                    <div>
+                        <p className="text-white/60 text-sm font-medium tracking-wide">Total Balance</p>
+                        <p className="mt-2 text-4xl md:text-5xl font-bold text-white tracking-tight">
+                            <span className="text-2xl align-top mr-1 font-medium opacity-70">Rs.</span>
+                            {balance.toLocaleString()}
                         </p>
                     </div>
-                    
-                    {/* History Button - Bottom */}
-                    <div className="flex items-center justify-between w-full mt-auto text-gray-700 group-hover:text-primary transition-colors">
-                        <span className="text-base font-medium">History</span>
-                        <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    <div className="w-12 h-12 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+                        <Wallet className="w-6 h-6 text-white" />
                     </div>
                 </div>
-            </button>
 
-            {/* Action Cards */}
-            <div className="w-32 md:w-40 flex flex-col gap-4 flex-shrink-0">
-                {/* Top Up Card */}
-                <button
-                    onClick={onTopUpClick}
-                    className="w-full bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-all p-4 md:p-5 flex flex-col items-center gap-2 group cursor-pointer"
-                    aria-label="Top up wallet"
-                >
-                    <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center group-hover:bg-primary/90 transition-colors shadow-sm">
-                        <ArrowUpCircle className="w-6 h-6" />
+                <div className="flex items-end justify-between mt-8">
+                    <div className="flex flex-col gap-1">
+                        <div className="flex gap-2">
+                            {/* Mock Chip */}
+                            <div className="w-10 h-8 rounded-md bg-yellow-200/20 border border-yellow-200/30 relative overflow-hidden">
+                                <div className="absolute inset-0 bg-gradient-to-tr from-yellow-500/10 to-transparent" />
+                                <div className="absolute top-1/2 left-0 w-full h-[1px] bg-yellow-200/30" />
+                                <div className="absolute left-1/2 top-0 h-full w-[1px] bg-yellow-200/30" />
+                            </div>
+                            <div className="text-white/40 text-xs self-end mb-1">GIKI Wallet</div>
+                        </div>
+                        <p className="text-white/90 font-mono tracking-widest text-lg mt-2">
+                            •••• •••• •••• 4242
+                        </p>
                     </div>
-                    <span className="text-sm md:text-base font-medium text-gray-700 group-hover:text-primary transition-colors">Top up</span>
-                </button>
 
-                {/* Transfer Card */}
-                <button
-                    onClick={onTransferClick}
-                    className="w-full bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-all p-4 md:p-5 flex flex-col items-center gap-2 group cursor-pointer"
-                    aria-label="Transfer money"
-                >
-                    <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center group-hover:bg-primary/90 transition-colors shadow-sm">
-                        <ArrowRightLeft className="w-6 h-6" />
+                    <div className="flex items-center gap-1 text-accent-light text-sm font-semibold bg-white/5 px-3 py-1.5 rounded-full border border-white/5 group-hover:bg-white/10 transition-colors">
+                        History <ChevronRight className="w-4 h-4" />
                     </div>
-                    <span className="text-sm md:text-base font-medium text-gray-700 group-hover:text-primary transition-colors">Transfer</span>
-                </button>
+                </div>
             </div>
-        </div>
+        </button>
     );
 };
 

@@ -19,7 +19,7 @@ const getInitials = (name: string): string => {
 
 export const Footer = () => {
     const { data: contributors, isLoading } = useGitHubContributors();
-    
+
     // Use GitHub contributors if available, otherwise fallback
     const creators = contributors && contributors.length > 0
         ? contributors.map(contributor => ({
@@ -31,19 +31,25 @@ export const Footer = () => {
         : fallbackCreators;
 
     return (
-        <footer className="bg-primary text-white mt-auto">
-            <div className="max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-8">
+        <footer className="mt-auto relative overflow-hidden bg-footer-bg text-white">
+            {/* Background Gradients */}
+            <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none opacity-20">
+                <div className="absolute top-0 right-0 w-96 h-96 bg-primary/30 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl -ml-32 -mb-32"></div>
+            </div>
+
+            <div className="relative z-10 max-w-5xl mx-auto px-4 lg:px-6 py-10 md:py-12">
                 <FooterHeader />
 
-                <div className="border-t border-white/20 my-6" />
+                <div className="border-t border-white/10 my-8" />
 
-                <div className="mb-6">
-                    <p className="text-sm text-white/70 text-center md:text-left">
-                        <span className="font-semibold">Note:</span> In case of non-availability of a seat, please contact the Transport Supervisor to arrange an additional vehicle.
+                <div className="mb-8">
+                    <p className="text-sm text-zinc-400 text-center md:text-left leading-relaxed">
+                        <span className="font-semibold text-zinc-300">Note:</span> In case of non-availability of a seat, please contact the Transport Supervisor to arrange an additional vehicle.
                     </p>
                 </div>
 
-                <div className="border-t border-white/20 my-6" />
+                <div className="border-t border-white/10 my-8" />
 
                 <ContributorsSection contributors={creators} isLoading={isLoading} />
             </div>

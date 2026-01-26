@@ -16,11 +16,17 @@ var (
 	// ErrUserNotFound User State Errors
 
 	ErrUserNotFound = errors.New("USER_NOT_FOUND", http.StatusNotFound, "User not found")
-	ErrUserInactive = errors.New("USER_INACTIVE", http.StatusForbidden, "User account is inactive or not verified")
+	ErrUserInactive = errors.New("USER_INACTIVE", http.StatusForbidden, "User account is inactive")
+	ErrUserNotVerified = errors.New("USER_NOT_VERIFIED", http.StatusForbidden, "Please verify your email before signing in")
+	ErrUserPendingApproval = errors.New("USER_PENDING_APPROVAL", http.StatusForbidden, "Your account is pending approval")
 
 	// ErrTokenCreation Token Errors
 
 	ErrTokenCreation   = errors.New("TOKEN_CREATION", http.StatusInternalServerError, "Failed to create token")
 	ErrInvalidPassword = errors.New("INVALID_PASSWORD", http.StatusUnauthorized, "Invalid password")
 	ErrInvalidToken    = errors.New("INVALID_TOKEN", http.StatusUnauthorized, "Invalid or expired token")
+
+	// Verification Errors
+	ErrInvalidVerificationToken = errors.New("INVALID_VERIFICATION_TOKEN", http.StatusBadRequest, "Invalid verification token")
+	ErrVerificationTokenExpired = errors.New("VERIFICATION_TOKEN_EXPIRED", http.StatusBadRequest, "Verification token has expired")
 )

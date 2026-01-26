@@ -4,24 +4,30 @@ import { createContext, useContext, ReactNode } from 'react';
 interface WalletContextType {
     onHistoryClick: () => void;
     onTopUpClick: () => void;
-    onTransferClick: () => void;
+
+    onMyTicketsClick?: () => void;
+    onMyAccountClick?: () => void;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
-export const WalletProvider = ({ 
-    children, 
-    onHistoryClick, 
-    onTopUpClick, 
-    onTransferClick 
-}: { 
+export const WalletProvider = ({
+    children,
+    onHistoryClick,
+    onTopUpClick,
+
+    onMyTicketsClick,
+    onMyAccountClick,
+}: {
     children: ReactNode;
     onHistoryClick: () => void;
     onTopUpClick: () => void;
-    onTransferClick: () => void;
+
+    onMyTicketsClick?: () => void;
+    onMyAccountClick?: () => void;
 }) => {
     return (
-        <WalletContext.Provider value={{ onHistoryClick, onTopUpClick, onTransferClick }}>
+        <WalletContext.Provider value={{ onHistoryClick, onTopUpClick, onMyTicketsClick, onMyAccountClick }}>
             {children}
         </WalletContext.Provider>
     );

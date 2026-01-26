@@ -36,8 +36,9 @@ export const SignInPage = () => {
             await login({ email: data.email.trim(), password: data.password });
             toast.success('Signed in');
             navigate(redirectTo, { replace: true });
-        } catch {
-            toast.error('Sign in failed. Please try again.');
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Sign in failed. Please try again.';
+            toast.error(msg);
         }
     };
 

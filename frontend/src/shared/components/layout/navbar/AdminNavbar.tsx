@@ -4,6 +4,7 @@ import { BaseNavbar } from './BaseNavbar';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/lib/utils';
 import { LucideIcon, LogOut, X } from 'lucide-react';
+import { Logo } from '@/shared/components/ui/Logo';
 
 export interface NavItem {
     path: string;
@@ -34,7 +35,7 @@ export const AdminNavbar = ({ navItems, onLogout }: AdminNavbarProps) => {
             {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;
-                
+
                 return (
                     <Link
                         key={item.path}
@@ -42,8 +43,8 @@ export const AdminNavbar = ({ navItems, onLogout }: AdminNavbarProps) => {
                         className={cn(
                             "flex items-center gap-1.5 xl:gap-2 px-2 xl:px-4 py-2 rounded-lg transition-colors whitespace-nowrap",
                             isActive
-                                ? 'bg-white/20 text-white'
-                                : 'text-white/80 hover:text-white hover:bg-white/10'
+                                ? 'bg-primary/10 text-primary font-semibold'
+                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                         )}
                     >
                         {Icon && <Icon className="w-4 h-4 flex-shrink-0" />}
@@ -59,7 +60,7 @@ export const AdminNavbar = ({ navItems, onLogout }: AdminNavbarProps) => {
             variant="ghost"
             size="sm"
             onClick={onLogout}
-            className="text-white hover:bg-white/10"
+            className="text-gray-600 hover:bg-gray-100 hover:text-gray-900"
         >
             <LogOut className="w-4 h-4 xl:mr-2" />
             <span className="hidden xl:inline">Logout</span>
@@ -104,7 +105,7 @@ export const AdminNavbar = ({ navItems, onLogout }: AdminNavbarProps) => {
                         {navItems.map((item) => {
                             const Icon = item.icon;
                             const isActive = location.pathname === item.path;
-                            
+
                             return (
                                 <Link
                                     key={item.path}
@@ -145,7 +146,9 @@ export const AdminNavbar = ({ navItems, onLogout }: AdminNavbarProps) => {
     return (
         <BaseNavbar
             logoLink="/admin"
-            logoText="Admin Panel"
+            customLogo={
+                <Logo subText="Admin Panel" />
+            }
             navContent={navContent}
             rightActions={rightActions}
             mobileMenu={mobileMenu}

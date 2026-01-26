@@ -1,16 +1,13 @@
+
 import { Ticket, ArrowRight, ArrowLeft } from 'lucide-react';
-import { Modal } from '@/shared/components/ui/Modal';
 import { cn } from '@/lib/utils';
 import { TicketData, formatDate, groupTicketsByDirectionAndDate } from '../utils/ticketHelpers';
-import { TicketCard } from './TicketCard';
+import { TicketCard } from '../components/TicketCard';
 
-interface MyTicketsModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    tickets?: TicketData[];
-}
+import { useNavigate } from 'react-router-dom';
+import { Button } from '@/shared/components/ui/button';
 
-// Generate random 4-digit ticket number
+// Mock data (same as modal)
 const generateTicketNumber = (): string => {
     return Math.floor(1000 + Math.random() * 9000).toString();
 };
@@ -53,46 +50,36 @@ const mockTickets: TicketData[] = [
         relativeRelation: 'Spouse',
         canCancel: true
     },
-    {
-        id: '3',
-        serialNumber: 3,
-        ticketNumber: generateTicketNumber(),
-        routeSerial: 'R003',
-        direction: 'to-giki',
-        fromLocation: 'Lahore',
-        toLocation: 'GIKI',
-        pickupLocation: 'Model Town',
-        date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
-        time: '8:00 AM',
-        status: 'confirmed',
-        busType: 'Student',
-        ticketCategory: 'employee', // Employee on student bus
-        isSelf: true,
-        fullName: 'Alice Smith',
-        canCancel: false
-    }
 ];
 
-
-export const MyTicketsModal = ({
-    isOpen,
-    onClose,
-    tickets = mockTickets
-}: MyTicketsModalProps) => {
+export const TicketsPage = () => {
+    const navigate = useNavigate();
+    const tickets = mockTickets; // In real app, fetch from API
     const groupedTickets = groupTicketsByDirectionAndDate(tickets);
 
     return (
-        <Modal
-            isOpen={isOpen}
-            onClose={onClose}
-            title="My Tickets"
-            size="lg"
-        >
+        <div className="w-full pb-20 md:pb-6">
+            <div className="flex items-center justify-between gap-4 mb-6 pt-6">
+                <h1 className="text-2xl font-bold text-gray-900">My Tickets</h1>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="hidden md:flex"
+                    onClick={() => navigate('/')}
+                >
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Back
+                </Button>
+            </div>
+
             {groupedTickets.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-3xl border border-gray-100 shadow-sm">
                     <Ticket className="w-16 h-16 text-gray-300 mb-4" />
                     <p className="text-gray-600 font-medium">No tickets found</p>
                     <p className="text-sm text-gray-500 mt-2">Your booked tickets will appear here</p>
+                    <Button variant="outline" className="mt-6" onClick={() => navigate('/transport')}>
+                        Book a Trip
+                    </Button>
                 </div>
             ) : (
                 <div className="space-y-8">
@@ -121,7 +108,7 @@ export const MyTicketsModal = ({
                             {dateGroups.map(({ date, tickets: dateTickets }: { date: string; tickets: TicketData[] }) => (
                                 <div key={date} className="space-y-3">
                                     {/* Date Header */}
-                                    <div className="sticky top-0 bg-white py-2 mb-3 z-10">
+                                    <div className="sticky top-14 md:top-0 bg-light-background py-2 z-10">
                                         <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
                                             {formatDate(date)}
                                         </h3>
@@ -137,7 +124,6 @@ export const MyTicketsModal = ({
                     ))}
                 </div>
             )}
-        </Modal>
+        </div>
     );
 };
-

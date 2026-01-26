@@ -19,17 +19,6 @@ type RegisterRequest struct {
 	PhoneNumber string `json:"phone_number"`
 }
 
-type StudentVerifyPayload struct {
-	Email string `json:"email"`
-	Name  string `json:"name"`
-	Link  string `json:"link"`
-}
-
-type EmployeeWaitPayload struct {
-	Email string `json:"email"`
-	Name  string `json:"name"`
-}
-
 type User struct {
 	ID           uuid.UUID `json:"id"`
 	Name         string    `json:"name"`

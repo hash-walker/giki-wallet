@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"crypto/rand"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	auth "github.com/hash-walker/giki-wallet/internal/auth/auth_db"
 	"github.com/hash-walker/giki-wallet/internal/common"
 	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
@@ -57,6 +59,71 @@ func (s *Service) Login(ctx context.Context, req LoginParams) (*LoginResult, err
 
 }
 
+func (s *Service) GetUserByID(ctx context.Context, userID uuid.UUID) (user_db.GikiWalletUser, error) {
+	u, err := s.userQ.GetUserByID(ctx, userID)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return user_db.GikiWalletUser{}, ErrUserNotFound
+		}
+		return user_db.GikiWalletUser{}, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	return u, nil
+}
+
+func (s *Service) VerifyEmailAndIssueTokens(ctx context.Context, token string) (*LoginResult, error) {
+	tokenHash := sha256Hex(token)
+
+	tx, err := s.dbPool.Begin(ctx)
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrTransactionBegin, err)
+	}
+	defer tx.Rollback(ctx)
+
+	var userID uuid.UUID
+	var tokenType string
+	var expiresAt time.Time
+
+	if tokenType != "EMAIL_VERIFICATION" {
+		return nil, ErrInvalidVerificationToken
+	}
+
+	if time.Now().UTC().After(expiresAt.UTC()) {
+		return nil, ErrVerificationTokenExpired
+	}
+
+	u, err := s.userQ.UpdateUserVerification(ctx, userID)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	if _, err := tx.Exec(ctx, ``, tokenHash); err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	expireTime := time.Duration(3600) * time.Second
+	tokenPair, err := s.issueTokenPair(ctx, tx, u, expireTime)
+	if err != nil {
+		return nil, commonerrors.Wrap(ErrTokenCreation, err)
+	}
+
+	res := LoginResult{
+		User:   u,
+		Tokens: tokenPair,
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrTransactionCommit, err)
+	}
+
+	return &res, nil
+}
+
 func (s *Service) authenticateAndIssueTokens(ctx context.Context, tx pgx.Tx, email string, password string) (*LoginResult, error) {
 
 	user, err := s.checkUserAndPassword(ctx, tx, email, password)
@@ -72,8 +139,16 @@ func (s *Service) authenticateAndIssueTokens(ctx context.Context, tx pgx.Tx, ema
 		}
 	}
 
-	if !user.IsActive || !user.IsVerified {
-		return nil, commonerrors.Wrap(ErrUserInactive, fmt.Errorf("user status inactive: active=%v, verified=%v", user.IsActive, user.IsVerified))
+	if !user.IsActive {
+		// Employees generally require manual approval.
+		if user.UserType == "employee" {
+			return nil, commonerrors.Wrap(ErrUserPendingApproval, fmt.Errorf("user pending approval: active=%v, verified=%v", user.IsActive, user.IsVerified))
+		}
+		return nil, commonerrors.Wrap(ErrUserInactive, fmt.Errorf("user inactive: active=%v, verified=%v", user.IsActive, user.IsVerified))
+	}
+
+	if !user.IsVerified {
+		return nil, commonerrors.Wrap(ErrUserNotVerified, fmt.Errorf("user not verified: active=%v, verified=%v", user.IsActive, user.IsVerified))
 	}
 
 	expireTime := time.Duration(3600) * time.Second
@@ -178,4 +253,9 @@ func MakeRefreshToken() (string, error) {
 	refreshToken := hex.EncodeToString(key)
 
 	return refreshToken, nil
+}
+
+func sha256Hex(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])
 }

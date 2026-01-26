@@ -36,12 +36,13 @@ type AuthTokens struct {
 }
 
 type LoginResponse struct {
-	ID        string     `json:"id"`
-	Name      string     `json:"name"`
-	Email     string     `json:"email"`
-	UserType  string     `json:"user_type"`
-	CreatedAt time.Time  `json:"created_at,omitempty"`
-	Auth      AuthTokens `json:"auth"`
+	ID        string      `json:"id"`
+	Name      string      `json:"name"`
+	Email     string      `json:"email"`
+	PhoneNumber string    `json:"phone_number"`
+	UserType  string      `json:"user_type"`
+	CreatedAt time.Time   `json:"created_at,omitempty"`
+	Auth      *AuthTokens `json:"auth,omitempty"`
 }
 
 // ToLoginResponse converts LoginResult to LoginResponse for API response
@@ -50,12 +51,19 @@ func ToLoginResponse(result LoginResult) LoginResponse {
 		ID:        result.User.ID.String(),
 		Name:      result.User.Name,
 		Email:     result.User.Email,
+		PhoneNumber: result.User.PhoneNumber,
 		UserType:  result.User.UserType,
 		CreatedAt: result.User.CreatedAt,
-		Auth: AuthTokens{
-			AccessToken:  result.Tokens.AccessToken,
-			RefreshToken: result.Tokens.RefreshToken,
-			ExpiresAt:    result.Tokens.ExpiresAt,
-		},
+		Auth: func() *AuthTokens {
+			// For endpoints like /auth/me we may not be issuing tokens.
+			if result.Tokens.AccessToken == "" && result.Tokens.RefreshToken == "" && result.Tokens.ExpiresAt == 0 {
+				return nil
+			}
+			return &AuthTokens{
+				AccessToken:  result.Tokens.AccessToken,
+				RefreshToken: result.Tokens.RefreshToken,
+				ExpiresAt:    result.Tokens.ExpiresAt,
+			}
+		}(),
 	}
 }

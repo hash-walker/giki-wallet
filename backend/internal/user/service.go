@@ -2,16 +2,18 @@ package user
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/hash-walker/giki-wallet/internal/common"
@@ -48,20 +50,34 @@ func (s *Service) CreateUser(ctx context.Context, req RegisterRequest) (User, er
 	}
 
 	passwordHash, err := HashPassword(req.Password)
-	token, _ := generateBase64Token(64)
+	if err != nil {
+		return User{}, commonerrors.Wrap(commonerrors.ErrInternal, err)
+	}
+
 	var user user_db.GikiWalletUser
+	var verificationToken string
 
 	err = common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
 		userQ := s.userQ.WithTx(tx)
+
+		isActive := false
+		isVerified := false
+		// Students can become active immediately, but must verify email first.
+		if req.UserType == "student" {
+			isActive = true
+		}
 
 		var createErr error
 		user, createErr = userQ.CreateUser(ctx, user_db.CreateUserParams{
 			Name:         req.Name,
 			Email:        req.Email,
 			PhoneNumber:  req.PhoneNumber,
+			AuthProvider: "Local",
 			PasswordAlgo: "BCRYPT",
 			UserType:     req.UserType,
 			PasswordHash: passwordHash,
+			IsActive:     isActive,
+			IsVerified:   isVerified,
 		})
 
 		if createErr != nil {
@@ -70,14 +86,43 @@ func (s *Service) CreateUser(ctx context.Context, req RegisterRequest) (User, er
 			return translateDBError(createErr)
 		}
 
-		return s.createRoleProfile(ctx, tx, user.ID, req)
+		if err := s.createRoleProfile(ctx, tx, user.ID, req); err != nil {
+			return err
+		}
+
+		// Create email verification token for students.
+		if req.UserType == "student" {
+			tok, err := generateBase64Token(64)
+			if err != nil {
+				return commonerrors.Wrap(commonerrors.ErrInternal, err)
+			}
+			verificationToken = tok
+
+			tokenHash := sha256Hex(verificationToken)
+			expiresAt := time.Now().UTC().Add(24 * time.Hour)
+
+			err = userQ.CreateAccessToken(ctx, user_db.CreateAccessTokenParams{
+				TokenHash: tokenHash,
+				UserID:    user.ID,
+				Type:      "EMAIL_VERIFICATION",
+				ExpiresAt: expiresAt,
+			})
+
+			if err != nil {
+				return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+			}
+		}
+
+		return nil
 	})
 
 	if err != nil {
 		return User{}, err
 	}
 
-	_ = s.enqueueAccountCreationJob(ctx, token, req)
+	// Enqueue any out-of-band messaging (email).
+	// For students, we include verification token link.
+	_ = s.enqueueAccountCreationJob(ctx, verificationToken, req)
 
 	return mapDBUserToUser(user), nil
 }
@@ -139,12 +184,14 @@ func generateBase64Token(n int) (string, error) {
 		return "", err
 	}
 
-	token := os.Getenv("TOKEN_SECRET")
-	mac := hmac.New(sha256.New, []byte(token))
-	mac.Write(b)
-	hash := mac.Sum(nil)
+	token := base64.URLEncoding.EncodeToString(b)
 
-	return strings.ToUpper(hex.EncodeToString(hash)), nil
+	return token, nil
+}
+
+func sha256Hex(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])
 }
 
 func (s *Service) enqueueAccountCreationJob(ctx context.Context, token string, req RegisterRequest) error {
@@ -152,14 +199,23 @@ func (s *Service) enqueueAccountCreationJob(ctx context.Context, token string, r
 
 	switch req.UserType {
 	case "student":
-		err = s.jobs.Enqueue(ctx, "SEND_STUDENT_VERIFY_EMAIL", StudentVerifyPayload{
+		verifyBase := os.Getenv("FRONTEND_VERIFY_URL")
+		if verifyBase == "" {
+			// Local default (nginx serves HTTPS on 8443).
+			verifyBase = "https://localhost:8443/verify"
+		}
+		if token == "" {
+			return commonerrors.Wrap(commonerrors.ErrInternal, errors.New("missing verification token"))
+		}
+
+		err = s.jobs.Enqueue(ctx, "SEND_STUDENT_VERIFY_EMAIL", worker.StudentVerifyPayload{
 			Email: req.Email,
 			Name:  req.Name,
-			Link:  fmt.Sprintf("https://giktransport.giki.edu.pk/verify?token=%s", token),
+			Link:  fmt.Sprintf("%s?token=%s", verifyBase, token),
 		})
 
 	case "employee":
-		err = s.jobs.Enqueue(ctx, "SEND_EMPLOYEE_WAIT_EMAIL", EmployeeWaitPayload{
+		err = s.jobs.Enqueue(ctx, "SEND_EMPLOYEE_WAIT_EMAIL", worker.EmployeeWaitPayload{
 			Email: req.Email,
 			Name:  req.Name,
 		})

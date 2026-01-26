@@ -192,18 +192,18 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 	if userRole == "STUDENT" && totalPrice > 0 {
 		userWallet, err := s.wallet.GetOrCreateWallet(ctx, tx, userID)
 		if err != nil {
-			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+			return nil, err
 		}
 
 		revenueWalletID, err := s.wallet.GetSystemWalletByName(ctx, wallet.TransportSystemWallet, wallet.SystemWalletRevenue)
 		if err != nil {
-			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+			return nil, err
 		}
 
 		amount := int64(totalPrice)
 		err = s.wallet.ExecuteTransaction(ctx, tx, userWallet.ID, revenueWalletID, amount, "TRANSPORT_BOOKING", userID.String(), "Transport ticket purchase")
 		if err != nil {
-			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+			return nil, err
 		}
 	}
 
