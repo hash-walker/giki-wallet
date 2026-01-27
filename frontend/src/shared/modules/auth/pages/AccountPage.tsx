@@ -13,14 +13,7 @@ export const AccountPage = () => {
         navigate('/auth/sign-in');
     };
 
-    if (!user) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-                <p className="text-gray-500">Please sign in to view your account</p>
-                <Button onClick={() => navigate('/auth/sign-in')}>Sign In</Button>
-            </div>
-        )
-    }
+    if (!user) return null;
 
     return (
         <div className="w-full pb-20 md:pb-6 pt-6">

@@ -26,11 +26,11 @@ export const Navbar = ({
     navItems,
     onLogout,
 }: NavbarProps) => {
+    const { user } = useAuthStore();
+
     if (variant === 'admin' && navItems) {
         return <AdminNavbar navItems={navItems} onLogout={onLogout} />;
     }
-
-    const { user } = useAuthStore();
 
     return (
         <ClientNavbar

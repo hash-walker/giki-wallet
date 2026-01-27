@@ -9,7 +9,7 @@ import { TopUpPage } from '@/client/modules/wallet/pages/TopUpPage';
 import { TicketsPage } from '@/client/modules/booking/pages/TicketsPage';
 import { AccountPage } from '@/shared/modules/auth/pages/AccountPage';
 import { Toaster } from '@/shared/components/ui/sonner';
-import { AuthLayout, SignInPage, SignUpPage, VerifyEmailPage } from '@/shared/modules/auth';
+import { AuthLayout, SignInPage, SignUpPage, VerifyEmailPage, RequireAuth } from '@/shared/modules/auth';
 import { useAuthStore } from '@/shared/stores/authStore';
 
 const router = createBrowserRouter([
@@ -57,97 +57,99 @@ const router = createBrowserRouter([
         path: '/transport',
         element: (
             <ClientLayout>
-                <TransportPage />
+                <RequireAuth />
             </ClientLayout>
         ),
+        children: [
+            {
+                index: true,
+                element: <TransportPage />,
+            },
+        ],
     },
     {
         path: '/top-up',
         element: (
             <ClientLayout>
-                <TopUpPage />
+                <RequireAuth />
             </ClientLayout>
         ),
+        children: [
+            {
+                index: true,
+                element: <TopUpPage />,
+            },
+        ],
     },
     {
         path: '/tickets',
         element: (
             <ClientLayout>
-                <TicketsPage />
+                <RequireAuth />
             </ClientLayout>
         ),
+        children: [
+            {
+                index: true,
+                element: <TicketsPage />,
+            },
+        ],
     },
     {
         path: '/account',
         element: (
             <ClientLayout>
-                <AccountPage />
+                <RequireAuth />
             </ClientLayout>
         ),
+        children: [
+            {
+                index: true,
+                element: <AccountPage />,
+            },
+        ],
     },
     {
-        path: '/admin',
         element: (
             <AdminLayout>
-                <AdminDashboard />
+                <RequireAuth />
             </AdminLayout>
         ),
-    },
-    {
-        path: '/admin/routes',
-        element: (
-            <AdminLayout>
-                <RoutesPage />
-            </AdminLayout>
-        ),
-    },
-    {
-        path: '/admin/time-slots',
-        element: (
-            <AdminLayout>
-                <TimeSlotsPage />
-            </AdminLayout>
-        ),
-    },
-    {
-        path: '/admin/tickets',
-        element: (
-            <AdminLayout>
-                <AdminTicketsPage />
-            </AdminLayout>
-        ),
-    },
-    {
-        path: '/admin/users',
-        element: (
-            <AdminLayout>
-                <UsersPage />
-            </AdminLayout>
-        ),
-    },
-    {
-        path: '/admin/transactions',
-        element: (
-            <AdminLayout>
-                <TransactionsPage />
-            </AdminLayout>
-        ),
-    },
-    {
-        path: '/admin/history',
-        element: (
-            <AdminLayout>
-                <HistoryPage />
-            </AdminLayout>
-        ),
-    },
-    {
-        path: '/admin/settings',
-        element: (
-            <AdminLayout>
-                <SettingsPage />
-            </AdminLayout>
-        ),
+        children: [
+            {
+                path: '/admin',
+                index: true,
+                element: <AdminDashboard />,
+            },
+            {
+                path: '/admin/routes',
+                element: <RoutesPage />,
+            },
+            {
+                path: '/admin/time-slots',
+                element: <TimeSlotsPage />,
+            },
+            {
+                path: '/admin/tickets',
+                element: <AdminTicketsPage />,
+            },
+            {
+                path: '/admin/users',
+                element: <UsersPage />,
+            },
+            {
+                path: '/admin/transactions',
+                element: <TransactionsPage />,
+            },
+            {
+                path: '/admin/history',
+                element: <HistoryPage />,
+            },
+            {
+                path: '/admin/settings',
+                element: <SettingsPage />,
+            },
+        ],
     },
     {
         path: '*',

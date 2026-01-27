@@ -1,5 +1,5 @@
 
-import { Home, Ticket, User, Wallet } from 'lucide-react';
+import { Home, Ticket, User } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
@@ -8,13 +8,6 @@ import { cn } from '@/lib/utils';
 export const BottomNav = () => {
     const navigate = useNavigate();
     const location = useLocation();
-
-    // Determine active state
-    // Simple logic: if path is /transport, Tickets is active? Or use 'onMyBookingsClick' as a modal?
-    // Current app uses Modals for Tickets and Account.
-    // Let's assume standard routes for improved "App" feel if possible, but user just asked for "design it like mobile app".
-    // Since Tickets/Account are modals in `ClientLayout`, we treat them as actions.
-    // 'Home' is '/', 'Transport' is '/transport'.
 
     const isActive = (path: string) => location.pathname === path;
 

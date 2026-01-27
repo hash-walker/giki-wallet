@@ -251,19 +251,7 @@ export const TransportPage = () => {
         );
     }
 
-    if (!user) {
-        return (
-            <div className="max-w-xl mx-auto py-10">
-                <div className="bg-white border border-gray-200 rounded-2xl p-6">
-                    <h1 className="text-xl font-bold text-gray-900">Transport</h1>
-                    <p className="text-sm text-gray-600 mt-2">Please sign in to book transport.</p>
-                    <Button className="mt-4" onClick={() => navigate('/auth/sign-in?redirect=/transport')}>
-                        Sign in
-                    </Button>
-                </div>
-            </div>
-        );
-    }
+
 
     return (
         <div className="space-y-6">
