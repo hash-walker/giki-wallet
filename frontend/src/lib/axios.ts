@@ -39,17 +39,24 @@ apiClient.interceptors.response.use(
             // Unauthorized - clear token (expired/invalid)
             localStorage.removeItem('auth_token');
         }
-        
+
         if (error.response?.status === 403) {
             // Forbidden
             console.error('Access forbidden');
         }
-        
-        if (error.response?.status >= 500) {
+
+        if (error.code === 'ECONNABORTED') {
+            console.warn('Request timed out. The server might be busy or restarting.');
+        } else if (error.response?.status >= 500) {
             // Server error
-            console.error('Server error:', error.response.data);
+            const data = error.response.data;
+            if (typeof data === 'string' && data.includes('<html')) {
+                console.warn(`Server error (${error.response.status}): Service is currently unavailable (Proxy/Edge error).`);
+            } else {
+                console.error('Server error:', data);
+            }
         }
-        
+
         return Promise.reject(error);
     }
 );

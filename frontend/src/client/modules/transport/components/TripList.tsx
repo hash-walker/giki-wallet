@@ -53,6 +53,10 @@ export function TripList({ trips, loading, selectedTripId, onSelectTrip }: TripL
                                     </p>
                                 </div>
 
+                                <p className="text-[10px] font-black text-primary uppercase tracking-[0.15em] mb-1">
+                                    {t.route_name}
+                                </p>
+
                                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">
                                     {new Date(t.departure_time).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
                                 </p>

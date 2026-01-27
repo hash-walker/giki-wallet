@@ -1,8 +1,8 @@
 import { MapPin, ShieldCheck } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Select } from '@/shared/components/ui/Select';
-import { Trip } from '../api';
-import { buildStopOptions, filterDropoffOptions, isFromGIKI, isToGIKI, getStopById } from '../utils';
+import { Trip } from '../validators';
+import { buildStopOptions, filterDropoffOptions, filterPickupOptions, isFromGIKI, isToGIKI, getStopById } from '../utils';
 
 interface BookingFormProps {
     trip: Trip;
@@ -12,6 +12,7 @@ interface BookingFormProps {
     onDropoffChange: (id: string) => void;
     seatCount: number;
     onSeatCountChange: (count: number) => void;
+    remainingQuota: number;
     primaryActionLabel: string;
     onPrimaryAction: () => void;
     primaryActionDisabled: boolean;
@@ -27,13 +28,14 @@ export function BookingForm({
     onDropoffChange,
     seatCount,
     onSeatCountChange,
+    remainingQuota,
     primaryActionLabel,
     onPrimaryAction,
     primaryActionDisabled,
     secondaryActionLabel,
     onSecondaryAction,
 }: BookingFormProps) {
-    const stopOptions = buildStopOptions(trip.stops);
+    const pickupOptions = filterPickupOptions(trip.stops, dropoffStopId);
     const dropoffOptions = filterDropoffOptions(trip.stops, pickupStopId);
 
     const isOutbound = isFromGIKI(trip.stops);
@@ -42,11 +44,16 @@ export function BookingForm({
     const pickupStop = getStopById(trip.stops, pickupStopId);
     const dropoffStop = getStopById(trip.stops, dropoffStopId);
 
-    const maxSeats = Math.max(1, Math.min(trip.available_seats, 5));
-    const seatsOptions = Array.from({ length: maxSeats }, (_, i) => ({
-        value: String(i + 1),
-        label: `${i + 1} seat${i + 1 > 1 ? 's' : ''}`,
-    }));
+    const maxQuotaSeats = Math.max(0, remainingQuota);
+    const maxTripSeats = trip.available_seats;
+    const maxSeats = Math.max(0, Math.min(maxTripSeats, Math.min(maxQuotaSeats, 5)));
+
+    const seatsOptions = maxSeats > 0
+        ? Array.from({ length: maxSeats }, (_, i) => ({
+            value: String(i + 1),
+            label: `${i + 1} seat${i + 1 > 1 ? 's' : ''}`,
+        }))
+        : [{ value: '0', label: '0 seats' }];
 
     return (
         <div className="mt-8 border-t border-slate-100 pt-8 animate-in fade-in slide-in-from-bottom-4 duration-700 bg-slate-50/30 -mx-8 px-8 pb-8 -mb-8 rounded-b-[2rem]">
@@ -59,13 +66,15 @@ export function BookingForm({
                     <div className="space-y-4">
                         {isOutbound ? (
                             <div className="space-y-4">
-                                <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-sm ring-1 ring-slate-200/50">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pickup (Fixed)</p>
-                                    <p className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-accent" />
-                                        {pickupStop?.stop_name || 'GIKI'}
-                                    </p>
-                                </div>
+                                <Select
+                                    label="Pickup (Fixed)"
+                                    options={pickupOptions}
+                                    value={pickupStopId}
+                                    onChange={() => { }}
+                                    disabled={true}
+                                    placeholder="GIKI"
+                                    className="bg-slate-50 border-slate-100 rounded-2xl h-14 font-bold opacity-70 cursor-not-allowed"
+                                />
                                 <Select
                                     label="Select Dropoff Location"
                                     options={dropoffOptions}
@@ -79,25 +88,27 @@ export function BookingForm({
                             <div className="space-y-4">
                                 <Select
                                     label="Select Pickup Location"
-                                    options={stopOptions}
+                                    options={pickupOptions}
                                     value={pickupStopId}
                                     onChange={onPickupChange}
                                     placeholder="Choose pickup point"
                                     className="bg-white border-slate-100 rounded-2xl h-14 font-bold shadow-sm"
                                 />
-                                <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-sm ring-1 ring-slate-200/50">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Dropoff (Fixed)</p>
-                                    <p className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                                        {dropoffStop?.stop_name || 'GIKI'}
-                                    </p>
-                                </div>
+                                <Select
+                                    label="Dropoff (Fixed)"
+                                    options={dropoffOptions}
+                                    value={dropoffStopId}
+                                    onChange={() => { }}
+                                    disabled={true}
+                                    placeholder="GIKI"
+                                    className="bg-slate-50 border-slate-100 rounded-2xl h-14 font-bold opacity-70 cursor-not-allowed"
+                                />
                             </div>
                         ) : (
                             <>
                                 <Select
                                     label="Pickup"
-                                    options={stopOptions}
+                                    options={pickupOptions}
                                     value={pickupStopId}
                                     onChange={onPickupChange}
                                     placeholder="Select pickup"
@@ -128,17 +139,26 @@ export function BookingForm({
                         options={seatsOptions}
                         value={String(seatCount)}
                         onChange={(v) => {
-                            const n = Math.max(1, parseInt(v, 10) || 1);
+                            const n = parseInt(v, 10) || 0;
                             onSeatCountChange(n);
                         }}
-                        placeholder="Select seats"
+                        disabled={maxSeats === 0}
+                        placeholder={maxSeats === 0 ? "Quota Exceeded" : "Select seats"}
                         className="bg-white border-slate-100 rounded-2xl h-14 font-bold shadow-sm"
                     />
-                    <div className="mt-4 p-4 rounded-2xl bg-primary/5 border border-primary/10">
-                        <p className="text-[10px] font-black text-primary/60 uppercase tracking-widest mb-1">Notice</p>
-                        <p className="text-xs text-primary/80 font-bold leading-relaxed">
-                            Max 5 seats allowed per booking.
-                            Current availability: <span className="text-primary font-black uppercase tracking-widest ml-1">{trip.available_seats} spots</span>.
+                    <div className={`mt-4 p-4 rounded-2xl border ${remainingQuota <= 0 ? 'bg-red-50 border-red-100' : 'bg-primary/5 border-primary/10'}`}>
+                        <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${remainingQuota <= 0 ? 'text-red-500' : 'text-primary/60'}`}>
+                            {remainingQuota <= 0 ? 'Quota Exceeded' : 'Notice'}
+                        </p>
+                        <p className={`text-xs font-bold leading-relaxed ${remainingQuota <= 0 ? 'text-red-600' : 'text-primary/80'}`}>
+                            {remainingQuota <= 0 ? (
+                                `You have reached your weekly booking limit for this direction.`
+                            ) : (
+                                <>
+                                    Max 5 seats allowed. Available quota: <span className="text-primary font-black uppercase tracking-widest ml-1">{remainingQuota} spots</span>.
+                                    Current Trip Availability: <span className="text-primary font-black uppercase tracking-widest ml-1">{trip.available_seats} spots</span>.
+                                </>
+                            )}
                         </p>
                     </div>
                 </div>

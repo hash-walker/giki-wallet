@@ -52,6 +52,16 @@ export function filterDropoffOptions(stops: TripStop[], pickupId: string | null)
         .map((s) => ({ value: s.stop_id, label: s.stop_name }));
 }
 
+export function filterPickupOptions(stops: TripStop[], dropoffId: string | null) {
+    if (!dropoffId) return buildStopOptions(stops);
+    const dropoff = stops.find((s) => s.stop_id === dropoffId);
+    if (!dropoff) return buildStopOptions(stops);
+    return stops
+        .filter((s) => s.sequence < dropoff.sequence)
+        .sort((a, b) => a.sequence - b.sequence)
+        .map((s) => ({ value: s.stop_id, label: s.stop_name }));
+}
+
 /**
  * Returns true if the first stop is GIKI (Outbound)
  */

@@ -1,39 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bus, Clock, MapPin, ShieldCheck } from 'lucide-react';
+import { useNavigate, useBlocker } from 'react-router-dom';
+import { Clock } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
-import { Select } from '@/shared/components/ui/Select';
-import { Modal } from '@/shared/components/ui/Modal';
 import { toast } from '@/lib/toast';
 import { useAuthStore } from '@/shared/stores/authStore';
-import {
-    confirmBatch,
-    getUpcomingTrips,
-    holdSeats,
-    listRoutes,
-    releaseHold,
-    type Trip,
-    type TripStop,
-    type TransportRoute,
-} from '@/client/modules/transport/api';
-import { TransportRouteSelector } from '../components/TransportRouteSelector';
+import { useTransportStore } from '../store';
 import { TripList } from '../components/TripList';
 import { BookingForm } from '../components/BookingForm';
-import { BookingConfirmationModal, Passenger, HeldSeat } from '../components/BookingConfirmationModal';
+import { BookingConfirmationModal, type Passenger, type HeldSeat } from '../components/BookingConfirmationModal';
+import { TransportHeader } from '../components/TransportHeader';
+import { TransportBookingModeSelector } from '../components/TransportBookingModeSelector';
+import { PendingReservationBanner } from '../components/PendingReservationBanner';
+import { AbandonBookingModal } from '../components/AbandonBookingModal';
 import { formatDateTime, getStopById, isFromGIKI, isToGIKI, getGikiStop } from '../utils';
+import { type Trip } from '../api';
 
-function getApiErrorMessage(err: unknown): string {
-    if (typeof err !== 'object' || err === null) return 'Something went wrong';
-    const maybeAxios = err as {
-        response?: { data?: { code?: unknown; error?: unknown; message?: unknown } };
-        message?: unknown;
-    };
-    const msg =
-        maybeAxios.response?.data?.message ||
-        maybeAxios.response?.data?.error ||
-        maybeAxios.message;
-    return typeof msg === 'string' && msg.trim() ? msg : 'Something went wrong';
-}
 
 
 
@@ -43,33 +24,58 @@ function getApiErrorMessage(err: unknown): string {
 
 export const TransportPage = () => {
     const navigate = useNavigate();
-    const { initialized, user } = useAuthStore();
+    const { initialized: authInitialized, user } = useAuthStore();
+    const {
+        allTrips,
+        quota,
+        activeHolds,
+        loading: tripsLoading,
+        initialized,
+        fetchData,
+        releaseAllHolds,
+        reserveSeats: storeReserveSeats,
+        confirmBooking: storeConfirmBooking
+    } = useTransportStore();
 
-    const [routes, setRoutes] = useState<TransportRoute[]>([]);
-    const [routesLoading, setRoutesLoading] = useState(false);
+    const [timeLeft, setTimeLeft] = useState<number>(0);
+    const [abandonModalOpen, setAbandonModalOpen] = useState(false);
 
-    const [roundTrip, setRoundTrip] = useState(false);
+    const blocker = useBlocker(
+        ({ currentLocation, nextLocation }) =>
+            activeHolds.length > 0 && currentLocation.pathname !== nextLocation.pathname
+    );
 
-    const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
-    const [trips, setTrips] = useState<Trip[]>([]);
-    const [tripsLoading, setTripsLoading] = useState(false);
+    useEffect(() => {
+        if (blocker.state === 'blocked') {
+            setAbandonModalOpen(true);
+        }
+    }, [blocker]);
+
+    const getRemainingQuota = (trip: Trip | null) => {
+        if (!trip || !quota) return 5;
+        // For now we assume trips are either GIKI-based or City-based
+        // isFromGIKI = OUTBOUND, isToGIKI = INBOUND
+        if (isFromGIKI(trip.stops)) return quota.outbound.remaining;
+        if (isToGIKI(trip.stops)) return quota.inbound.remaining;
+        return 5; // Default
+    };
+
     const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
-    const selectedTrip = useMemo(() => trips.find((t) => t.trip_id === selectedTripId) || null, [trips, selectedTripId]);
+    const selectedTrip = useMemo(() => allTrips.find((t) => t.trip_id === selectedTripId) || null, [allTrips, selectedTripId]);
 
     const [pickupStopId, setPickupStopId] = useState<string | null>(null);
     const [dropoffStopId, setDropoffStopId] = useState<string | null>(null);
     const [seatCount, setSeatCount] = useState(1);
 
     // Round-trip: second leg
-    const [returnRouteId, setReturnRouteId] = useState<string | null>(null);
-    const [returnTrips, setReturnTrips] = useState<Trip[]>([]);
     const [returnTripId, setReturnTripId] = useState<string | null>(null);
-    const returnTrip = useMemo(() => returnTrips.find((t) => t.trip_id === returnTripId) || null, [returnTrips, returnTripId]);
+    const returnTrip = useMemo(() => allTrips.find((t) => t.trip_id === returnTripId) || null, [allTrips, returnTripId]);
     const [returnPickupStopId, setReturnPickupStopId] = useState<string | null>(null);
     const [returnDropoffStopId, setReturnDropoffStopId] = useState<string | null>(null);
     const [returnSeatCount, setReturnSeatCount] = useState(1);
 
     const [stage, setStage] = useState<'select_outbound' | 'select_return'>('select_outbound');
+    const [roundTrip, setRoundTrip] = useState(false);
 
     const [outboundHolds, setOutboundHolds] = useState<HeldSeat[]>([]);
     const [returnHolds, setReturnHolds] = useState<HeldSeat[]>([]);
@@ -78,107 +84,24 @@ export const TransportPage = () => {
     const [passengers, setPassengers] = useState<Record<string, Passenger>>({});
     const [confirming, setConfirming] = useState(false);
 
+
+
     useEffect(() => {
-        void (async () => {
-            try {
-                setRoutesLoading(true);
-                const data = await listRoutes();
-                setRoutes(data);
-            } catch (e) {
-                toast.error(getApiErrorMessage(e));
-            } finally {
-                setRoutesLoading(false);
-            }
-        })();
-    }, []);
+        void fetchData(true);
+    }, [fetchData]);
 
-    // Load trips for outbound
-    useEffect(() => {
-        if (!selectedRouteId) return;
-        void (async () => {
-            setTripsLoading(true);
-            try {
-                const data = await getUpcomingTrips(selectedRouteId);
-                setTrips(data);
-                setSelectedTripId(null);
-                setPickupStopId(null);
-                setDropoffStopId(null);
-                setSeatCount(1);
-            } catch (e) {
-                toast.error(getApiErrorMessage(e));
-            } finally {
-                setTripsLoading(false);
-            }
-        })();
-    }, [selectedRouteId]);
+    const trips = useMemo(() => {
+        if (stage === 'select_outbound') return allTrips;
 
-    // Load trips for return leg
-    useEffect(() => {
-        if (!roundTrip || stage !== 'select_return' || !returnRouteId) return;
-        void (async () => {
-            setTripsLoading(true);
-            try {
-                const data = await getUpcomingTrips(returnRouteId);
-                setReturnTrips(data);
-                setReturnTripId(null);
-                setReturnPickupStopId(null);
-                setReturnDropoffStopId(null);
-                setReturnSeatCount(1);
-            } catch (e) {
-                toast.error(getApiErrorMessage(e));
-            } finally {
-                setTripsLoading(false);
-            }
-        })();
-    }, [roundTrip, stage, returnRouteId]);
-
-    const routeOptions = useMemo(
-        () => routes.map((r) => ({ value: r.route_id, label: r.route_name })),
-        [routes]
-    );
-
-    const selectedRouteName = useMemo(
-        () => routes.find((r) => r.route_id === selectedRouteId)?.route_name || null,
-        [routes, selectedRouteId]
-    );
-
-    const returnRouteOptions = routeOptions;
-    const returnRouteName = useMemo(
-        () => routes.find((r) => r.route_id === returnRouteId)?.route_name || null,
-        [routes, returnRouteId]
-    );
-
-    // Auto-select return route logic
-    const autoSelectReturn = (outboundId: string | null) => {
-        if (!outboundId) return null;
-        const outbound = routes.find(r => r.route_id === outboundId);
-        if (!outbound) return null;
-
-        // Try to find reverse name
-        // Supports: "A to B", "A - B", "A -> B"
-        const separators = [" to ", " - ", " -> ", " TO "];
-        const name = outbound.route_name;
-
-        for (const sep of separators) {
-            if (name.includes(sep)) {
-                const parts = name.split(sep);
-                if (parts.length === 2) {
-                    const reverseName = `${parts[1].trim()}${sep}${parts[0].trim()}`;
-                    const match = routes.find(r => r.route_name.toLowerCase() === reverseName.toLowerCase());
-                    if (match) return match.route_id;
-                }
-            }
+        // For return leg, show trips that go in opposite direction of outbound
+        if (selectedTrip) {
+            return allTrips.filter(t => t.route_name !== selectedTrip.route_name && t.trip_id !== selectedTrip.trip_id);
         }
-        return null;
-    };
+        return allTrips;
+    }, [allTrips, stage, selectedTrip]);
 
-    // Effect: When roundTrip is turned on, or selectedRouteId changes while roundTrip is on, try to set returnRouteId
-    useEffect(() => {
-        if (roundTrip && selectedRouteId && !returnRouteId) {
-            const autoId = autoSelectReturn(selectedRouteId);
-            if (autoId) setReturnRouteId(autoId);
-        }
-    }, [roundTrip, selectedRouteId]);
+    const selectedRouteName = selectedTrip?.route_name || null;
+    const returnRouteName = returnTrip?.route_name || null;
 
     const canSelectOutbound =
         !!selectedTrip &&
@@ -197,9 +120,8 @@ export const TransportPage = () => {
         returnSeatCount <= Math.max(1, returnTrip.available_seats);
 
     async function doReleaseHolds() {
-        const all = [...outboundHolds, ...returnHolds];
-        if (all.length === 0) return;
-        await Promise.allSettled(all.map((h) => releaseHold(h.hold_id)));
+        if (outboundHolds.length === 0 && returnHolds.length === 0) return;
+        await releaseAllHolds();
         setOutboundHolds([]);
         setReturnHolds([]);
     }
@@ -207,7 +129,7 @@ export const TransportPage = () => {
     async function reserveOutbound() {
         if (!selectedTrip || !pickupStopId || !dropoffStopId) return;
         try {
-            const resp = await holdSeats({
+            const resp = await storeReserveSeats({
                 trip_id: selectedTrip.trip_id,
                 count: seatCount,
                 pickup_stop_id: pickupStopId,
@@ -215,7 +137,6 @@ export const TransportPage = () => {
             });
             setOutboundHolds(resp.holds);
 
-            // initialize passengers for holds
             setPassengers((prev) => {
                 const next = { ...prev };
                 for (const h of resp.holds) {
@@ -231,14 +152,14 @@ export const TransportPage = () => {
                 setConfirmOpen(true);
             }
         } catch (e) {
-            toast.error(getApiErrorMessage(e));
+            // Error handled by store
         }
     }
 
     async function reserveReturnAndReview() {
         if (!returnTrip || !returnPickupStopId || !returnDropoffStopId) return;
         try {
-            const resp = await holdSeats({
+            const resp = await storeReserveSeats({
                 trip_id: returnTrip.trip_id,
                 count: returnSeatCount,
                 pickup_stop_id: returnPickupStopId,
@@ -256,7 +177,7 @@ export const TransportPage = () => {
 
             setConfirmOpen(true);
         } catch (e) {
-            toast.error(getApiErrorMessage(e));
+            // Error handled by store
         }
     }
 
@@ -274,7 +195,7 @@ export const TransportPage = () => {
 
         setConfirming(true);
         try {
-            await confirmBatch({
+            await storeConfirmBooking({
                 confirmations: allHolds.map((h) => ({
                     hold_id: h.hold_id,
                     passenger_name: passengers[h.hold_id].name.trim(),
@@ -282,14 +203,13 @@ export const TransportPage = () => {
                 })),
             });
 
-            toast.success('Booking confirmed');
             setConfirmOpen(false);
             setStage('select_outbound');
             setOutboundHolds([]);
             setReturnHolds([]);
             navigate('/', { replace: true });
         } catch (e) {
-            toast.error(getApiErrorMessage(e));
+            // Error handled by store
         } finally {
             setConfirming(false);
         }
@@ -347,48 +267,27 @@ export const TransportPage = () => {
 
     return (
         <div className="space-y-6">
-            {/* Header Section */}
-            <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-primary via-primary/90 to-primary-dark p-8 text-white shadow-xl shadow-primary/20">
-                {/* Decorative Elements */}
-                <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-white/10 blur-3xl pointer-events-none" />
-                <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-48 h-48 rounded-full bg-accent/30 blur-2xl pointer-events-none" />
+            <PendingReservationBanner
+                count={activeHolds.length}
+                timeLeft={timeLeft}
+                onReleaseAll={releaseAllHolds}
+            />
 
-                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
-                            <Bus className="w-7 h-7 text-white" />
-                        </div>
-                        <div>
-                            <h1 className="text-3xl font-black tracking-tighter text-white drop-shadow-sm uppercase">Transport</h1>
-                            <p className="text-accent-light text-[10px] font-black uppercase tracking-[0.2em] opacity-90">Schedule your ride with ease</p>
-                        </div>
-                    </div>
-                    <Button
-                        onClick={() => navigate('/')}
-                        className="h-12 px-6 rounded-2xl bg-white/10 hover:bg-white/20 border-white/20 text-white backdrop-blur-md transition-all self-start md:self-center font-bold text-xs"
-                    >
-                        <ArrowLeft className="w-4 h-4 mr-2" />
-                        Back to Home
-                    </Button>
-                </div>
-            </div>
+            <TransportHeader />
 
             <div className="grid gap-6">
-                <TransportRouteSelector
-                    routes={routes}
-                    routesLoading={routesLoading}
-                    selectedRouteId={selectedRouteId}
-                    onSelectRoute={setSelectedRouteId}
-                    returnRouteId={returnRouteId}
-                    onSelectReturnRoute={setReturnRouteId}
-                    stage={stage}
+                <TransportBookingModeSelector
                     roundTrip={roundTrip}
-                    onToggleRoundTrip={() => {
-                        if (roundTrip && stage === 'select_return') {
-                            void doReleaseHolds();
-                            setStage('select_outbound');
+                    onToggle={(isRoundTrip) => {
+                        if (isRoundTrip) {
+                            setRoundTrip(true);
+                        } else {
+                            if (roundTrip && stage === 'select_return') {
+                                void doReleaseHolds();
+                                setStage('select_outbound');
+                            }
+                            setRoundTrip(false);
                         }
-                        setRoundTrip((v) => !v);
                     }}
                 />
 
@@ -399,13 +298,13 @@ export const TransportPage = () => {
                     </div>
 
                     <TripList
-                        trips={stage === 'select_outbound' ? trips : returnTrips}
+                        trips={trips}
                         loading={tripsLoading}
                         selectedTripId={stage === 'select_outbound' ? selectedTripId : returnTripId}
                         onSelectTrip={(id) => {
                             if (stage === 'select_outbound') {
                                 setSelectedTripId(id);
-                                const trip = trips.find(t => t.trip_id === id);
+                                const trip = allTrips.find(t => t.trip_id === id);
                                 if (trip && isFromGIKI(trip.stops)) {
                                     setPickupStopId(getGikiStop(trip.stops));
                                     setDropoffStopId(null);
@@ -416,9 +315,15 @@ export const TransportPage = () => {
                                     setPickupStopId(null);
                                     setDropoffStopId(null);
                                 }
+                                // Initialize seat count based on remaining quota
+                                if (trip && getRemainingQuota(trip) <= 0) {
+                                    setSeatCount(0);
+                                } else {
+                                    setSeatCount(1);
+                                }
                             } else {
                                 setReturnTripId(id);
-                                const trip = returnTrips.find(t => t.trip_id === id);
+                                const trip = allTrips.find(t => t.trip_id === id);
                                 if (trip && isFromGIKI(trip.stops)) {
                                     setReturnPickupStopId(getGikiStop(trip.stops));
                                     setReturnDropoffStopId(null);
@@ -428,6 +333,12 @@ export const TransportPage = () => {
                                 } else {
                                     setReturnPickupStopId(null);
                                     setReturnDropoffStopId(null);
+                                }
+                                // Initialize return seat count based on remaining quota
+                                if (trip && getRemainingQuota(trip) <= 0) {
+                                    setReturnSeatCount(0);
+                                } else {
+                                    setReturnSeatCount(1);
                                 }
                             }
                         }}
@@ -452,6 +363,7 @@ export const TransportPage = () => {
                                 if (stage === 'select_outbound') setSeatCount(n);
                                 else setReturnSeatCount(n);
                             }}
+                            remainingQuota={getRemainingQuota(stage === 'select_outbound' ? selectedTrip : returnTrip)}
                             primaryActionLabel={
                                 stage === 'select_outbound'
                                     ? (roundTrip ? 'Reserve & continue' : 'Book')
@@ -476,99 +388,43 @@ export const TransportPage = () => {
                     )}
                 </div>
 
-                {/* Confirm modal */}
-                <Modal
+                <BookingConfirmationModal
                     isOpen={confirmOpen}
                     onClose={async () => {
                         setConfirmOpen(false);
                         await doReleaseHolds();
                     }}
-                    title="Confirm booking"
-                    footer={
-                        <div className="flex gap-2">
-                            <Button
-                                variant="outline"
-                                className="flex-1"
-                                disabled={confirming}
-                                onClick={async () => {
-                                    setConfirmOpen(false);
-                                    await doReleaseHolds();
-                                }}
-                            >
-                                Cancel
-                            </Button>
-                            <Button className="flex-1 font-semibold" disabled={confirming} onClick={confirmBooking}>
-                                {confirming ? 'Confirming…' : 'Confirm'}
-                            </Button>
-                        </div>
-                    }
-                >
-                    <div className="space-y-4">
-                        {outboundSummary && (
-                            <div className="p-4 rounded-xl border border-gray-200 bg-gray-50">
-                                <p className="font-semibold text-gray-900">Outbound</p>
-                                <p className="text-sm text-gray-700 mt-1">{outboundSummary.route}</p>
-                                <p className="text-xs text-gray-600 mt-1">
-                                    {outboundSummary.when} · {outboundSummary.pickup} → {outboundSummary.dropoff} · {outboundSummary.seats}{' '}
-                                    seat(s)
-                                </p>
-                            </div>
-                        )}
+                    confirming={confirming}
+                    onConfirm={confirmBooking}
+                    outboundSummary={outboundSummary}
+                    returnSummary={returnSummary}
+                    outboundHolds={outboundHolds}
+                    returnHolds={returnHolds}
+                    passengers={passengers}
+                    setPassengers={setPassengers}
+                />
 
-                        {roundTrip && returnSummary && (
-                            <div className="p-4 rounded-xl border border-gray-200 bg-gray-50">
-                                <p className="font-semibold text-gray-900">Return</p>
-                                <p className="text-sm text-gray-700 mt-1">{returnSummary.route}</p>
-                                <p className="text-xs text-gray-600 mt-1">
-                                    {returnSummary.when} · {returnSummary.pickup} → {returnSummary.dropoff} · {returnSummary.seats} seat(s)
-                                </p>
-                            </div>
-                        )}
-
-                        <div className="border-t pt-4">
-                            <p className="text-sm font-semibold text-gray-900 mb-2">Passenger details</p>
-                            <div className="space-y-3">
-                                {[...outboundHolds, ...returnHolds].map((h, idx) => {
-                                    const p = passengers[h.hold_id] || { name: '', relation: 'SELF' as const };
-                                    return (
-                                        <div key={h.hold_id} className="p-3 rounded-xl border border-gray-200">
-                                            <p className="text-xs font-semibold text-gray-600 mb-2">Seat {idx + 1}</p>
-                                            <input
-                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
-                                                placeholder="Passenger name"
-                                                value={p.name}
-                                                onChange={(e) =>
-                                                    setPassengers((prev) => ({
-                                                        ...prev,
-                                                        [h.hold_id]: { ...p, name: e.target.value },
-                                                    }))
-                                                }
-                                            />
-                                            <div className="mt-2">
-                                                <Select
-                                                    options={[
-                                                        { value: 'SELF', label: 'Self' },
-                                                        { value: 'SPOUSE', label: 'Spouse' },
-                                                        { value: 'CHILD', label: 'Child' },
-                                                    ]}
-                                                    value={p.relation}
-                                                    onChange={(v) =>
-                                                        setPassengers((prev) => ({
-                                                            ...prev,
-                                                            [h.hold_id]: { ...p, relation: v as Passenger['relation'] },
-                                                        }))
-                                                    }
-                                                    placeholder="Relation"
-                                                    showLabel={false}
-                                                />
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </div>
-                </Modal>
+                <AbandonBookingModal
+                    isOpen={abandonModalOpen}
+                    onClose={() => {
+                        setAbandonModalOpen(false);
+                        blocker.reset?.();
+                    }}
+                    timeLeft={timeLeft}
+                    onAbandon={async () => {
+                        setAbandonModalOpen(false);
+                        try {
+                            await releaseAllHolds();
+                            blocker.proceed?.();
+                        } catch (e) {
+                            // Error handled by store
+                        }
+                    }}
+                    onStay={() => {
+                        setAbandonModalOpen(false);
+                        blocker.reset?.();
+                    }}
+                />
             </div>
         </div>
     );

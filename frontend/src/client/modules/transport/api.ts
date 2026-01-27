@@ -1,73 +1,30 @@
 import { apiClient } from '@/lib/axios';
+import {
+    type TransportRoute,
+    type RouteTemplate,
+    type Trip,
+    type TripStop,
+    type WeeklySummary,
+    type HoldSeatsRequest,
+    type HoldSeatsResponse,
+    type ConfirmBatchRequest,
+    type ConfirmBatchResponse,
+    type QuotaResponse,
+    type ActiveHold
+} from './validators';
 
-export type TransportRoute = {
-    route_id: string;
-    route_name: string;
-};
-
-export type RouteTemplate = {
-    route_id: string;
-    route_name: string;
-    rules: {
-        open_hours_before: number;
-        close_hours_before: number;
-    };
-    stops: Array<{
-        stop_id: string;
-        name: string;
-        sequence: number;
-        is_active: boolean;
-    }>;
-    quick_slots: Array<{
-        slot_id: string;
-        day_of_week: string;
-        departure_time: { time: string }; // backend types.LocalTime wrapper
-    }>;
-};
-
-export type TripStop = {
-    stop_id: string;
-    stop_name: string;
-    sequence: number;
-};
-
-export type Trip = {
-    trip_id: string;
-    departure_time: string;
-    booking_status: 'OPEN' | 'LOCKED' | 'FULL' | 'CLOSED' | 'CANCELLED';
-    opens_at: string;
-    available_seats: number;
-    price: number;
-    stops: TripStop[];
-};
-
-export type HoldSeatsRequest = {
-    trip_id: string;
-    count: number;
-    pickup_stop_id: string;
-    dropoff_stop_id: string;
-};
-
-export type HoldSeatsResponse = {
-    holds: Array<{
-        hold_id: string;
-        expires_at: string;
-    }>;
-};
-
-export type ConfirmBatchRequest = {
-    confirmations: Array<{
-        hold_id: string;
-        passenger_name: string;
-        passenger_relation: 'SELF' | 'SPOUSE' | 'CHILD';
-    }>;
-};
-
-export type ConfirmBatchResponse = {
-    tickets: Array<{
-        ticket_id: string;
-        status: string;
-    }>;
+export type {
+    TransportRoute,
+    RouteTemplate,
+    Trip,
+    TripStop,
+    WeeklySummary,
+    HoldSeatsRequest,
+    HoldSeatsResponse,
+    ConfirmBatchRequest,
+    ConfirmBatchResponse,
+    QuotaResponse,
+    ActiveHold
 };
 
 export async function listRoutes() {
@@ -85,6 +42,20 @@ export async function getUpcomingTrips(routeId: string) {
     return res.data;
 }
 
+export async function getQuota() {
+    const res = await apiClient.get<QuotaResponse>('/transport/quota');
+    return res.data;
+}
+
+export async function getActiveHolds() {
+    const res = await apiClient.get<ActiveHold[]>('/transport/holds/active');
+    return res.data;
+}
+
+export async function releaseAllActiveHolds() {
+    await apiClient.delete('/transport/holds/active');
+}
+
 export async function holdSeats(payload: HoldSeatsRequest) {
     const res = await apiClient.post<HoldSeatsResponse>('/transport/holds', payload);
     return res.data;
@@ -97,5 +68,15 @@ export async function confirmBatch(payload: ConfirmBatchRequest) {
 
 export async function releaseHold(holdId: string) {
     await apiClient.delete(`/transport/holds/${holdId}`);
+}
+
+export async function getWeeklySummary() {
+    const res = await apiClient.get<WeeklySummary>('/transport/weekly-summary');
+    return res.data;
+}
+
+export async function getAllUpcomingTrips() {
+    const res = await apiClient.get<Trip[]>('/transport/trips/upcoming');
+    return res.data;
 }
 

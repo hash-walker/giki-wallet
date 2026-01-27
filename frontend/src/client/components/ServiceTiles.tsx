@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { ArrowRightLeft, ArrowUpCircle, Bus, Ticket, User, ChevronRight } from 'lucide-react';
 import { useWallet } from '@/context/WalletContext';
 import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/shared/stores/authStore';
 
 type Tile = {
     key: string;
@@ -14,42 +15,50 @@ type Tile = {
 
 export const ServiceTiles = ({ onTransportClick }: { onTransportClick?: () => void }) => {
     const { onTopUpClick, onMyTicketsClick, onMyAccountClick } = useWallet();
+    const { user } = useAuthStore();
 
     const tiles = useMemo<Tile[]>(
-        () => [
-            {
-                key: 'topup',
-                title: 'Top up',
-                description: 'Add funds',
-                icon: ArrowUpCircle,
-                onClick: onTopUpClick,
-            },
+        () => {
+            const allTiles = [
+                {
+                    key: 'topup',
+                    title: 'Top up',
+                    description: 'Add funds',
+                    icon: ArrowUpCircle,
+                    onClick: onTopUpClick,
+                },
 
-            {
-                key: 'transport',
-                title: 'Transport',
-                description: 'Book rides',
-                icon: Bus,
-                onClick: onTransportClick,
-            },
-            {
-                key: 'tickets',
-                title: 'Tickets',
-                description: 'My bookings',
-                icon: Ticket,
-                onClick: onMyTicketsClick,
-                disabled: !onMyTicketsClick,
-            },
-            {
-                key: 'account',
-                title: 'Account',
-                description: 'Profile',
-                icon: User,
-                onClick: onMyAccountClick,
-                disabled: !onMyAccountClick,
-            },
-        ],
-        [onMyAccountClick, onMyTicketsClick, onTopUpClick, onTransportClick]
+                {
+                    key: 'transport',
+                    title: 'Transport',
+                    description: 'Book rides',
+                    icon: Bus,
+                    onClick: onTransportClick,
+                },
+                {
+                    key: 'tickets',
+                    title: 'Tickets',
+                    description: 'My bookings',
+                    icon: Ticket,
+                    onClick: onMyTicketsClick,
+                    disabled: !onMyTicketsClick,
+                },
+                {
+                    key: 'account',
+                    title: 'Account',
+                    description: 'Profile',
+                    icon: User,
+                    onClick: onMyAccountClick,
+                    disabled: !onMyAccountClick,
+                },
+            ];
+
+            if (user?.user_type === 'employee') {
+                return allTiles.filter(t => t.key !== 'topup');
+            }
+            return allTiles;
+        },
+        [onMyAccountClick, onMyTicketsClick, onTopUpClick, onTransportClick, user?.user_type]
     );
 
     return (
@@ -76,7 +85,7 @@ export const ServiceTiles = ({ onTransportClick }: { onTransportClick?: () => vo
                         >
                             <div className={cn(
                                 "w-12 h-12 rounded-2xl flex items-center justify-center mb-3 transition-colors duration-300",
-                                t.key === 'transport' ? "bg-accent/10 text-accent group-hover:bg-accent/20" :
+                                t.key === 'transport' ? "bg-primary/10 text-primary border border-primary/5 shadow-inner group-hover:bg-primary/20" :
                                     t.key === 'topup' ? "bg-primary/5 text-primary group-hover:bg-primary/10" :
                                         "bg-gray-50 text-gray-600 group-hover:bg-gray-100"
                             )}>
