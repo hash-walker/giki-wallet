@@ -121,6 +121,91 @@ func (s *Service) HoldSeats(ctx context.Context, userID uuid.UUID, userRole stri
 	return &HoldSeatsResponse{Holds: holds}, nil
 }
 
+func (s *Service) GetUserQuota(ctx context.Context, userID uuid.UUID, userRole string) (*QuotaResponse, error) {
+	// Directions to check
+	directions := []string{"OUTBOUND", "INBOUND"}
+	resp := &QuotaResponse{}
+
+	for _, dir := range directions {
+		// 1. Get rule
+		rule, err := s.q.GetQuotaRule(ctx, transport_db.GetQuotaRuleParams{
+			UserRole:  userRole,
+			Direction: dir,
+		})
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				continue // Skip if no policy for this direction
+			}
+			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
+
+		// 2. Get usage
+		usage, err := s.q.GetWeeklyTicketCountByDirection(ctx, transport_db.GetWeeklyTicketCountByDirectionParams{
+			UserID:    userID,
+			Direction: dir,
+		})
+		if err != nil {
+			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
+
+		quotaUsage := QuotaUsage{
+			Limit:     int(rule.WeeklyLimit),
+			Used:      int(usage),
+			Remaining: int(rule.WeeklyLimit) - int(usage),
+		}
+
+		if dir == "OUTBOUND" {
+			resp.Outbound = quotaUsage
+		} else {
+			resp.Inbound = quotaUsage
+		}
+	}
+
+	return resp, nil
+}
+
+func (s *Service) GetActiveHolds(ctx context.Context, userID uuid.UUID) ([]ActiveHoldResponse, error) {
+	rows, err := s.q.GetActiveHoldsByUserID(ctx, userID)
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	resp := make([]ActiveHoldResponse, 0, len(rows))
+	for _, row := range rows {
+		resp = append(resp, ActiveHoldResponse{
+			ID:        row.ID,
+			TripID:    row.TripID,
+			ExpiresAt: row.ExpiresAt,
+			Direction: row.Direction,
+			RouteName: row.RouteName,
+		})
+	}
+
+	return resp, nil
+}
+
+func (s *Service) ReleaseAllHolds(ctx context.Context, userID uuid.UUID) error {
+	tx, err := s.dbPool.Begin(ctx)
+	if err != nil {
+		return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.q.WithTx(tx)
+
+	tripIDs, err := qtx.DeleteAllActiveHoldsByUserID(ctx, userID)
+	if err != nil {
+		return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	for _, tripID := range tripIDs {
+		if err := qtx.IncrementTripSeat(ctx, tripID); err != nil {
+			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
 // ConfirmBatch finalizes multiple holds with passenger details and wallet deduction
 func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole string, items []ConfirmItem) (*ConfirmBatchResponse, error) {
 
@@ -429,4 +514,66 @@ func (s *Service) GetUpcomingTrips(ctx context.Context, routeID uuid.UUID) ([]Tr
 	}
 
 	return MapDBTripsToTrips(rows), nil
+}
+
+func (s *Service) GetAllUpcomingTrips(ctx context.Context) ([]TripResponse, error) {
+	rows, err := s.q.GetAllUpcomingTrips(ctx)
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	return MapDBAllTripsToTrips(rows), nil
+}
+
+func (s *Service) GetWeeklyTripSummary(ctx context.Context) (*WeeklyTripSummary, error) {
+	rows, err := s.q.GetWeeklyTrips(ctx)
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	summary := &WeeklyTripSummary{
+		Trips: make([]TripSummaryRow, 0, len(rows)),
+	}
+	now := time.Now()
+
+	for _, row := range rows {
+		summary.Scheduled++
+
+		// Logic consistent with MapDBTripsToTrips
+		apiStatus := "OPEN"
+		physicalStatus := common.TextToString(row.Status)
+
+		if physicalStatus == "CANCELLED" {
+			apiStatus = "CANCELLED"
+		} else if row.BookingStatus == "CLOSED" {
+			apiStatus = "CLOSED"
+		} else {
+			if row.AvailableSeats <= 0 {
+				apiStatus = "FULL"
+			} else if now.Before(row.BookingOpensAt) {
+				apiStatus = "LOCKED"
+			} else if now.After(row.BookingClosesAt) {
+				apiStatus = "CLOSED"
+			} else {
+				apiStatus = "OPEN"
+			}
+		}
+
+		if apiStatus == "LOCKED" {
+			summary.Locked++
+		} else if apiStatus == "OPEN" {
+			summary.Opened++
+		}
+
+		summary.Trips = append(summary.Trips, TripSummaryRow{
+			TripID:         row.ID,
+			RouteName:      row.RouteName,
+			DepartureTime:  row.DepartureTime,
+			AvailableSeats: int(row.AvailableSeats),
+			TotalCapacity:  int(row.TotalCapacity),
+			BookingStatus:  apiStatus,
+		})
+	}
+
+	return summary, nil
 }

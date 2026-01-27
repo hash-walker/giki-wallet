@@ -66,6 +66,25 @@ func (h *Handler) HoldSeats(w http.ResponseWriter, r *http.Request) {
 	common.ResponseWithJSON(w, http.StatusCreated, resp)
 }
 
+func (h *Handler) GetQuota(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		middleware.HandleError(w, commonerrors.ErrUnauthorized, requestID)
+		return
+	}
+
+	userRole := getUserRoleForTransport(r)
+
+	resp, err := h.service.GetUserQuota(r.Context(), userID, userRole)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, resp)
+}
+
 func (h *Handler) ConfirmBatch(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
 	userID, ok := auth.GetUserIDFromContext(r.Context())
@@ -123,6 +142,40 @@ func (h *Handler) ReleaseHold(w http.ResponseWriter, r *http.Request) {
 	_ = h.service.ReleaseHold(r.Context(), holdID)
 
 	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"status": "RELEASED"})
+}
+
+func (h *Handler) GetActiveHolds(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		middleware.HandleError(w, commonerrors.ErrUnauthorized, requestID)
+		return
+	}
+
+	resp, err := h.service.GetActiveHolds(r.Context(), userID)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handler) ReleaseAllActiveHolds(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		middleware.HandleError(w, commonerrors.ErrUnauthorized, requestID)
+		return
+	}
+
+	err := h.service.ReleaseAllHolds(r.Context(), userID)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) ListRoutes(w http.ResponseWriter, r *http.Request) {
@@ -192,4 +245,28 @@ func (h *Handler) GetUpcomingTrips(w http.ResponseWriter, r *http.Request) {
 	}
 
 	common.ResponseWithJSON(w, http.StatusOK, trips)
+}
+
+func (h *Handler) GetAllUpcomingTrips(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	trips, err := h.service.GetAllUpcomingTrips(r.Context())
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, trips)
+}
+
+func (h *Handler) GetWeeklyTripSummary(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	summary, err := h.service.GetWeeklyTripSummary(r.Context())
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, summary)
 }

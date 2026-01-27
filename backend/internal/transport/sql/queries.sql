@@ -55,8 +55,6 @@ SELECT
     t.booking_status,
     t.direction,
 
-
-
     -- Stop Details
     ts.stop_id,
     s.address as stop_name,
@@ -68,6 +66,52 @@ WHERE t.route_id = $1
   AND t.departure_time > NOW()
   AND t.status != 'COMPLETED'
 ORDER BY t.departure_time ASC, ts.sequence_order ASC;
+
+-- name: GetAllUpcomingTrips :many
+SELECT
+    t.id as trip_id,
+    t.departure_time,
+    t.booking_opens_at,
+    t.booking_closes_at,
+    t.total_capacity,
+    t.available_seats,
+    t.base_price,
+    t.status,
+    t.booking_status,
+    t.direction,
+
+    -- Route Details
+    r.name as route_name,
+
+    -- Stop Details
+    ts.stop_id,
+    s.address as stop_name,
+    ts.sequence_order
+FROM giki_transport.trip t
+         JOIN giki_transport.routes r ON t.route_id = r.id
+         JOIN giki_transport.trip_stops ts ON t.id = ts.trip_id
+         JOIN giki_transport.stops s ON ts.stop_id = s.id
+WHERE t.departure_time > NOW()
+  AND t.status != 'COMPLETED'
+ORDER BY t.departure_time ASC, ts.sequence_order ASC;
+
+-- name: GetWeeklyTrips :many
+SELECT
+    t.id,
+    t.departure_time,
+    t.booking_opens_at,
+    t.booking_closes_at,
+    t.total_capacity,
+    t.available_seats,
+    t.status,
+    t.booking_status,
+    r.name as route_name
+FROM giki_transport.trip t
+JOIN giki_transport.routes r ON t.route_id = r.id
+WHERE t.departure_time >= NOW()
+  AND t.departure_time <= NOW() + INTERVAL '7 days'
+  AND t.status != 'COMPLETED'
+ORDER BY t.departure_time ASC;
 
 -- name: GetTrip :one
 SELECT * FROM giki_transport.trip WHERE id = $1;
@@ -185,3 +229,15 @@ WHERE t.id = sqlc.arg(ticket_id)
 UPDATE giki_transport.tickets
 SET status = 'CANCELLED'
 WHERE id = $1 AND status = 'CONFIRMED';
+
+-- name: GetActiveHoldsByUserID :many
+SELECT h.id, h.trip_id, h.expires_at, tr.direction, r.name as route_name
+FROM giki_transport.trip_holds h
+JOIN giki_transport.trip tr ON h.trip_id = tr.id
+JOIN giki_transport.routes r ON tr.route_id = r.id
+WHERE h.user_id = $1 AND h.expires_at > NOW();
+
+-- name: DeleteAllActiveHoldsByUserID :many
+DELETE FROM giki_transport.trip_holds
+WHERE user_id = $1 AND expires_at > NOW()
+RETURNING trip_id;

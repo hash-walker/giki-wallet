@@ -70,16 +70,21 @@ func (s *Server) MountRoutes() {
 	r.Post("/booking/payment/response", s.Payment.CardCallBack)
 
 	r.Route("/transport", func(r chi.Router) {
-		r.Use(auth.RequireAuth)
 
-		r.Get("/routes", s.Transport.ListRoutes)
-		r.Get("/routes/{route_id}/template", s.Transport.GetRouteTemplate)
-		r.Get("/routes/{route_id}/trips/upcoming", s.Transport.GetUpcomingTrips)
+		r.Get("/trips/upcoming", s.Transport.GetAllUpcomingTrips)
+		r.Get("/weekly-summary", s.Transport.GetWeeklyTripSummary)
 
-		r.Post("/holds", s.Transport.HoldSeats)
-		r.Post("/confirm", s.Transport.ConfirmBatch)
-		r.Delete("/holds/{hold_id}", s.Transport.ReleaseHold)
-		r.Delete("/tickets/{ticket_id}", s.Transport.CancelTicket)
+		// Protected routes (Auth required for booking)
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireAuth)
+			r.Get("/quota", s.Transport.GetQuota)
+			r.Post("/holds", s.Transport.HoldSeats)
+			r.Get("/holds/active", s.Transport.GetActiveHolds)
+			r.Delete("/holds/active", s.Transport.ReleaseAllActiveHolds)
+			r.Post("/confirm", s.Transport.ConfirmBatch)
+			r.Delete("/holds/{hold_id}", s.Transport.ReleaseHold)
+			r.Delete("/tickets/{ticket_id}", s.Transport.CancelTicket)
+		})
 	})
 
 	r.Route("/wallet", func(r chi.Router) {
@@ -97,5 +102,9 @@ func (s *Server) MountRoutes() {
 		r.Get("/dashboard", func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Admin Dashboard"))
 		})
+
+		r.Get("/routes", s.Transport.ListRoutes)
+		r.Get("/routes/{route_id}/template", s.Transport.GetRouteTemplate)
+		r.Get("/routes/{route_id}/trips/upcoming", s.Transport.GetUpcomingTrips)
 	})
 }

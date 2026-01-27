@@ -60,6 +60,7 @@ type CreateTripResponse struct {
 
 type TripResponse struct {
 	TripID        uuid.UUID `json:"trip_id"`
+	RouteName     string    `json:"route_name"`
 	DepartureTime time.Time `json:"departure_time"`
 
 	BookingStatus string `json:"booking_status"`
@@ -69,6 +70,22 @@ type TripResponse struct {
 	Price          float64   `json:"price"`
 
 	Stops []TripStopItem `json:"stops"`
+}
+
+type WeeklyTripSummary struct {
+	Scheduled int              `json:"scheduled"`
+	Opened    int              `json:"opened"`
+	Locked    int              `json:"locked"`
+	Trips     []TripSummaryRow `json:"trips"`
+}
+
+type TripSummaryRow struct {
+	TripID         uuid.UUID `json:"trip_id"`
+	RouteName      string    `json:"route_name"`
+	DepartureTime  time.Time `json:"departure_time"`
+	AvailableSeats int       `json:"available_seats"`
+	TotalCapacity  int       `json:"total_capacity"`
+	BookingStatus  string    `json:"booking_status"`
 }
 
 type TripStopItem struct {
@@ -126,6 +143,25 @@ type BookTicketResponse struct {
 // Batch confirm response
 type ConfirmBatchResponse struct {
 	Tickets []BookTicketResponse `json:"tickets"`
+}
+
+type QuotaResponse struct {
+	Outbound QuotaUsage `json:"outbound"`
+	Inbound  QuotaUsage `json:"inbound"`
+}
+
+type QuotaUsage struct {
+	Limit     int `json:"limit"`
+	Used      int `json:"used"`
+	Remaining int `json:"remaining"`
+}
+
+type ActiveHoldResponse struct {
+	ID        uuid.UUID `json:"id"`
+	TripID    uuid.UUID `json:"trip_id"`
+	ExpiresAt time.Time `json:"expires_at"`
+	Direction string    `json:"direction"`
+	RouteName string    `json:"route_name"`
 }
 
 func mapDBRouteTemplateToRouteTemplate(rows []transport_db.GetRouteStopsDetailsRow, weeklyScheduleRows []transport_db.GikiTransportRouteWeeklySchedule) *RouteTemplateResponse {
@@ -206,6 +242,66 @@ func MapDBTripsToTrips(rows []transport_db.GetUpcomingTripsByRouteRow) []TripRes
 
 			trip := &TripResponse{
 				TripID:         row.TripID,
+				DepartureTime:  row.DepartureTime,
+				BookingStatus:  apiStatus,
+				OpensAt:        row.BookingOpensAt,
+				AvailableSeats: int(row.AvailableSeats),
+				Price:          common.NumericToFloat64(row.BasePrice),
+				Stops:          make([]TripStopItem, 0),
+			}
+
+			tripMap[row.TripID] = trip
+			orderedIDs = append(orderedIDs, row.TripID)
+		}
+
+		tripMap[row.TripID].Stops = append(tripMap[row.TripID].Stops, TripStopItem{
+			StopID:   row.StopID,
+			StopName: row.StopName,
+			Sequence: row.SequenceOrder,
+		})
+	}
+
+	// Convert Map back to Slice using the ordered ID list
+	result := make([]TripResponse, 0, len(orderedIDs))
+	for _, id := range orderedIDs {
+		result = append(result, *tripMap[id])
+	}
+
+	return result
+}
+
+func MapDBAllTripsToTrips(rows []transport_db.GetAllUpcomingTripsRow) []TripResponse {
+
+	tripMap := make(map[uuid.UUID]*TripResponse)
+	var orderedIDs []uuid.UUID
+
+	for _, row := range rows {
+		if _, exists := tripMap[row.TripID]; !exists {
+
+			apiStatus := "OPEN" // Default to Auto-Pilot
+			now := time.Now()
+
+			physicalStatus := common.TextToString(row.Status)
+
+			if physicalStatus == "CANCELLED" {
+				apiStatus = "CANCELLED"
+			} else if row.BookingStatus == "CLOSED" {
+				apiStatus = "CLOSED"
+			} else {
+				if row.AvailableSeats <= 0 {
+					apiStatus = "FULL"
+				} else if now.Before(row.BookingOpensAt) {
+					apiStatus = "LOCKED"
+				} else if now.After(row.BookingClosesAt) {
+					apiStatus = "CLOSED"
+				} else {
+					apiStatus = "OPEN"
+				}
+			}
+
+			trip := &TripResponse{
+				TripID:         row.TripID,
+				RouteName:      row.RouteName,
 				DepartureTime:  row.DepartureTime,
 				BookingStatus:  apiStatus,
 				OpensAt:        row.BookingOpensAt,

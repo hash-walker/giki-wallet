@@ -10,7 +10,6 @@ const (
 	RoleEmployee       = "EMPLOYEE"
 )
 
-// AllowedRoles is a map for quick validation if needed
 var AllowedRoles = map[string]bool{
 	RoleSuperAdmin:     true,
 	RoleTransportAdmin: true,
