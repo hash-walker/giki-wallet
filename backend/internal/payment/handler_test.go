@@ -103,8 +103,8 @@ func TestTopUpRequest_JSON(t *testing.T) {
 		t.Fatalf("TopUpRequest JSON unmarshal error: %v", err)
 	}
 
-	if req.Amount != 1000 {
-		t.Errorf("TopUpRequest.Amount = %d, want 1000", req.Amount)
+	if req.Amount != 1000.0 {
+		t.Errorf("TopUpRequest.Amount = %f, want 1000.0", req.Amount)
 	}
 
 	if req.Method != PaymentMethodMWallet {
@@ -129,8 +129,8 @@ func TestTopUpRequest_CardJSON(t *testing.T) {
 		t.Fatalf("TopUpRequest JSON unmarshal error: %v", err)
 	}
 
-	if req.Amount != 2000 {
-		t.Errorf("TopUpRequest.Amount = %d, want 2000", req.Amount)
+	if req.Amount != 2000.0 {
+		t.Errorf("TopUpRequest.Amount = %f, want 2000.0", req.Amount)
 	}
 
 	if req.Method != PaymentMethodCard {

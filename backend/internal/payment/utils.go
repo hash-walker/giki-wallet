@@ -93,9 +93,9 @@ func NormalizeCNICLast6(cnic string) (string, error) {
 // HELPERS - Amount Conversion
 // =============================================================================
 
-// AmountToPaisa converts rupees to paisa as string
-func AmountToPaisa(amount int64) string {
-	return strconv.FormatInt(amount*100, 10)
+// AmountToPaisa converts amount in smallest unit (paisa) to string
+func AmountToPaisa(amountPaisa int64) string {
+	return strconv.FormatInt(amountPaisa, 10)
 }
 
 // =============================================================================

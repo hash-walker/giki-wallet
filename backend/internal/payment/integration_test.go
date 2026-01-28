@@ -135,7 +135,7 @@ func cleanupTestUser() {
 
 // createIntegrationTestContext creates a context with the test user ID
 func createIntegrationTestContext() context.Context {
-	return auth.SetUserIDInContext(context.Background(), testUserID)
+	return auth.SetUserInContext(context.Background(), testUserID, "")
 }
 
 // cleanupTestTransactions removes test transactions
@@ -169,7 +169,7 @@ func TestIntegration_MWalletPayment_Success(t *testing.T) {
 
 	// Initiate payment (no transaction wrapper - service handles its own DB operations)
 	result, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         500,
+		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
@@ -200,8 +200,8 @@ func TestIntegration_MWalletPayment_Success(t *testing.T) {
 	if txn.Status != payment.CurrentStatusSUCCESS {
 		t.Errorf("DB status mismatch: expected SUCCESS, got %s", txn.Status)
 	}
-	if txn.Amount != 500 {
-		t.Errorf("Amount mismatch: expected 500, got %d", txn.Amount)
+	if txn.Amount != 50000 {
+		t.Errorf("Amount mismatch: expected 50000, got %d", txn.Amount)
 	}
 }
 
@@ -217,7 +217,7 @@ func TestIntegration_MWalletPayment_Pending(t *testing.T) {
 	idempotencyKey := uuid.New()
 
 	result, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         1000,
+		Amount:         1000.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
@@ -256,7 +256,7 @@ func TestIntegration_MWalletPayment_Failed(t *testing.T) {
 	idempotencyKey := uuid.New()
 
 	result, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         500,
+		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
@@ -286,7 +286,7 @@ func TestIntegration_Idempotency_SameKeyReturnsSameResult(t *testing.T) {
 
 	// First request
 	result1, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         500,
+		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
@@ -298,7 +298,7 @@ func TestIntegration_Idempotency_SameKeyReturnsSameResult(t *testing.T) {
 
 	// Second request with same idempotency key
 	result2, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         500,
+		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
@@ -329,7 +329,7 @@ func TestIntegration_Idempotency_FailedTransactionAllowsRetry(t *testing.T) {
 	mockGateway.SetInquiryScenario(testutils.ScenarioFailed)
 
 	result1, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         500,
+		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
@@ -348,7 +348,7 @@ func TestIntegration_Idempotency_FailedTransactionAllowsRetry(t *testing.T) {
 	mockGateway.SetInquiryScenario(testutils.ScenarioSuccess) // Also set inquiry to success for retry
 
 	result2, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         500,
+		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
@@ -383,7 +383,7 @@ func TestIntegration_CardPayment_InitiateReturnsPaymentPageURL(t *testing.T) {
 	idempotencyKey := uuid.New()
 
 	result, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         1000,
+		Amount:         1000.0,
 		Method:         PaymentMethodCard,
 		IdempotencyKey: idempotencyKey,
 	})
@@ -413,7 +413,7 @@ func TestIntegration_CardPayment_InitiateCardPaymentBuildsHTML(t *testing.T) {
 
 	// First create a transaction via InitiatePayment
 	result, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         1000,
+		Amount:         1000.0,
 		Method:         PaymentMethodCard,
 		IdempotencyKey: idempotencyKey,
 	})
@@ -456,7 +456,7 @@ func TestIntegration_CardCallback_Success(t *testing.T) {
 
 	// Create transaction
 	initResult, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         1000,
+		Amount:         1000.0,
 		Method:         PaymentMethodCard,
 		IdempotencyKey: idempotencyKey,
 	})
@@ -502,7 +502,7 @@ func TestIntegration_CardCallback_Failed(t *testing.T) {
 
 	// Create transaction
 	initResult, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         1000,
+		Amount:         1000.0,
 		Method:         PaymentMethodCard,
 		IdempotencyKey: idempotencyKey,
 	})
@@ -540,7 +540,7 @@ func TestIntegration_Validation_InvalidPhoneNumber(t *testing.T) {
 	ctx := createIntegrationTestContext()
 
 	_, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         500,
+		Amount:         500.0,
 		PhoneNumber:    "invalid",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
@@ -562,7 +562,7 @@ func TestIntegration_Validation_InvalidCNIC(t *testing.T) {
 	ctx := createIntegrationTestContext()
 
 	_, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         500,
+		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "12", // Too short
 		Method:         PaymentMethodMWallet,
@@ -585,7 +585,7 @@ func TestIntegration_Validation_NoUserInContext(t *testing.T) {
 	ctx := context.Background()
 
 	_, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         500,
+		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
@@ -612,7 +612,7 @@ func TestIntegration_Database_TransactionPersistence(t *testing.T) {
 	ctx := createIntegrationTestContext()
 
 	result, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         750,
+		Amount:         750.0,
 		PhoneNumber:    "03009876543",
 		CNICLast6:      "654321",
 		Method:         PaymentMethodMWallet,
@@ -633,8 +633,8 @@ func TestIntegration_Database_TransactionPersistence(t *testing.T) {
 	if txn.UserID != testUserID {
 		t.Errorf("UserID mismatch: expected %s, got %s", testUserID, txn.UserID)
 	}
-	if txn.Amount != 750 {
-		t.Errorf("Amount mismatch: expected 750, got %d", txn.Amount)
+	if txn.Amount != 75000 {
+		t.Errorf("Amount mismatch: expected 75000, got %d", txn.Amount)
 	}
 	if txn.PaymentMethod != string(PaymentMethodMWallet) {
 		t.Errorf("PaymentMethod mismatch: expected %s, got %s", PaymentMethodMWallet, txn.PaymentMethod)
@@ -658,7 +658,7 @@ func TestIntegration_Database_PollingStatus(t *testing.T) {
 	ctx := createIntegrationTestContext()
 
 	result, _ := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         500,
+		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
@@ -705,7 +705,7 @@ func TestIntegration_Inquiry_Success(t *testing.T) {
 	ctx := createIntegrationTestContext()
 
 	result, _ := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         500,
+		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
@@ -716,7 +716,7 @@ func TestIntegration_Inquiry_Success(t *testing.T) {
 	mockGateway.SetInquiryScenario(testutils.ScenarioSuccess)
 
 	// Call inquiry
-	inquiryResult, err := testService.gatewayClient.Inquiry(ctx, result.TxnRefNo)
+	inquiryResult, err := testService.gatewayClient.Inquiry(ctx, gateway.InquiryRequest{TxnRefNo: result.TxnRefNo})
 	if err != nil {
 		t.Fatalf("Inquiry failed: %v", err)
 	}
@@ -737,7 +737,7 @@ func BenchmarkIntegration_MWalletPayment(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		testService.InitiatePayment(ctx, TopUpRequest{
-			Amount:         500,
+			Amount:         500.0,
 			PhoneNumber:    "03001234567",
 			CNICLast6:      "123456",
 			Method:         PaymentMethodMWallet,

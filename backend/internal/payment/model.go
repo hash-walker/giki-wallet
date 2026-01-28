@@ -25,7 +25,7 @@ const (
 // TopUpRequest Frontend → backend
 type TopUpRequest struct {
 	IdempotencyKey uuid.UUID     `json:"idempotency_key"`
-	Amount         int64         `json:"amount"` // smallest unit (e.g., paisa)
+	Amount         float64       `json:"amount"` // in Rupees
 	Method         PaymentMethod `json:"method"`
 	PhoneNumber    string        `json:"phone_number,omitempty"`
 	CNICLast6      string        `json:"cnic_last6,omitempty"`
@@ -43,7 +43,7 @@ type TopUpResult struct {
 	PaymentPageURL string `json:"redirect,omitempty"`
 
 	// Useful for UI
-	Amount int64 `json:"amount,omitempty"`
+	Amount float64 `json:"amount,omitempty"`
 }
 
 //type RedirectPayload struct {
@@ -66,7 +66,7 @@ func MapMWalletToTopUpResult(
 		Status:        GatewayStatusToPaymentStatus(mwResp.Status),
 		Message:       mwResp.Message,
 		PaymentMethod: PaymentMethod(existing.PaymentMethod),
-		Amount:        existing.Amount,
+		Amount:        float64(existing.Amount) / 100.0,
 	}
 }
 
@@ -80,7 +80,7 @@ func MapInquiryToTopUpResult(
 		Status:        GatewayStatusToPaymentStatus(inquiryResult.Status),
 		Message:       inquiryResult.Message,
 		PaymentMethod: PaymentMethod(existing.PaymentMethod),
-		Amount:        existing.Amount,
+		Amount:        float64(existing.Amount) / 100.0,
 	}
 }
 
@@ -94,7 +94,7 @@ func MapCardCallbackToTopUpResult(
 		Status:        GatewayStatusToPaymentStatus(callback.Status),
 		Message:       callback.Message,
 		PaymentMethod: PaymentMethod(existing.PaymentMethod),
-		Amount:        existing.Amount,
+		Amount:        float64(existing.Amount) / 100.0,
 	}
 }
 

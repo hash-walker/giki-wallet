@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -113,7 +112,8 @@ func (c *JazzCashClient) SubmitMWallet(ctx context.Context, req MWalletInitiateR
 	}
 
 	// create a https post request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.walletPaymentURL, bytes.NewBuffer(jsonBody))
+	fullURL := strings.TrimSuffix(c.baseURL, "/") + "/" + strings.TrimPrefix(c.walletPaymentURL, "/")
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", fullURL, bytes.NewBuffer(jsonBody))
 
 	if err != nil {
 		return nil, commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("failed to create http request: %w", err))
@@ -170,11 +170,11 @@ func (c *JazzCashClient) InitiateCard(ctx context.Context, req CardInitiateReque
 	}, nil
 }
 
-func (c *JazzCashClient) ParseAndVerifyCardCallback(ctx context.Context, rForm url.Values) (*CardCallback, error) {
+func (c *JazzCashClient) ParseAndVerifyCardCallback(ctx context.Context, rForm map[string]string) (*CardCallback, error) {
 	responseMap := make(map[string]any)
 
-	for key, _ := range rForm {
-		responseMap[key] = rForm.Get(key)
+	for key, val := range rForm {
+		responseMap[key] = val
 	}
 
 	// verify response hash
@@ -187,13 +187,13 @@ func (c *JazzCashClient) ParseAndVerifyCardCallback(ctx context.Context, rForm u
 
 }
 
-func (c *JazzCashClient) Inquiry(ctx context.Context, txnRefNo string) (InquiryResponse, error) {
-	fields := c.buildInquiryFields(txnRefNo)
+func (c *JazzCashClient) Inquiry(ctx context.Context, req InquiryRequest) (*InquiryResponse, error) {
+	fields := c.buildInquiryFields(req.TxnRefNo)
 
 	secureHash, err := c.JazzcashSecureHash(fields)
 
 	if err != nil {
-		return InquiryResponse{}, commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("failed to compute secure hash: %w", err))
+		return nil, commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("failed to compute secure hash: %w", err))
 	}
 
 	fields[FieldSecureHash] = secureHash
@@ -201,14 +201,15 @@ func (c *JazzCashClient) Inquiry(ctx context.Context, txnRefNo string) (InquiryR
 	// convert fields to json body
 	jsonBody, err := json.Marshal(fields)
 	if err != nil {
-		return InquiryResponse{}, commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("failed to marshal inquiry fields: %w", err))
+		return nil, commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("failed to marshal inquiry fields: %w", err))
 	}
 
 	// create a https post request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.statusInquiryURL, bytes.NewBuffer(jsonBody))
+	fullURL := strings.TrimSuffix(c.baseURL, "/") + "/" + strings.TrimPrefix(c.statusInquiryURL, "/")
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", fullURL, bytes.NewBuffer(jsonBody))
 
 	if err != nil {
-		return InquiryResponse{}, commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("failed to create inquiry http request: %w", err))
+		return nil, commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("failed to create inquiry http request: %w", err))
 	}
 
 	// set headers content-type
@@ -218,13 +219,13 @@ func (c *JazzCashClient) Inquiry(ctx context.Context, txnRefNo string) (InquiryR
 	resp, err := c.httpClient.Do(httpReq)
 
 	if err != nil {
-		return InquiryResponse{}, commonerrors.Wrap(commonerrors.ErrExternalService, err)
+		return nil, commonerrors.Wrap(commonerrors.ErrExternalService, err)
 	}
 	defer resp.Body.Close()
 
 	// check http status
 	if resp.StatusCode != http.StatusOK {
-		return InquiryResponse{}, commonerrors.Wrap(commonerrors.ErrExternalService, fmt.Errorf("inquiry API returned status %d", resp.StatusCode))
+		return nil, commonerrors.Wrap(commonerrors.ErrExternalService, fmt.Errorf("inquiry API returned status %d", resp.StatusCode))
 	}
 
 	// parse json resp
@@ -232,17 +233,18 @@ func (c *JazzCashClient) Inquiry(ctx context.Context, txnRefNo string) (InquiryR
 	var responseMap map[string]any
 
 	if err := json.NewDecoder(resp.Body).Decode(&responseMap); err != nil {
-		return InquiryResponse{}, commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("failed to decode response: %w", err))
+		return nil, commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("failed to decode response: %w", err))
 	}
 
 	// verify response hash
 
 	if err := c.verifyResponseHash(responseMap); err != nil {
-		return InquiryResponse{}, commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("response hash verification failed: %w", err))
+		return nil, commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("response hash verification failed: %w", err))
 	}
 
 	// 11. Map response to InquiryResponse struct
-	return c.mapInquiryResponse(responseMap), nil
+	res := c.mapInquiryResponse(responseMap)
+	return &res, nil
 
 }
 
@@ -392,7 +394,7 @@ func (c *JazzCashClient) buildInquiryFields(txnRefNo string) JazzCashFields {
 func mapResponseCodeToStatus(responseCode string) Status {
 	// Key success codes
 	switch responseCode {
-	case "000", "121", "200":
+	case "000", "200":
 		return StatusSuccess
 	}
 
@@ -404,7 +406,7 @@ func mapResponseCodeToStatus(responseCode string) Status {
 
 	// Pending codes
 	switch responseCode {
-	case "157", "124", "210":
+	case "157", "124", "210", "121":
 		return StatusPending
 	}
 

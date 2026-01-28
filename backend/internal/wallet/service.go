@@ -49,12 +49,14 @@ func (s *Service) executeDoubleEntryTransaction(
 	// lock both wallets (prevent race conditions)
 	senderWallet, err := walletQ.GetWalletForUpdate(ctx, senderWalletID)
 	if err != nil {
+		fmt.Printf("[DEBUG] Failed to lock sender wallet: %v\n", err)
 		return commonerrors.Wrap(ErrDatabase, err)
 	}
 
 	_, err = walletQ.GetWalletForUpdate(ctx, receiverWalletID)
 
 	if err != nil {
+		fmt.Printf("[DEBUG] Failed to lock receiver wallet: %v\n", err)
 		return commonerrors.Wrap(ErrDatabase, err)
 	}
 
@@ -103,6 +105,7 @@ func (s *Service) executeDoubleEntryTransaction(
 	})
 
 	if err != nil {
+		fmt.Printf("[DEBUG] Failed to create debit entry: %v\n", err)
 		return commonerrors.Wrap(ErrDatabase, err)
 	}
 
@@ -124,6 +127,7 @@ func (s *Service) executeDoubleEntryTransaction(
 	})
 
 	if err != nil {
+		fmt.Printf("[DEBUG] Failed to create credit entry: %v\n", err)
 		return commonerrors.Wrap(ErrDatabase, err)
 	}
 
@@ -203,7 +207,7 @@ func (s *Service) GetUserBalance(ctx context.Context, userID uuid.UUID) (*Balanc
 	}
 
 	return &BalanceResponse{
-		Balance:  balance,
+		Balance:  float64(balance) / 100.0,
 		Currency: w.Currency,
 	}, nil
 }
@@ -223,8 +227,8 @@ func (s *Service) GetUserHistory(ctx context.Context, userID uuid.UUID) ([]Trans
 	for _, e := range entries {
 		items = append(items, TransactionHistoryItem{
 			ID:           e.ID,
-			Amount:       e.Amount,
-			BalanceAfter: e.BalanceAfter,
+			Amount:       float64(e.Amount) / 100.0,
+			BalanceAfter: float64(e.BalanceAfter) / 100.0,
 			Type:         e.Type,
 			ReferenceID:  e.ReferenceID,
 			Description:  common.TextToString(e.Description),

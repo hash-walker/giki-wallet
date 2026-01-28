@@ -1,4 +1,5 @@
 import { apiClient } from '@/lib/axios';
+import { TopUpRequest, TopUpResult } from './types';
 
 export type BalanceResponse = {
     balance: number;
@@ -22,5 +23,19 @@ export async function getBalance() {
 
 export async function getHistory() {
     const res = await apiClient.get<ApiTransaction[]>('/wallet/history');
+    return res.data;
+}
+
+export async function topUp(request: TopUpRequest & { timeout?: number }) {
+    const { timeout, ...data } = request;
+    console.log(`Initiating topUp with timeout: ${timeout || 60000}ms`);
+    const res = await apiClient.post<TopUpResult>('/payment/topup', data, {
+        timeout: timeout || 60000
+    });
+    return res.data;
+}
+
+export async function getTransactionStatus(txnRefNo: string) {
+    const res = await apiClient.get<TopUpResult>(`/payment/status/${txnRefNo}`);
     return res.data;
 }

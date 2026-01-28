@@ -52,7 +52,7 @@ func TestBusinessLogic_PaymentToWalletFlow_Complete(t *testing.T) {
 
 	// 1. Initiate payment
 	result, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         1000,
+		Amount:         1000.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
@@ -89,8 +89,8 @@ func TestBusinessLogic_PaymentToWalletFlow_Complete(t *testing.T) {
 		}
 	}
 
-	if creditEntry.Amount != 1000 {
-		t.Errorf("Ledger credit amount: got %d, want 1000", creditEntry.Amount)
+	if creditEntry.Amount != 100000 {
+		t.Errorf("Ledger credit amount: got %d, want 100000", creditEntry.Amount)
 	}
 
 	// 4. Verify wallet balance
@@ -101,8 +101,8 @@ func TestBusinessLogic_PaymentToWalletFlow_Complete(t *testing.T) {
 		t.Fatalf("GetWalletBalanceSnapshot failed: %v", err)
 	}
 
-	if balance != 1000 {
-		t.Errorf("Wallet balance: got %d, want 1000", balance)
+	if balance != 100000 {
+		t.Errorf("Wallet balance: got %d, want 100000", balance)
 	}
 }
 
@@ -125,7 +125,7 @@ func TestBusinessLogic_IdempotencyKey_PreventsDuplicatePayments(t *testing.T) {
 	idempotencyKey := uuid.New()
 
 	request := TopUpRequest{
-		Amount:         500,
+		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
@@ -154,8 +154,8 @@ func TestBusinessLogic_IdempotencyKey_PreventsDuplicatePayments(t *testing.T) {
 	userWallet, _ := walletQ.GetWallet(ctx, common.GoogleUUIDtoPgUUID(testUserID, true))
 	balance, _ := walletQ.GetWalletBalanceSnapshot(ctx, userWallet.ID)
 
-	if balance != 500 {
-		t.Errorf("Wallet balance should be 500 (not double-credited), got %d", balance)
+	if balance != 50000 {
+		t.Errorf("Wallet balance should be 50000 (not double-credited), got %d", balance)
 	}
 
 	// Verify only 2 ledger entries exist (from single transaction)
@@ -182,7 +182,7 @@ func TestBusinessLogic_FailedPayment_NoWalletCredit(t *testing.T) {
 	ctx = createIntegrationTestContext()
 
 	result, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         500,
+		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
@@ -227,7 +227,7 @@ func TestBusinessLogic_PendingToSuccess_SingleCredit(t *testing.T) {
 	mockGateway.SetInquiryScenario(testutils.ScenarioPending)
 
 	result1, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         500,
+		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
@@ -260,7 +260,7 @@ func TestBusinessLogic_PendingToSuccess_SingleCredit(t *testing.T) {
 	mockGateway.SetInquiryScenario(testutils.ScenarioSuccess)
 
 	result2, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         500,
+		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
@@ -278,13 +278,13 @@ func TestBusinessLogic_PendingToSuccess_SingleCredit(t *testing.T) {
 	// Wallet should now be credited
 	userWallet, _ = walletQ.GetWallet(ctx, common.GoogleUUIDtoPgUUID(testUserID, true)) // Should exist now
 	balance, _ := walletQ.GetWalletBalanceSnapshot(ctx, userWallet.ID)
-	if balance != 500 {
-		t.Errorf("Wallet balance after success: got %d, want 500", balance)
+	if balance != 50000 {
+		t.Errorf("Wallet balance after success: got %d, want 50000", balance)
 	}
 
 	// Third request - should still return SUCCESS without double-crediting
 	result3, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         500,
+		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
@@ -301,7 +301,7 @@ func TestBusinessLogic_PendingToSuccess_SingleCredit(t *testing.T) {
 
 	// Balance should still be 500 (not double-credited)
 	balance, _ = walletQ.GetWalletBalanceSnapshot(ctx, userWallet.ID)
-	if balance != 500 {
+	if balance != 50000 {
 		t.Errorf("Wallet should not be double-credited, balance: %d", balance)
 	}
 }
@@ -321,7 +321,7 @@ func TestBusinessLogic_TransactionTimeout_Handling(t *testing.T) {
 
 	// Create a pending transaction
 	result, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         500,
+		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
@@ -345,7 +345,7 @@ func TestBusinessLogic_TransactionTimeout_Handling(t *testing.T) {
 
 	// Check transaction status again - should timeout and fail
 	result2, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         500,
+		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
@@ -380,7 +380,7 @@ func TestBusinessLogic_AuditLog_Consistency(t *testing.T) {
 
 	// Create card payment
 	initResult, err := testService.InitiatePayment(ctx, TopUpRequest{
-		Amount:         1000,
+		Amount:         1000.0,
 		Method:         PaymentMethodCard,
 		IdempotencyKey: uuid.New(),
 	})
@@ -416,8 +416,8 @@ func TestBusinessLogic_AuditLog_Consistency(t *testing.T) {
 	walletQ := wallet_db.New(testDBPool)
 	userWallet, _ := walletQ.GetWallet(ctx, common.GoogleUUIDtoPgUUID(testUserID, true))
 	balance, _ := walletQ.GetWalletBalanceSnapshot(ctx, userWallet.ID)
-	if balance != 1000 {
-		t.Errorf("Wallet balance: got %d, want 1000", balance)
+	if balance != 100000 {
+		t.Errorf("Wallet balance: got %d, want 100000", balance)
 	}
 
 	// Verify audit log was marked as processed
@@ -463,7 +463,7 @@ func TestBusinessLogic_ConcurrentPayments_NoDoubleCredit(t *testing.T) {
 			defer wg.Done()
 
 			result, err := testService.InitiatePayment(ctx, TopUpRequest{
-				Amount:         1000,
+				Amount:         1000.0,
 				PhoneNumber:    "03001234567",
 				CNICLast6:      "123456",
 				Method:         PaymentMethodMWallet,
@@ -506,7 +506,7 @@ func TestBusinessLogic_ConcurrentPayments_NoDoubleCredit(t *testing.T) {
 	userWallet, err := walletQ.GetWallet(ctx, common.GoogleUUIDtoPgUUID(testUserID, true))
 	if err == nil {
 		balance, _ := walletQ.GetWalletBalanceSnapshot(ctx, userWallet.ID)
-		if balance != 1000 {
+		if balance != 100000 {
 			t.Errorf("Wallet should be credited once, balance: %d", balance)
 		}
 	} else {

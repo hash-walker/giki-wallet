@@ -11,6 +11,7 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/transport/transport_db"
 	"github.com/hash-walker/giki-wallet/internal/wallet"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -285,7 +286,7 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 			return nil, err
 		}
 
-		amount := int64(totalPrice)
+		amount := int64(totalPrice * 100)
 		err = s.wallet.ExecuteTransaction(ctx, tx, userWallet.ID, revenueWalletID, amount, "TRANSPORT_BOOKING", userID.String(), "Transport ticket purchase")
 		if err != nil {
 			return nil, err
@@ -420,6 +421,106 @@ func (s *Service) ReleaseHold(ctx context.Context, holdID uuid.UUID) error {
 	}
 
 	return nil
+}
+
+func (s *Service) GetMyTickets(ctx context.Context, userID uuid.UUID) ([]MyTicketResponse, error) {
+	query := `
+		SELECT 
+			t.id, t.status, t.passenger_name, t.passenger_relation,
+			tr.id, tr.departure_time, tr.base_price, tr.direction, tr.booking_closes_at,
+			r.name,
+			sp.address,
+			sd.address
+		FROM giki_transport.tickets t
+		JOIN giki_transport.trip tr ON t.trip_id = tr.id
+		JOIN giki_transport.routes r ON tr.route_id = r.id
+		JOIN giki_transport.stops sp ON t.pickup_stop_id = sp.id
+		JOIN giki_transport.stops sd ON t.dropoff_stop_id = sd.id
+		WHERE t.user_id = $1
+		ORDER BY tr.departure_time DESC
+	`
+
+	rows, err := s.dbPool.Query(ctx, query, userID)
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+	defer rows.Close()
+
+	var tickets []MyTicketResponse
+	for rows.Next() {
+		var (
+			ticketID          uuid.UUID
+			status            string
+			passengerName     string
+			passengerRelation string
+			tripID            uuid.UUID
+			departureTime     time.Time
+			basePrice         pgtype.Numeric
+			direction         string
+			bookingClosesAt   time.Time
+			routeName         string
+			pickupName        string
+			dropoffName       string
+		)
+
+		if err := rows.Scan(
+			&ticketID, &status, &passengerName, &passengerRelation,
+			&tripID, &departureTime, &basePrice, &direction, &bookingClosesAt,
+			&routeName, &pickupName, &dropoffName,
+		); err != nil {
+			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
+
+		// determine from/to location
+		// if direction = OUTBOUND, From = Islamabad (Route Name usually), To = GIKI
+		// if direction = INBOUND, From = GIKI, To = Islamabad
+		// OR we can rely on pickup/dropoff names.
+		// For consistency with UI:
+		// OUTBOUND (to-giki): From = Islamabad (or pickup), To = GIKI (or dropoff)
+		// INBOUND (from-giki): From = GIKI, To = Islamabad
+
+		fromLoc := "Islamabad"
+		toLoc := "GIKI"
+		if direction == "INBOUND" { // from-giki
+			fromLoc = "GIKI"
+			toLoc = "Islamabad"
+		}
+
+		// CanCancel logic: status CONFIRMED and now < booking_closes_at
+		canCancel := status == "CONFIRMED" && time.Now().Before(bookingClosesAt)
+
+		// Parse serial/ticket number from ID or random for now?
+		// UI expects "R001" etc. We can just use last 4 chars of UUID.
+		ticketNum := ticketID.String()[len(ticketID.String())-4:]
+
+		// Map API direction to match frontend expectation
+		frontendDirection := "to-giki"
+		if direction == "INBOUND" {
+			frontendDirection = "from-giki"
+		}
+
+		tickets = append(tickets, MyTicketResponse{
+			ID:                ticketID,
+			TicketNumber:      ticketNum,
+			RouteName:         routeName,
+			Direction:         frontendDirection,
+			FromLocation:      fromLoc,
+			ToLocation:        toLoc,
+			PickupLocation:    pickupName,
+			DropoffLocation:   dropoffName,
+			Date:              departureTime.Format("2006-01-02"),
+			Time:              departureTime.Format("3:04 PM"),
+			Status:            status,
+			BusType:           "Standard", // Hardcoded for now
+			PassengerName:     passengerName,
+			PassengerRelation: passengerRelation,
+			IsSelf:            passengerRelation == "SELF",
+			Price:             common.NumericToFloat64(basePrice),
+			CanCancel:         canCancel,
+		})
+	}
+
+	return tickets, nil
 }
 
 // =============================================================================

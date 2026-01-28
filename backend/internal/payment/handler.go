@@ -115,3 +115,21 @@ func (h *Handler) CardCallBack(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/payment/failed?txn="+result.TxnRefNo, http.StatusSeeOther)
 	}
 }
+
+func (h *Handler) CheckStatus(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+	txnRefNo := chi.URLParam(r, "txnRefNo")
+
+	if txnRefNo == "" {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, nil), requestID)
+		return
+	}
+
+	result, err := h.pService.GetTransactionStatus(r.Context(), txnRefNo)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, result)
+}

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"math"
 	"net/url"
 	"time"
 
@@ -22,6 +24,8 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/middleware"
 )
 
+var ErrIdempotentSuccess = errors.New("IDEMPOTENT_SUCCESS")
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -31,7 +35,7 @@ type Service struct {
 	q             *payment.Queries
 	walletS       *wallet.Service
 	dbPool        *pgxpool.Pool
-	gatewayClient *gateway.JazzCashClient
+	gatewayClient gateway.Gateway
 	rateLimiter   *RateLimiter
 }
 
@@ -45,7 +49,7 @@ type RateLimiter struct {
 // =============================================================================
 
 // NewService creates a new payment service
-func NewService(dbPool *pgxpool.Pool, gatewayClient *gateway.JazzCashClient, walletS *wallet.Service, rateLimiter *RateLimiter) *Service {
+func NewService(dbPool *pgxpool.Pool, gatewayClient gateway.Gateway, walletS *wallet.Service, rateLimiter *RateLimiter) *Service {
 	return &Service{
 		q:             payment.New(dbPool),
 		dbPool:        dbPool,
@@ -134,6 +138,11 @@ func (s *Service) InitiatePayment(ctx context.Context, payload TopUpRequest) (*T
 	// create new transaction record
 	// ═══════════════════════════════════════════════════════════════════════════
 
+	amountPaisa := int64(math.Round(payload.Amount * 100))
+	if amountPaisa <= 0 {
+		return nil, commonerrors.Wrap(commonerrors.ErrInvalidInput, fmt.Errorf("amount must be greater than 0"))
+	}
+
 	billRefNo, err := GenerateBillRefNo()
 	if err != nil {
 		return nil, commonerrors.Wrap(ErrInternal, err)
@@ -151,7 +160,7 @@ func (s *Service) InitiatePayment(ctx context.Context, payload TopUpRequest) (*T
 		TxnRefNo:       txnRefNo,
 		PaymentMethod:  string(payload.Method),
 		Status:         payment.CurrentStatus(PaymentStatusPending),
-		Amount:         payload.Amount,
+		Amount:         amountPaisa,
 	})
 
 	if err != nil {
@@ -243,7 +252,12 @@ func (s *Service) MarkAuditProcessed(ctx context.Context, auditID uuid.UUID) {
 
 func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.Values, auditID uuid.UUID) (*TopUpResult, error) {
 
-	callback, err := s.gatewayClient.ParseAndVerifyCardCallback(ctx, rForm)
+	callbackData := make(map[string]string)
+	for k := range rForm {
+		callbackData[k] = rForm.Get(k)
+	}
+
+	callback, err := s.gatewayClient.ParseAndVerifyCardCallback(ctx, callbackData)
 	if err != nil {
 		return nil, commonerrors.Wrap(ErrGatewayUnavailable, err)
 	}
@@ -307,7 +321,7 @@ func (s *Service) initiateMWalletPayment(
 	txnExpiryDateTime := time.Now().Add(24 * time.Hour).Format("20060102150405")
 
 	mwRequest := gateway.MWalletInitiateRequest{
-		AmountPaisa:       AmountToPaisa(payload.Amount),
+		AmountPaisa:       AmountToPaisa(gatewayTxn.Amount),
 		BillRefID:         billRefNo,
 		TxnRefNo:          txnRefNo,
 		Description:       "GIKI Wallet Top Up",
@@ -320,6 +334,41 @@ func (s *Service) initiateMWalletPayment(
 	_, err = s.gatewayClient.SubmitMWallet(ctx, mwRequest)
 	if err != nil {
 		return nil, commonerrors.Wrap(ErrGatewayUnavailable, err)
+	}
+
+	// ═══════════════════════════════════════════════════════════════════════════
+	// Wait logic (UX requirement): Wait up to 40 seconds
+	// ═══════════════════════════════════════════════════════════════════════════
+
+	maxWait := 40 * time.Second
+	pollInterval := 5 * time.Second
+	start := time.Now()
+
+	log.Printf("[DEBUG] Entering 40s wait loop for txn %s at %s", gatewayTxn.TxnRefNo, start.Format(time.RFC3339Nano))
+
+	for {
+		result, err := s.checkTransactionStatus(ctx, gatewayTxn)
+		if err == nil {
+			// If Success or Failed, return immediately
+			if result.Status == PaymentStatusSuccess || result.Status == PaymentStatusFailed {
+				log.Printf("[DEBUG] Transaction %s finished early with status %s", gatewayTxn.TxnRefNo, result.Status)
+				return result, nil
+			}
+		}
+
+		// If 40s passed, break and return PENDING
+		if time.Since(start) >= maxWait {
+			log.Printf("[DEBUG] 40s timeout reached for txn %s", gatewayTxn.TxnRefNo)
+			break
+		}
+
+		// Wait before next check
+		select {
+		case <-ctx.Done():
+			log.Printf("[DEBUG] Client disconnected (Context Cancelled) for txn %s", gatewayTxn.TxnRefNo)
+			return nil, ctx.Err()
+		case <-time.After(pollInterval):
+		}
 	}
 
 	return s.checkTransactionStatus(ctx, gatewayTxn)
@@ -365,6 +414,15 @@ func (s *Service) initiateCardPayment(
 	return html, nil
 }
 
+func (s *Service) GetTransactionStatus(ctx context.Context, txnRefNo string) (*TopUpResult, error) {
+	txn, err := s.q.GetTransactionByTxnRefNo(ctx, txnRefNo)
+	if err != nil {
+		return nil, commonerrors.Wrap(ErrDatabaseQuery, err)
+	}
+
+	return s.checkTransactionStatus(ctx, txn)
+}
+
 func (s *Service) creditWalletFromPayment(ctx context.Context, tx pgx.Tx, userID uuid.UUID, amount int64, paymentTxnRefNo string) error {
 
 	// get user's wallet
@@ -400,6 +458,12 @@ func (s *Service) creditWalletFromPayment(ctx context.Context, tx pgx.Tx, userID
 			return nil
 		}
 
+		// Also check for raw database constraint violation (race condition)
+		if CheckUniqueConstraintViolation(err) {
+			log.Printf("[INFO] Wallet credit idempotent check hit for txn %s", paymentTxnRefNo)
+			return ErrIdempotentSuccess
+		}
+
 		return commonerrors.Wrap(commonerrors.ErrTransactionBegin, fmt.Errorf("wallet credit failed: %w", err))
 	}
 	return nil
@@ -422,7 +486,7 @@ func (s *Service) handleExistingTransaction(
 			Status:        PaymentStatusSuccess,
 			Message:       "Transaction has already completed",
 			PaymentMethod: PaymentMethod(existing.PaymentMethod),
-			Amount:        existing.Amount,
+			Amount:        float64(existing.Amount) / 100.0,
 		}, nil
 
 	case payment.CurrentStatus(PaymentStatusPending),
@@ -438,7 +502,7 @@ func (s *Service) handleExistingTransaction(
 			Status:        PaymentStatusFailed,
 			Message:       "Transaction has failed. Please create a new payment.",
 			PaymentMethod: PaymentMethod(existing.PaymentMethod),
-			Amount:        existing.Amount,
+			Amount:        float64(existing.Amount) / 100.0,
 		}, nil
 	}
 }
@@ -449,7 +513,7 @@ func (s *Service) checkTransactionStatus(
 	existing payment.GikiWalletGatewayTransaction,
 ) (*TopUpResult, error) {
 	// External API call - no transaction held
-	inquiryResult, err := s.gatewayClient.Inquiry(ctx, existing.TxnRefNo)
+	inquiryResult, err := s.gatewayClient.Inquiry(ctx, gateway.InquiryRequest{TxnRefNo: existing.TxnRefNo})
 
 	if err != nil {
 		return nil, commonerrors.Wrap(ErrGatewayUnavailable, err)
@@ -478,8 +542,15 @@ func (s *Service) checkTransactionStatus(
 		}
 
 		// Credit wallet (must succeed or transaction rolls back)
+		// NOTE: Storing atomic units (Paisas) in DB. Read layer handles conversion.
 		err = s.creditWalletFromPayment(ctx, tx, existing.UserID, existing.Amount, existing.TxnRefNo)
 		if err != nil {
+			if errors.Is(err, ErrIdempotentSuccess) {
+				log.Printf("[INFO] Transaction %s already credited (idempotent), skipping commit", existing.TxnRefNo)
+				// Do NOT commit - transaction is aborted due to unique constraint violation
+				// Just return success
+				return MapInquiryToTopUpResult(existing, *inquiryResult), nil
+			}
 			return nil, err // Transaction will rollback via defer
 		}
 
@@ -488,7 +559,7 @@ func (s *Service) checkTransactionStatus(
 			return nil, commonerrors.Wrap(commonerrors.ErrTransactionCommit, err)
 		}
 
-		return MapInquiryToTopUpResult(existing, inquiryResult), nil
+		return MapInquiryToTopUpResult(existing, *inquiryResult), nil
 
 	case PaymentStatusFailed:
 		// Update DB status to FAILED
@@ -500,7 +571,7 @@ func (s *Service) checkTransactionStatus(
 			return nil, commonerrors.Wrap(ErrTransactionUpdate, err)
 		}
 
-		return MapInquiryToTopUpResult(existing, inquiryResult), nil
+		return MapInquiryToTopUpResult(existing, *inquiryResult), nil
 
 	case PaymentStatusPending, PaymentStatusUnknown:
 		// Check timeout
@@ -513,16 +584,16 @@ func (s *Service) checkTransactionStatus(
 				return nil, commonerrors.Wrap(ErrTransactionUpdate, err)
 			}
 
-			result := MapInquiryToTopUpResult(existing, inquiryResult)
+			result := MapInquiryToTopUpResult(existing, *inquiryResult)
 			result.Status = PaymentStatusFailed
 			result.Message = "Transaction has timed out. Please try again."
 			return result, nil
 		}
 
-		return MapInquiryToTopUpResult(existing, inquiryResult), nil
+		return MapInquiryToTopUpResult(existing, *inquiryResult), nil
 
 	default:
-		return MapInquiryToTopUpResult(existing, inquiryResult), nil
+		return MapInquiryToTopUpResult(existing, *inquiryResult), nil
 	}
 }
 
@@ -595,7 +666,7 @@ func (s *Service) pollTransactionOnce(ctx context.Context, txRefNo string) bool 
 	}
 
 	// Call inquiry API
-	inquiryResult, err := s.gatewayClient.Inquiry(ctx, txRefNo)
+	inquiryResult, err := s.gatewayClient.Inquiry(ctx, gateway.InquiryRequest{TxnRefNo: txRefNo})
 	if err != nil {
 		middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrExternalService, fmt.Errorf("inquiry API failed (will retry): %w", err)), "polling-"+txRefNo)
 		s.rateLimiter.Release()

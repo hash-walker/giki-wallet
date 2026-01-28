@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"testing"
@@ -14,6 +15,17 @@ import (
 	paymentdb "github.com/hash-walker/giki-wallet/internal/payment/payment_db"
 	"github.com/hash-walker/giki-wallet/internal/payment/testutils"
 )
+
+// toSimpleMap converts url.Values to map[string]string for the gateway interface
+func toSimpleMap(v map[string][]string) map[string]string {
+	m := make(map[string]string)
+	for k, vals := range v {
+		if len(vals) > 0 {
+			m[k] = vals[0]
+		}
+	}
+	return m
+}
 
 // Test utility functions
 
@@ -136,13 +148,13 @@ func TestAmountToPaisa(t *testing.T) {
 		want   string
 	}{
 		{
-			name:   "500 rupees",
-			amount: 500,
+			name:   "50000 paisa",
+			amount: 50000,
 			want:   "50000",
 		},
 		{
-			name:   "1000 rupees",
-			amount: 1000,
+			name:   "100000 paisa",
+			amount: 100000,
 			want:   "100000",
 		},
 		{
@@ -151,8 +163,8 @@ func TestAmountToPaisa(t *testing.T) {
 			want:   "0",
 		},
 		{
-			name:   "1 rupee",
-			amount: 1,
+			name:   "100 paisa",
+			amount: 100,
 			want:   "100",
 		},
 	}
@@ -235,7 +247,7 @@ func TestInitiateMWalletPayment_Success(t *testing.T) {
 
 	payload := TopUpRequest{
 		IdempotencyKey: uuid.New(),
-		Amount:         500,
+		Amount:         500.50, // Test fractional Rupees
 		Method:         PaymentMethodMWallet,
 		PhoneNumber:    "03123456789",
 		CNICLast6:      "123456",
@@ -248,8 +260,13 @@ func TestInitiateMWalletPayment_Success(t *testing.T) {
 	}
 
 	// Test the gateway call directly
+	amountPaisa := int64(math.Round(payload.Amount * 100))
+	if amountPaisa != 50050 {
+		t.Errorf("conversion failed: expected 50050 paisa, got %d", amountPaisa)
+	}
+
 	mwRequest := gateway.MWalletInitiateRequest{
-		AmountPaisa:       AmountToPaisa(payload.Amount),
+		AmountPaisa:       AmountToPaisa(amountPaisa),
 		BillRefID:         gatewayTxn.BillRefID,
 		TxnRefNo:          gatewayTxn.TxnRefNo,
 		Description:       "GIKI Wallet Top Up",
@@ -356,7 +373,7 @@ func TestInquiry_Success(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	inquiryResult, err := service.gatewayClient.Inquiry(ctx, "TEST_TXN_123")
+	inquiryResult, err := service.gatewayClient.Inquiry(ctx, gateway.InquiryRequest{TxnRefNo: "TEST_TXN_123"})
 	if err != nil {
 		t.Fatalf("Inquiry() error = %v", err)
 	}
@@ -381,7 +398,7 @@ func TestInquiry_Pending(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	inquiryResult, err := service.gatewayClient.Inquiry(ctx, "TEST_TXN_123")
+	inquiryResult, err := service.gatewayClient.Inquiry(ctx, gateway.InquiryRequest{TxnRefNo: "TEST_TXN_123"})
 	if err != nil {
 		t.Fatalf("Inquiry() error = %v", err)
 	}
@@ -402,7 +419,7 @@ func TestInquiry_Failed(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	inquiryResult, err := service.gatewayClient.Inquiry(ctx, "TEST_TXN_123")
+	inquiryResult, err := service.gatewayClient.Inquiry(ctx, gateway.InquiryRequest{TxnRefNo: "TEST_TXN_123"})
 	if err != nil {
 		t.Fatalf("Inquiry() error = %v", err)
 	}
@@ -466,7 +483,7 @@ func TestHashVerification_Inquiry(t *testing.T) {
 	ctx := context.Background()
 
 	// This will fail if hash verification fails
-	inquiryResult, err := service.gatewayClient.Inquiry(ctx, "TEST_TXN_123")
+	inquiryResult, err := service.gatewayClient.Inquiry(ctx, gateway.InquiryRequest{TxnRefNo: "TEST_TXN_123"})
 	if err != nil {
 		t.Fatalf("Inquiry() failed - hash verification may have failed: %v", err)
 	}
@@ -606,7 +623,7 @@ func TestCardCallback_Success(t *testing.T) {
 	formValues := mockServer.GenerateCardCallbackFormData("TXN_TEST_123", "000")
 
 	ctx := context.Background()
-	callback, err := gatewayClient.ParseAndVerifyCardCallback(ctx, formValues)
+	callback, err := gatewayClient.ParseAndVerifyCardCallback(ctx, toSimpleMap(formValues))
 	if err != nil {
 		t.Fatalf("ParseAndVerifyCardCallback() error = %v", err)
 	}
@@ -631,7 +648,7 @@ func TestCardCallback_Failed(t *testing.T) {
 	formValues := mockServer.GenerateCardCallbackFormData("TXN_TEST_123", "101")
 
 	ctx := context.Background()
-	callback, err := gatewayClient.ParseAndVerifyCardCallback(ctx, formValues)
+	callback, err := gatewayClient.ParseAndVerifyCardCallback(ctx, toSimpleMap(formValues))
 	if err != nil {
 		t.Fatalf("ParseAndVerifyCardCallback() error = %v", err)
 	}
@@ -655,8 +672,7 @@ func TestCardCallback_InvalidHash(t *testing.T) {
 		"pp_SecureHash":   {"INVALID_HASH"},
 	}
 
-	ctx := context.Background()
-	_, err := gatewayClient.ParseAndVerifyCardCallback(ctx, formValues)
+	_, err := gatewayClient.ParseAndVerifyCardCallback(context.Background(), toSimpleMap(formValues))
 	if err == nil {
 		t.Errorf("ParseAndVerifyCardCallback() with invalid hash should return error")
 	}

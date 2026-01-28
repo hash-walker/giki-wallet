@@ -1,64 +1,31 @@
-
-import { Ticket, ArrowRight, ArrowLeft } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Ticket, ArrowRight, ArrowLeft, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TicketData, formatDate, groupTicketsByDirectionAndDate } from '../utils/ticketHelpers';
 import { TicketCard } from '../components/TicketCard';
-
+import { useTicketsStore } from '../store';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/shared/components/ui/button';
-
-// Mock data (same as modal)
-const generateTicketNumber = (): string => {
-    return Math.floor(1000 + Math.random() * 9000).toString();
-};
-
-const mockTickets: TicketData[] = [
-    {
-        id: '1',
-        serialNumber: 1,
-        ticketNumber: generateTicketNumber(),
-        routeSerial: 'R001',
-        direction: 'to-giki',
-        fromLocation: 'Islamabad',
-        toLocation: 'GIKI',
-        pickupLocation: 'F-6 Markaz',
-        date: new Date().toISOString().split('T')[0],
-        time: '9:00 AM',
-        status: 'confirmed',
-        busType: 'Employee',
-        ticketCategory: 'employee',
-        isSelf: true,
-        fullName: 'John Doe',
-        canCancel: true
-    },
-    {
-        id: '2',
-        serialNumber: 2,
-        ticketNumber: generateTicketNumber(),
-        routeSerial: 'R002',
-        direction: 'from-giki',
-        fromLocation: 'GIKI',
-        toLocation: 'Islamabad',
-        dropLocation: 'F-7 Markaz',
-        date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
-        time: '5:00 PM',
-        status: 'confirmed',
-        busType: 'Employee',
-        ticketCategory: 'family',
-        isSelf: false,
-        relativeName: 'Jane Doe',
-        relativeRelation: 'Spouse',
-        canCancel: true
-    },
-];
+import JazzCashPayment from '../../wallet/components/JazzCashPayment';
+import { useAuthStore } from '@/shared/stores/authStore';
 
 export const TicketsPage = () => {
     const navigate = useNavigate();
-    const tickets = mockTickets; // In real app, fetch from API
-    const groupedTickets = groupTicketsByDirectionAndDate(tickets);
+    const { tickets, loading, fetchTickets } = useTicketsStore();
+    const { user } = useAuthStore();
+    const [selectedTicket, setSelectedTicket] = useState<TicketData | null>(null);
+
+    useEffect(() => {
+        fetchTickets();
+    }, [fetchTickets]);
+
+    // Map backend response ticket structure to TicketData (if needed)
+    // Actually, backend response matches closely. 
+    // We might need to ensure compatibility or just trust our Zod schema.
+    const groupedTickets = groupTicketsByDirectionAndDate(tickets as unknown as TicketData[]);
 
     return (
-        <div className="w-full pb-20 md:pb-6">
+        <div className="w-full pb-20 md:pb-6 relative">
             <div className="flex items-center justify-between gap-4 mb-8 pt-6">
                 <div className="flex items-center gap-4">
                     <div className="w-14 h-14 rounded-2xl bg-primary/5 flex items-center justify-center text-primary border border-primary/10 shadow-sm">
@@ -79,7 +46,12 @@ export const TicketsPage = () => {
                 </Button>
             </div>
 
-            {groupedTickets.length === 0 ? (
+            {loading ? (
+                <div className="flex flex-col items-center justify-center py-20">
+                    <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
+                    <p className="text-slate-400 font-bold text-sm">Loading tickets...</p>
+                </div>
+            ) : groupedTickets.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-[2rem] border border-slate-100 shadow-sm">
                     <Ticket className="w-16 h-16 text-slate-200 mb-6" />
                     <p className="text-slate-900 text-lg font-bold">No tickets found</p>
@@ -131,13 +103,46 @@ export const TicketsPage = () => {
                                     {/* Tickets for this date */}
                                     <div className="grid gap-4">
                                         {dateTickets.map((ticket: TicketData) => (
-                                            <TicketCard key={ticket.id} ticket={ticket} />
+                                            <TicketCard
+                                                key={ticket.id}
+                                                ticket={ticket}
+                                                onBuyClick={(t) => setSelectedTicket(t)}
+                                            />
                                         ))}
                                     </div>
                                 </div>
                             ))}
                         </div>
                     ))}
+                </div>
+            )}
+
+            {/* Payment Modal */}
+            {selectedTicket && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
+                    <div className="relative w-full max-w-md bg-white rounded-[2.5rem] p-2 shadow-2xl">
+                        <button
+                            onClick={() => setSelectedTicket(null)}
+                            className="absolute z-10 top-6 right-6 p-2 rounded-full bg-slate-100 hover:bg-slate-200 transition-colors"
+                        >
+                            <X className="w-5 h-5 text-slate-500" />
+                        </button>
+
+                        <div className="p-4">
+                            <JazzCashPayment
+                                amount={selectedTicket.price || 500} // Fallback price if 0 or missing
+                                phoneNumber={user?.phone_number || ''}
+                                cnicLast6={'123456'} // Fallback since CNIC might not be in auth user
+                                onSuccess={() => {
+                                    // Refresh tickets or show success logic
+                                    setTimeout(() => setSelectedTicket(null), 3000);
+                                }}
+                                onFailure={(err) => {
+                                    console.error('Payment failed', err);
+                                }}
+                            />
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

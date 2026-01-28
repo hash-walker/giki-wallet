@@ -32,6 +32,7 @@ export interface TicketData {
         refundedAt?: string;
     };
     txnRefNo?: string;
+    price?: number;
 }
 
 export const formatDate = (dateString: string): string => {

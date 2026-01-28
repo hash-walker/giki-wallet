@@ -45,14 +45,14 @@ func MapDBWalletToWallet(dbWallet walletdb.GikiWalletWallet) *Wallet {
 }
 
 type BalanceResponse struct {
-	Balance  int64  `json:"balance"`
-	Currency string `json:"currency"`
+	Balance  float64 `json:"balance"`
+	Currency string  `json:"currency"`
 }
 
 type TransactionHistoryItem struct {
 	ID           uuid.UUID `json:"id"`
-	Amount       int64     `json:"amount"`
-	BalanceAfter int64     `json:"balance_after"`
+	Amount       float64   `json:"amount"`
+	BalanceAfter float64   `json:"balance_after"`
 	Type         string    `json:"type"`
 	ReferenceID  string    `json:"reference_id"`
 	Description  string    `json:"description"`

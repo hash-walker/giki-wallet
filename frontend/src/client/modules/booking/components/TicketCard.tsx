@@ -4,9 +4,10 @@ import { TicketData, getRefundBadge, getStatusColor, getTicketCategoryBadge } fr
 
 interface TicketCardProps {
     ticket: TicketData;
+    onBuyClick?: (ticket: TicketData) => void;
 }
 
-export const TicketCard = ({ ticket }: TicketCardProps) => {
+export const TicketCard = ({ ticket, onBuyClick }: TicketCardProps) => {
     const refundBadge = getRefundBadge(ticket);
     const categoryBadge = getTicketCategoryBadge(ticket);
 
@@ -112,7 +113,12 @@ export const TicketCard = ({ ticket }: TicketCardProps) => {
                             Cancel Booking
                         </button>
                     ) : (
-                        <span className="text-[10px] text-slate-300 font-black uppercase tracking-widest italic opacity-50">Non-cancellable</span>
+                        <button
+                            className="h-10 px-5 rounded-xl bg-primary/5 hover:bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest transition-all border border-primary/10 shadow-sm hover:shadow-md hover:-translate-y-0.5"
+                            onClick={() => onBuyClick?.(ticket)}
+                        >
+                            Buy Ticket
+                        </button>
                     )}
                 </div>
             </div>

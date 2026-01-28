@@ -270,3 +270,20 @@ func (h *Handler) GetWeeklyTripSummary(w http.ResponseWriter, r *http.Request) {
 
 	common.ResponseWithJSON(w, http.StatusOK, summary)
 }
+
+func (h *Handler) GetMyTickets(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		middleware.HandleError(w, commonerrors.ErrUnauthorized, requestID)
+		return
+	}
+
+	tickets, err := h.service.GetMyTickets(r.Context(), userID)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, tickets)
+}

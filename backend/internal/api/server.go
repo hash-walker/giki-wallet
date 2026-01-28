@@ -65,6 +65,7 @@ func (s *Server) MountRoutes() {
 		r.Use(auth.RequireAuth)
 		r.Post("/topup", s.Payment.TopUp)
 		r.Get("/page/{txnRefNo}", s.Payment.CardPaymentPage)
+		r.Get("/status/{txnRefNo}", s.Payment.CheckStatus)
 	})
 
 	r.Post("/booking/payment/response", s.Payment.CardCallBack)
@@ -81,6 +82,7 @@ func (s *Server) MountRoutes() {
 			r.Post("/holds", s.Transport.HoldSeats)
 			r.Get("/holds/active", s.Transport.GetActiveHolds)
 			r.Delete("/holds/active", s.Transport.ReleaseAllActiveHolds)
+			r.Get("/tickets", s.Transport.GetMyTickets)
 			r.Post("/confirm", s.Transport.ConfirmBatch)
 			r.Delete("/holds/{hold_id}", s.Transport.ReleaseHold)
 			r.Delete("/tickets/{ticket_id}", s.Transport.CancelTicket)

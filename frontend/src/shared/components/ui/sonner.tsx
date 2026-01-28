@@ -28,7 +28,7 @@ const Toaster = () => {
           "--border-radius": "var(--radius)",
         } as CSSProperties
       }
-      position="top-right"
+      position="top-center"
       duration={3000}
     />
   )

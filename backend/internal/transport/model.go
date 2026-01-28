@@ -164,6 +164,26 @@ type ActiveHoldResponse struct {
 	RouteName string    `json:"route_name"`
 }
 
+type MyTicketResponse struct {
+	ID                uuid.UUID `json:"id"`
+	TicketNumber      string    `json:"ticket_number"`
+	RouteName         string    `json:"route_name"`
+	Direction         string    `json:"direction"`
+	FromLocation      string    `json:"from_location"`
+	ToLocation        string    `json:"to_location"`
+	PickupLocation    string    `json:"pickup_location"`
+	DropoffLocation   string    `json:"dropoff_location"`
+	Date              string    `json:"date"`
+	Time              string    `json:"time"`
+	Status            string    `json:"status"`
+	BusType           string    `json:"bus_type"`
+	PassengerName     string    `json:"passenger_name"`
+	PassengerRelation string    `json:"passenger_relation"`
+	IsSelf            bool      `json:"is_self"`
+	Price             float64   `json:"price"`
+	CanCancel         bool      `json:"can_cancel"`
+}
+
 func mapDBRouteTemplateToRouteTemplate(rows []transport_db.GetRouteStopsDetailsRow, weeklyScheduleRows []transport_db.GikiTransportRouteWeeklySchedule) *RouteTemplateResponse {
 	if len(rows) == 0 {
 		return nil
