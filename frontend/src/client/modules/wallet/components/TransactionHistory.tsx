@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Modal } from '@/shared/components/ui/Modal';
 import { formatDate, groupTransactionsByDate } from '../utils/walletHelpers';
-import { Transaction } from '../utils/transactionHelpers';
+import { Transaction, mapTxType } from '../utils/transactionHelpers';
 import { TransactionCard } from './TransactionCard';
-import { useWalletStore } from '../walletStore';
+import { useWalletModuleStore } from '../store';
+import { ApiTransaction } from '../api';
 
 interface TransactionHistoryProps {
     isOpen: boolean;
@@ -14,7 +15,7 @@ export const TransactionHistory = ({
     isOpen,
     onClose,
 }: TransactionHistoryProps) => {
-    const { transactions, fetchHistory, loading } = useWalletStore();
+    const { transactions, fetchHistory, isDataLoading } = useWalletModuleStore();
 
     useEffect(() => {
         if (isOpen) {
@@ -22,7 +23,26 @@ export const TransactionHistory = ({
         }
     }, [isOpen, fetchHistory]);
 
-    const groupedTransactions = groupTransactionsByDate(transactions);
+    // Map ApiTransaction to Transaction UI model if needed, or check compatibility
+    // Helper expects Transaction which has { id, type, description, amount, timestamp, date }
+    // ApiTransaction has { id, amount, balance_after, type, reference_id, description, created_at }
+
+    // We need to map it locally or update helpers. Let's map locally to satisfy Transaction type.
+    const mappedTransactions: Transaction[] = useMemo(() => {
+        return transactions.map((t: ApiTransaction) => {
+            const dateObj = new Date(t.created_at);
+            return {
+                id: t.id,
+                type: mapTxType(t.type),
+                description: t.description,
+                amount: t.amount,
+                timestamp: dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                date: dateObj.toISOString().split('T')[0]
+            };
+        });
+    }, [transactions]);
+
+    const groupedTransactions = groupTransactionsByDate(mappedTransactions);
 
     return (
         <Modal
@@ -32,7 +52,7 @@ export const TransactionHistory = ({
             size="lg"
         >
             <div className="space-y-6">
-                {loading ? (
+                {isDataLoading && transactions.length === 0 ? (
                     <div className="py-10 text-center text-gray-500">Loading transactions...</div>
                 ) : groupedTransactions.length === 0 ? (
                     <div className="py-10 text-center text-gray-500">No transactions yet.</div>
@@ -49,7 +69,7 @@ export const TransactionHistory = ({
 
                             {/* Transactions for this date */}
                             <div className="space-y-3">
-                                {dateTransactions.map((transaction: Transaction) => (
+                                {dateTransactions.map((transaction) => (
                                     <TransactionCard key={transaction.id} transaction={transaction} />
                                 ))}
                             </div>

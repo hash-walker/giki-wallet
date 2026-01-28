@@ -12,7 +12,7 @@ import JazzCashPayment from '../components/JazzCashPayment';
 
 type PaymentMethod = 'jazzcash' | 'card';
 
-export const TopUpPage = () => {
+const TopUpPage = () => {
     const navigate = useNavigate();
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('jazzcash');
     const [amount, setAmount] = useState<string>('');
@@ -42,9 +42,10 @@ export const TopUpPage = () => {
             } else {
                 toast.error('Failed to get payment page. Please try again.');
             }
-        } catch (error: any) {
+        } catch (error) {
             console.error('Payment error:', error);
-            const errorMessage = error.response?.data?.message || 'Payment failed. Please try again.';
+            const err = error as { response?: { data?: { message?: string } } };
+            const errorMessage = err.response?.data?.message || 'Payment failed. Please try again.';
             toast.error(errorMessage);
         } finally {
             setIsLoading(false);
@@ -129,3 +130,4 @@ export const TopUpPage = () => {
         </div>
     );
 };
+export default TopUpPage

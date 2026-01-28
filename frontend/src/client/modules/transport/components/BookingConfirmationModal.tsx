@@ -21,7 +21,7 @@ export type HeldSeat = {
     expires_at: string;
 };
 
-interface BookingConfirmationModalProps {
+export interface BookingConfirmationModalProps {
     isOpen: boolean;
     onClose: () => void;
     confirming: boolean;
@@ -31,7 +31,7 @@ interface BookingConfirmationModalProps {
     outboundHolds: HeldSeat[];
     returnHolds: HeldSeat[];
     passengers: Record<string, Passenger>;
-    setPassengers: React.Dispatch<React.SetStateAction<Record<string, Passenger>>>;
+    onUpdatePassenger: (holdId: string, data: Passenger) => void;
 }
 
 export function BookingConfirmationModal({
@@ -44,7 +44,7 @@ export function BookingConfirmationModal({
     outboundHolds,
     returnHolds,
     passengers,
-    setPassengers,
+    onUpdatePassenger,
 }: BookingConfirmationModalProps) {
     const allHolds = [...outboundHolds, ...returnHolds];
 
@@ -129,12 +129,7 @@ export function BookingConfirmationModal({
                                             className="w-full h-12 border border-slate-100 rounded-xl px-4 text-sm font-bold text-slate-900 placeholder:text-slate-300 focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all bg-slate-50/50 shadow-inner"
                                             placeholder="Enter passenger name"
                                             value={p.name}
-                                            onChange={(e) =>
-                                                setPassengers((prev) => ({
-                                                    ...prev,
-                                                    [h.hold_id]: { ...p, name: e.target.value },
-                                                }))
-                                            }
+                                            onChange={(e) => onUpdatePassenger(h.hold_id, { ...p, name: e.target.value })}
                                         />
                                         <Select
                                             options={[
@@ -143,12 +138,7 @@ export function BookingConfirmationModal({
                                                 { value: 'CHILD', label: 'Child' },
                                             ]}
                                             value={p.relation}
-                                            onChange={(v) =>
-                                                setPassengers((prev) => ({
-                                                    ...prev,
-                                                    [h.hold_id]: { ...p, relation: v as Passenger['relation'] },
-                                                }))
-                                            }
+                                            onChange={(v) => onUpdatePassenger(h.hold_id, { ...p, relation: v as Passenger['relation'] })}
                                             placeholder="Select relation"
                                             className="h-12 rounded-xl bg-slate-50/50 border-slate-100 font-bold text-sm shadow-inner"
                                             showLabel={false}

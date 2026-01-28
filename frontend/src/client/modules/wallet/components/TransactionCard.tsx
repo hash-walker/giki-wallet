@@ -1,13 +1,13 @@
 import { cn } from '@/lib/utils';
 import { Transaction, getTransactionIcon, getIconBackground } from '../utils/transactionHelpers';
-import { useWalletStore } from '../walletStore';
+import { useWalletModuleStore } from '../store';
 
 interface TransactionCardProps {
     transaction: Transaction;
 }
 
 export const TransactionCard = ({ transaction }: TransactionCardProps) => {
-    const { currency } = useWalletStore();
+    const { currency } = useWalletModuleStore();
     const isDebit = transaction.amount < 0;
     const amount = Math.abs(transaction.amount);
 

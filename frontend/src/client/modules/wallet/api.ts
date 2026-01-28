@@ -1,41 +1,46 @@
 import { apiClient } from '@/lib/axios';
-import { TopUpRequest, TopUpResult } from './types';
+import { z } from 'zod';
+import {
+    topUpRequestSchema,
+    topUpResultSchema,
+    balanceSchema,
+    historyResponseSchema
+} from './validators';
+import { TopUpRequest } from './types';
 
-export type BalanceResponse = {
-    balance: number;
-    currency: string;
-};
-
-export type ApiTransaction = {
-    id: string;
-    amount: number;
-    balance_after: number;
-    type: string;
-    reference_id: string;
-    description: string;
-    created_at: string;
-};
+// Infer types from schemas
+export type BalanceResponse = z.infer<typeof balanceSchema>;
+export type ApiTransaction = z.infer<typeof historyResponseSchema>[number];
+// Re-export TopUp result type
+export type TopUpResult = z.infer<typeof topUpResultSchema>;
 
 export async function getBalance() {
     const res = await apiClient.get<BalanceResponse>('/wallet/balance');
-    return res.data;
+    return balanceSchema.parse(res.data);
 }
 
 export async function getHistory() {
     const res = await apiClient.get<ApiTransaction[]>('/wallet/history');
-    return res.data;
+    return historyResponseSchema.parse(res.data);
 }
 
-export async function topUp(request: TopUpRequest & { timeout?: number }) {
+export async function topUp(request: TopUpRequest & { timeout?: number }, signal?: AbortSignal) {
     const { timeout, ...data } = request;
+
+    // Validate request
+    topUpRequestSchema.parse(data);
+
     console.log(`Initiating topUp with timeout: ${timeout || 60000}ms`);
     const res = await apiClient.post<TopUpResult>('/payment/topup', data, {
-        timeout: timeout || 60000
+        timeout: timeout || 60000,
+        signal
     });
-    return res.data;
+
+    // Validate and return response
+    return topUpResultSchema.parse(res.data);
 }
 
-export async function getTransactionStatus(txnRefNo: string) {
-    const res = await apiClient.get<TopUpResult>(`/payment/status/${txnRefNo}`);
-    return res.data;
+export async function getTransactionStatus(txnRefNo: string, signal?: AbortSignal) {
+    const res = await apiClient.get<TopUpResult>(`/payment/status/${txnRefNo}`, { signal });
+    return topUpResultSchema.parse(res.data);
 }

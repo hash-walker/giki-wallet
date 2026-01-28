@@ -4,9 +4,9 @@ import { ClientLayout } from '@/client/layout/ClientLayout';
 import { AdminLayout, AdminDashboard, RoutesPage, TimeSlotsPage, TicketsPage as AdminTicketsPage, UsersPage, SettingsPage, TransactionsPage, HistoryPage } from '@/admin';
 import { HomePage } from '@/client/pages/HomePage';
 import { TransportPage } from '@/client/modules/transport/pages/TransportPage';
-import { TopUpPage } from '@/client/modules/wallet/pages/TopUpPage';
+import TopUpPage from '@/client/modules/wallet/pages/TopUpPage';
 
-import { TicketsPage } from '@/client/modules/booking/pages/TicketsPage';
+import { TicketsPage } from '@/client/modules/transport/pages/TicketsPage';
 import { AccountPage } from '@/shared/modules/auth/pages/AccountPage';
 import { Toaster } from '@/shared/components/ui/sonner';
 import { AuthLayout, SignInPage, SignUpPage, VerifyEmailPage, RequireAuth } from '@/shared/modules/auth';

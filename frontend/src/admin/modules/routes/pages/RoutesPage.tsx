@@ -5,7 +5,7 @@ import { RoutesTable } from '../components/RoutesTable';
 import { RouteFormModal } from '../components/RouteFormModal';
 import { Route } from '../types';
 import { TimeSlot } from '../../time-slots/types';
-import { CITIES, STOPS } from '@/client/modules/booking/data/mockRoutes';
+import { CITIES, STOPS } from '@/client/modules/transport/data';
 import { toast } from '@/lib/toast';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
@@ -101,7 +101,7 @@ export const RoutesPage = () => {
     };
 
     const handleToggleHold = (id: number) => {
-        setRoutes(routes.map(r => 
+        setRoutes(routes.map(r =>
             r.id === id ? { ...r, isHeld: !r.isHeld } : r
         ));
         const route = routes.find(r => r.id === id);
@@ -120,8 +120,8 @@ export const RoutesPage = () => {
 
         if (editingRoute) {
             // Update existing route
-            setRoutes(routes.map(r => 
-                r.id === editingRoute.id 
+            setRoutes(routes.map(r =>
+                r.id === editingRoute.id
                     ? { ...routeWithWeek, id: editingRoute.id }
                     : r
             ));
@@ -148,17 +148,17 @@ export const RoutesPage = () => {
             if (route.weekStart && route.weekEnd) {
                 const routeWeekStart = new Date(route.weekStart);
                 const routeWeekEnd = new Date(route.weekEnd);
-                if (!isDateInWeek(routeWeekStart, weekStart, weekEnd) && 
+                if (!isDateInWeek(routeWeekStart, weekStart, weekEnd) &&
                     !isDateInWeek(routeWeekEnd, weekStart, weekEnd)) {
                     // Check if routes overlap with current week
                     const overlaps = (routeWeekStart <= weekEnd && routeWeekEnd >= weekStart);
                     if (!overlaps) return false;
                 }
             }
-            
-            const matchesSearch = 
+
+            const matchesSearch =
                 getCityName(route.cityId).toLowerCase().includes(searchTerm.toLowerCase());
-            
+
             const matchesDirection = filterDirection === 'all' || route.direction === filterDirection;
             const matchesCity = filterCity === 'all' || route.cityId === filterCity;
             const matchesBusType = filterBusType === 'all' || route.busType === filterBusType;

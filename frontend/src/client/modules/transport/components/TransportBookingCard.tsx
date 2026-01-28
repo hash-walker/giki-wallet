@@ -1,12 +1,19 @@
 import * as React from 'react';
-import { useState, useMemo } from 'react';
-import { RouteDirection, BookingData, BookingSelection, Schedule } from '../types';
+import { useState, useMemo, useEffect } from 'react';
 import { Select } from '@/shared/components/ui/Select';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/lib/utils';
-import { getAvailableTimeSlotsForCity, getAvailableStopsForCityAndTime, getScheduleForSelection } from '../data/mockRoutes';
+import {
+    getUniqueCities,
+    getAvailableTimesForCity,
+    getStopsForTrip,
+    getTripById,
+    isFromGIKI,
+    isToGIKI
+} from '../utils';
+import { Trip } from '../api';
 
-// Badge component - defined outside to avoid recreation on each render
+// Badge component
 const Badge = ({ type, children }: { type: 'employee' | 'student' | 'full'; children: React.ReactNode }) => {
     const colors = {
         employee: 'bg-primary',
@@ -20,14 +27,14 @@ const Badge = ({ type, children }: { type: 'employee' | 'student' | 'full'; chil
     );
 };
 
-// Availability component - defined outside
+// Availability component
 const Availability = ({ isFull, tickets }: { isFull: boolean; tickets?: number }) => (
     <span className={cn("font-semibold text-sm", isFull ? "text-destructive" : "text-primary")}>
         {isFull ? "Sold Out" : `${tickets} Left`}
     </span>
 );
 
-// TicketSelect component - defined outside
+// TicketSelect component
 const TicketSelect = ({
     ticketCount,
     setTicketCount,
@@ -59,151 +66,174 @@ const TicketSelect = ({
     </select>
 );
 
-type SelectionPayload = BookingSelection & {
-    scheduleId: number;
+export interface TransportBookingSelection {
+    tripId: string;
+    pickupId: string;
+    dropoffId: string;
+    ticketCount: number;
     isFull: boolean;
-    ticketsLeft: number;
-    status?: string;
-    busType?: string;
-    isHeld?: boolean;
-};
-
-interface BookingCardProps {
-    direction: RouteDirection;
-    bookingData: BookingData;
-    onBook?: (selection: SelectionPayload) => void;
-    mode?: 'immediate' | 'collect';
-    onSaveSelection?: (selection: SelectionPayload) => void;
-    onSelectionReset?: () => void;
-    sharedCityId?: string | null; // For round trip - shared city selection
 }
 
-export const BookingCard = ({
+interface TransportBookingCardProps {
+    direction: 'from-giki' | 'to-giki';
+    allTrips: Trip[];
+    onBook?: (selection: TransportBookingSelection) => void;
+    mode?: 'immediate' | 'collect';
+    onSaveSelection?: (selection: TransportBookingSelection) => void;
+    onSelectionReset?: () => void;
+    sharedCityName?: string | null;  // For round trip linkage if needed
+    loading?: boolean;
+}
+
+export const TransportBookingCard = ({
     direction,
-    bookingData,
+    allTrips,
     onBook,
     mode = 'immediate',
     onSaveSelection,
     onSelectionReset,
-    sharedCityId
-}: BookingCardProps) => {
-    const { cities, timeSlots, stops, schedules } = bookingData;
+    sharedCityName,
+    loading = false
+}: TransportBookingCardProps) => {
 
-    // Selection state - use shared city if provided, otherwise local state
-    const [localCityId, setLocalCityId] = useState<string | null>(null);
-    const selectedCityId = sharedCityId !== undefined ? sharedCityId : localCityId;
-    const [selectedTimeSlotId, setSelectedTimeSlotId] = useState<string | null>(null);
+    // Selection state
+    const [selectedCityName, setSelectedCityName] = useState<string | null>(null);
+    const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
     const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
     const [ticketCount, setTicketCount] = useState(1);
 
-    // Derived data based on selections
-    const availableTimeSlots = useMemo(() => {
-        if (!selectedCityId) return [];
-        return getAvailableTimeSlotsForCity(selectedCityId, schedules, timeSlots);
-    }, [selectedCityId, schedules, timeSlots]);
-
-    const availableStops = useMemo(() => {
-        if (!selectedCityId || !selectedTimeSlotId) return [];
-        return getAvailableStopsForCityAndTime(selectedCityId, selectedTimeSlotId, schedules, stops);
-    }, [selectedCityId, selectedTimeSlotId, schedules, stops]);
-
-    const currentSchedule: Schedule | undefined = useMemo(() => {
-        if (!selectedCityId || !selectedTimeSlotId || !selectedStopId) return undefined;
-        return getScheduleForSelection(selectedCityId, selectedTimeSlotId, selectedStopId, schedules);
-    }, [selectedCityId, selectedTimeSlotId, selectedStopId, schedules]);
-
-    // Handle city change - reset dependent selections
-    const handleCityChange = (cityId: string | null) => {
-        if (mode === 'collect') onSelectionReset?.();
-        // Only update local city if not using shared city
-        if (sharedCityId === undefined) {
-            setLocalCityId(cityId);
+    // Effect to sync shared city
+    useEffect(() => {
+        if (sharedCityName !== undefined && sharedCityName !== selectedCityName) {
+            setSelectedCityName(sharedCityName);
+            setSelectedTripId(null);
+            setSelectedStopId(null);
+            setTicketCount(1);
         }
-        setSelectedTimeSlotId(null);
-        setSelectedStopId(null);
-        setTicketCount(1);
-    };
+    }, [sharedCityName]);
 
-    // Handle time slot change - reset dependent selections
-    const handleTimeSlotChange = (timeSlotId: string | null) => {
+    // Derived Options using helpers
+    // 1. Cities
+    const cityOptions = useMemo(() => getUniqueCities(allTrips, direction), [allTrips, direction]);
+
+    // 2. Time Slots (Trips)
+    const timeOptions = useMemo(() => {
+        if (!selectedCityName) return [];
+        return getAvailableTimesForCity(allTrips, selectedCityName, direction);
+    }, [allTrips, selectedCityName, direction]);
+
+    // 3. Stops
+    const stopOptions = useMemo(() => {
+        if (!selectedTripId) return [];
+        return getStopsForTrip(allTrips, selectedTripId, direction);
+    }, [allTrips, selectedTripId, direction]);
+
+    // 4. Current Trip Data
+    const currentTrip = useMemo(() => {
+        if (!selectedTripId) return null;
+        return getTripById(allTrips, selectedTripId);
+    }, [allTrips, selectedTripId]);
+
+
+    // Handlers
+    const handleCityChange = (cityName: string | null) => {
         if (mode === 'collect') onSelectionReset?.();
-        setSelectedTimeSlotId(timeSlotId);
+        if (sharedCityName === undefined) {
+            setSelectedCityName(cityName);
+        }
+        setSelectedTripId(null);
         setSelectedStopId(null);
         setTicketCount(1);
     };
 
-    // Handle stop change - reset ticket count
+    const handleTimeChange = (tripId: string | null) => {
+        if (mode === 'collect') onSelectionReset?.();
+        setSelectedTripId(tripId);
+        setSelectedStopId(null);
+        setTicketCount(1);
+    };
+
     const handleStopChange = (stopId: string | null) => {
         if (mode === 'collect') onSelectionReset?.();
         setSelectedStopId(stopId);
         setTicketCount(1);
     };
 
-    // Handle booking or save selection (for round trip)
     const handleBook = () => {
-        if (!currentSchedule) return;
-        if (mode === 'collect' && isFull) {
-            // never allow saving sold-out legs (even if held)
-            onSelectionReset?.();
+        if (!currentTrip || !selectedTripId || !selectedStopId) return;
+
+        // Determine Pickup/Dropoff based on direction
+        let pickupId = '';
+        let dropoffId = '';
+
+        const gikiStopIndex = currentTrip.stops.findIndex(s => s.stop_name.toLowerCase().includes('giki'));
+        const gikiStopId = gikiStopIndex !== -1 ? currentTrip.stops[gikiStopIndex].stop_id : null;
+
+        if (!gikiStopId) {
+            console.error("GIKI Stop not found on trip");
             return;
         }
-        const payload: SelectionPayload = {
-            cityId: selectedCityId,
-            timeSlotId: selectedTimeSlotId,
-            stopId: selectedStopId,
+
+        if (direction === 'from-giki') {
+            pickupId = gikiStopId;
+            dropoffId = selectedStopId;
+        } else {
+            pickupId = selectedStopId;
+            dropoffId = gikiStopId;
+        }
+
+        const isFull = currentTrip.available_seats <= 0 || currentTrip.booking_status === 'FULL';
+
+        const payload: TransportBookingSelection = {
+            tripId: selectedTripId,
+            pickupId,
+            dropoffId,
             ticketCount,
-            scheduleId: currentSchedule.id,
-            isFull,
-            ticketsLeft: currentSchedule.tickets,
-            status: currentSchedule.status,
-            busType: currentSchedule.bus_type,
-            isHeld
+            isFull
         };
 
         if (mode === 'collect') {
             onSaveSelection?.(payload);
-            return;
+        } else {
+            onBook?.(payload);
         }
-
-        onBook?.(payload);
     };
 
-    const isFull = currentSchedule ? (currentSchedule.tickets <= 0 || currentSchedule.status === 'full') : false;
-    const isHeld = currentSchedule?.is_held || false;
-    const hasCompleteSelection = selectedCityId && selectedTimeSlotId && selectedStopId && currentSchedule;
-    const isFromGIKI = direction === 'from-giki';
-    const stopLabel = isFromGIKI ? "Drop Location" : "Pickup Point";
+    const isFull = currentTrip ? (currentTrip.available_seats <= 0 || currentTrip.booking_status === 'FULL') : false;
+    const isLocked = currentTrip?.booking_status === 'LOCKED';
+    const isStudent = false; // We don't have explicit student/employee flag on Trip yet, or infer from route name? 
+    // Assuming generic for now, strict "Student" bus logic might rely on route_name parsing if needed.
+    const maxTickets = Math.min(3, currentTrip?.available_seats || 0);
 
-    // Convert data to select options
-    const cityOptions = cities.map(c => ({ value: c.id, label: c.name }));
-    const timeOptions = availableTimeSlots.map(t => ({ value: t.id, label: `${t.date} - ${t.time}` }));
-    const stopOptions = availableStops.map(s => ({ value: s.id, label: s.name }));
+    const hasCompleteSelection = selectedCityName && selectedTripId && selectedStopId && currentTrip;
 
-    // Computed values for TicketSelect
-    const isStudent = currentSchedule?.bus_type === 'Student';
-    const maxTickets = Math.min(3, currentSchedule?.tickets || 0);
+    // Labels
+    const stopLabel = direction === 'from-giki' ? "Drop Location" : "Pickup Point";
+    const cityLabel = "City"; // Generic
+
+    if (loading) return <div className="p-8 text-center text-gray-400">Loading schedules...</div>;
 
     return (
         <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300">
             {/* Mobile View */}
             <div className="block md:hidden p-4 space-y-3">
-                {sharedCityId === undefined && (
+                {sharedCityName === undefined && (
                     <Select
                         options={cityOptions}
-                        value={selectedCityId}
+                        value={selectedCityName}
                         onChange={handleCityChange}
                         placeholder="Select City"
-                        label="City"
+                        label={cityLabel}
                     />
                 )}
                 <Select
                     options={timeOptions}
-                    value={selectedTimeSlotId}
-                    onChange={handleTimeSlotChange}
+                    value={selectedTripId}
+                    onChange={handleTimeChange}
                     placeholder="Select Time"
                     disabledPlaceholder="Select city first"
                     label="Date & Time"
-                    disabled={!selectedCityId}
+                    disabled={!selectedCityName}
                 />
                 <Select
                     options={stopOptions}
@@ -212,19 +242,18 @@ export const BookingCard = ({
                     placeholder="Select Stop"
                     disabledPlaceholder="Select time first"
                     label={stopLabel}
-                    disabled={!selectedTimeSlotId}
+                    disabled={!selectedTripId}
                 />
 
-                {hasCompleteSelection && (
+                {hasCompleteSelection && currentTrip && (
                     <div className="space-y-3 pt-2 border-t border-gray-100">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-1.5">
-                                <Badge type={currentSchedule.bus_type === 'Student' ? 'student' : 'employee'}>
-                                    {currentSchedule.bus_type}
-                                </Badge>
+                                {/* Infer Type from route name if possible, else generic */}
+                                <Badge type="employee">{currentTrip.route_name}</Badge>
                                 {isFull && <Badge type="full">Full</Badge>}
                             </div>
-                            <Availability isFull={isFull} tickets={currentSchedule?.tickets} />
+                            <Availability isFull={isFull} tickets={currentTrip.available_seats} />
                         </div>
                         <div className="flex gap-3 items-center">
                             <TicketSelect
@@ -237,38 +266,26 @@ export const BookingCard = ({
                             />
                             <Button
                                 className="flex-1 font-semibold"
-                                disabled={isFull}
+                                disabled={isFull || isLocked}
                                 variant={isFull ? "secondary" : "default"}
                                 onClick={handleBook}
                             >
                                 {mode === 'collect'
-                                    ? isFull
-                                        ? "Sold Out"
-                                        : "Save Selection"
-                                    : isHeld
-                                        ? "Resume"
-                                        : isFull
-                                            ? "Full"
-                                            : "Book"}
+                                    ? isFull ? "Sold Out" : "Save Selection"
+                                    : isFull ? "Full" : (isLocked ? "Locked" : "Book")}
                             </Button>
                         </div>
                     </div>
-                )}
-
-                {!hasCompleteSelection && selectedCityId && (
-                    <p className="text-sm text-gray-400 text-center py-2">
-                        Complete all selections to see availability
-                    </p>
                 )}
             </div>
 
             {/* Desktop View */}
             <div className="hidden md:flex py-6 px-5 items-center gap-4">
-                {sharedCityId === undefined && (
+                {sharedCityName === undefined && (
                     <div className="w-[18%]">
                         <Select
                             options={cityOptions}
-                            value={selectedCityId}
+                            value={selectedCityName}
                             onChange={handleCityChange}
                             placeholder="Select City"
                             showLabel={false}
@@ -276,36 +293,36 @@ export const BookingCard = ({
                     </div>
                 )}
 
-                <div className={sharedCityId === undefined ? "w-[18%]" : "w-[24%]"}>
+                <div className={sharedCityName === undefined ? "w-[18%]" : "w-[24%]"}>
                     <Select
                         options={timeOptions}
-                        value={selectedTimeSlotId}
-                        onChange={handleTimeSlotChange}
+                        value={selectedTripId}
+                        onChange={handleTimeChange}
                         placeholder="Select Time"
-                        disabledPlaceholder={sharedCityId ? "Select time" : "Select city first"}
-                        disabled={!selectedCityId}
+                        disabledPlaceholder={sharedCityName ? "Select time" : "Select city first"}
+                        disabled={!selectedCityName}
                         showLabel={false}
                     />
                 </div>
 
-                <div className={sharedCityId === undefined ? "w-[18%]" : "w-[24%]"}>
+                <div className={sharedCityName === undefined ? "w-[18%]" : "w-[24%]"}>
                     <Select
                         options={stopOptions}
                         value={selectedStopId}
                         onChange={handleStopChange}
                         placeholder="Select Stop"
                         disabledPlaceholder="Select time first"
-                        disabled={!selectedTimeSlotId}
+                        disabled={!selectedTripId}
                         showLabel={false}
                     />
                 </div>
 
-                <div className={cn(sharedCityId === undefined ? "w-[12%]" : "w-[13%]", "flex justify-center")}>
-                    {hasCompleteSelection ? (
+                <div className={cn(sharedCityName === undefined ? "w-[12%]" : "w-[13%]", "flex justify-center")}>
+                    {hasCompleteSelection && currentTrip ? (
                         <div className="flex items-center gap-1.5 flex-wrap justify-center">
-                            <Badge type={currentSchedule.bus_type === 'Student' ? 'student' : 'employee'}>
-                                {currentSchedule.bus_type}
-                            </Badge>
+                            {/* <Badge type="student">Student</Badge> */}
+                            {/* Skipping type badge for now unless route_name has it */}
+                            <span className="text-xs font-bold text-gray-500">{currentTrip.route_name}</span>
                             {isFull && <Badge type="full">Full</Badge>}
                         </div>
                     ) : (
@@ -313,15 +330,15 @@ export const BookingCard = ({
                     )}
                 </div>
 
-                <div className={cn(sharedCityId === undefined ? "w-[10%]" : "w-[11%]", "text-center")}>
-                    {hasCompleteSelection ? (
-                        <Availability isFull={isFull} tickets={currentSchedule?.tickets} />
+                <div className={cn(sharedCityName === undefined ? "w-[10%]" : "w-[11%]", "text-center")}>
+                    {hasCompleteSelection && currentTrip ? (
+                        <Availability isFull={isFull} tickets={currentTrip.available_seats} />
                     ) : (
                         <span className="text-xs text-gray-400">--</span>
                     )}
                 </div>
 
-                <div className={cn(sharedCityId === undefined ? "w-[8%]" : "w-[9%]", "flex justify-center")}>
+                <div className={cn(sharedCityName === undefined ? "w-[8%]" : "w-[9%]", "flex justify-center")}>
                     {hasCompleteSelection ? (
                         <TicketSelect
                             ticketCount={ticketCount}
@@ -336,22 +353,16 @@ export const BookingCard = ({
                     )}
                 </div>
 
-                <div className={sharedCityId === undefined ? "w-[16%]" : "w-[19%]"}>
+                <div className={sharedCityName === undefined ? "w-[16%]" : "w-[19%]"}>
                     <Button
                         className="w-full font-semibold shadow-sm"
-                        disabled={!hasCompleteSelection || isFull}
+                        disabled={!hasCompleteSelection || isFull || isLocked}
                         variant={!hasCompleteSelection || isFull ? "secondary" : "default"}
                         onClick={handleBook}
                     >
                         {mode === 'collect'
-                            ? isFull
-                                ? "Sold Out"
-                                : "Save Selection"
-                            : isHeld
-                                ? "Resume"
-                                : isFull
-                                    ? "Waitlist"
-                                    : "Book Now"}
+                            ? isFull ? "Sold Out" : "Save Selection"
+                            : isFull ? "Waitlist" : (isLocked ? "Opents Soon" : "Book Now")}
                     </Button>
                 </div>
             </div>

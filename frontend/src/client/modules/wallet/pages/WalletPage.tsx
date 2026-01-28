@@ -1,21 +1,17 @@
-import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { WalletCard } from '../components/WalletCard';
-import { WalletPageHeader } from '../components/WalletPageHeader';
-import { useWalletStore } from '../walletStore';
 
 export const WalletPage = () => {
-    const { balance, currency, fetchBalance } = useWalletStore();
-
-    useEffect(() => {
-        fetchBalance();
-    }, [fetchBalance]);
+    const navigate = useNavigate();
 
     return (
         <div className="w-full">
             <div className="mt-6">
-                <WalletCard balance={balance} currency={currency} />
+                {/* WalletCard now handles its own data fetching */}
+                <WalletCard
+                    onTopUp={() => navigate('/wallet/topup')}
+                />
             </div>
         </div>
     );
 };
-

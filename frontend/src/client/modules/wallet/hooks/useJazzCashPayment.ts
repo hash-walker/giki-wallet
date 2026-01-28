@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react';
-import { usePaymentStore, PaymentFlowStatus } from '../store/paymentStore';
-import { paymentService, TopUpRequest } from '../services/paymentService';
+import { useWalletModuleStore, PaymentFlowStatus } from '../store';
+import { topUp, getTransactionStatus } from '../api';
+import { TopUpRequest } from '../types';
 
 export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast6: string) => {
     const {
@@ -12,8 +13,8 @@ export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast
         setTimeLeft,
         setTxnRefNo,
         setErrorMessage,
-        reset
-    } = usePaymentStore();
+        resetPaymentState: reset
+    } = useWalletModuleStore();
 
     const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -50,7 +51,7 @@ export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast
     const pollStatus = useCallback(async () => {
         if (!txnRefNo || status !== 'processing') return;
         try {
-            const result = await paymentService.getStatus(txnRefNo);
+            const result = await getTransactionStatus(txnRefNo);
             if (result.status === 'SUCCESS') handleSuccess();
             else if (result.status === 'FAILED') handleFailure(result.message || "Transaction failed");
         } catch (err) {
@@ -97,7 +98,7 @@ export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast
                 cnic_last6: cnicLast6
             };
 
-            const result = await paymentService.topUp(request, abortControllerRef.current.signal);
+            const result = await topUp(request, abortControllerRef.current.signal);
 
             // Switch from "Connecting" to the "Check your phone" screen
             setStatus('processing');

@@ -37,4 +37,12 @@ export const getIconBackground = (type: TransactionType): string => {
             return "bg-destructive/10";
     }
 };
-
+export const mapTxType = (type: string): TransactionType => {
+    switch (type) {
+        case 'TICKET_PURCHASE': return 'ticket';
+        case 'TOP_UP': return 'topup';
+        case 'TRANSFER': return 'transfer';
+        case 'TRANSFER_RECEIVED': return 'received';
+        default: return 'ticket';
+    }
+};

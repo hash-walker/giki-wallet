@@ -119,3 +119,20 @@ export type ActiveHold = z.infer<typeof activeHoldSchema>;
 export type HoldSeatsRequest = z.infer<typeof holdSeatsRequestSchema>;
 export type ConfirmBatchRequest = z.infer<typeof confirmBatchRequestSchema>;
 export type ConfirmItem = z.infer<typeof confirmItemSchema>;
+
+// Booking Flow Schemas
+export const passengerSchema = z.object({
+    name: z.string().min(1, "Name is required"),
+    relation: z.enum(['SELF', 'SPOUSE', 'CHILD']),
+});
+
+export const bookingSelectionSchema = z.object({
+    tripId: z.string().uuid(),
+    pickupId: z.string().uuid(),
+    dropoffId: z.string().uuid(),
+    ticketCount: z.number().min(1).max(3),
+    isFull: z.boolean(),
+});
+
+export type Passenger = z.infer<typeof passengerSchema>;
+export type BookingSelection = z.infer<typeof bookingSelectionSchema>;
