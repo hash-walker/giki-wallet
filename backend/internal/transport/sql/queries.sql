@@ -186,10 +186,10 @@ DELETE FROM giki_transport.trip_holds WHERE id = $1;
 -- name: ConfirmBookingWithDetails :one
 -- Moves Hold -> Ticket AND inserts the Passenger Names (Step 2: Fill & Pay)
 INSERT INTO giki_transport.tickets (
-    trip_id, user_id, pickup_stop_id, dropoff_stop_id,
+    trip_id, user_id, serial_no, ticket_code, pickup_stop_id, dropoff_stop_id,
     status, passenger_name, passenger_relation
-) VALUES ($1, $2, $3, $4, 'CONFIRMED', $5, $6
 )
+VALUES ($1, $2, COALESCE((SELECT MAX(serial_no) FROM giki_transport.tickets WHERE trip_id = $1), 0) + 1, $3, $4, $5, 'CONFIRMED', $6, $7)
 RETURNING id;
 
 
@@ -241,3 +241,19 @@ WHERE h.user_id = $1 AND h.expires_at > NOW();
 DELETE FROM giki_transport.trip_holds
 WHERE user_id = $1 AND expires_at > NOW()
 RETURNING trip_id;
+
+-- name: GetUserTicketsByID :many
+
+SELECT
+    t.id, t.status, t.passenger_name, t.passenger_relation, t.serial_no, t.ticket_code,
+    tr.id, tr.departure_time, tr.base_price, tr.bus_type, tr.direction, tr.booking_closes_at,
+    r.name,
+    sp.address,
+    sd.address
+FROM giki_transport.tickets t
+         JOIN giki_transport.trip tr ON t.trip_id = tr.id
+         JOIN giki_transport.routes r ON tr.route_id = r.id
+         JOIN giki_transport.stops sp ON t.pickup_stop_id = sp.id
+         JOIN giki_transport.stops sd ON t.dropoff_stop_id = sd.id
+WHERE t.user_id = $1
+ORDER BY tr.departure_time DESC;

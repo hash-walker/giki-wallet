@@ -60,6 +60,8 @@ CREATE TABLE giki_transport.trip (
     direction VARCHAR(10) NOT NULL DEFAULT 'OUTBOUND', -- 'OUTBOUND' or 'INBOUND'
     base_price DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
 
+    bus_type VARCHAR(50) NOT NULL,
+
     total_capacity INT NOT NULL,
     available_seats INT NOT NULL,
 
@@ -112,6 +114,9 @@ CREATE TABLE giki_transport.tickets (
      trip_id uuid REFERENCES giki_transport.trip(id) NOT NULL,
      user_id uuid NOT NULL REFERENCES giki_wallet.users(id),
 
+     serial_no INT NOT NULL,
+     ticket_code CHAR(4) NOT NULL,
+
      pickup_stop_id uuid REFERENCES giki_transport.stops(id) NOT NULL,
      dropoff_stop_id uuid REFERENCES giki_transport.stops(id) NOT NULL,
 
@@ -122,7 +127,9 @@ CREATE TABLE giki_transport.tickets (
      booking_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
-     UNIQUE(trip_id, user_id)
+     UNIQUE(trip_id, user_id),
+     UNIQUE(trip_id, serial_no),
+     UNIQUE(trip_id, ticket_code)
 );
 
 CREATE TABLE giki_transport.trip_holds (

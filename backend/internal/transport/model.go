@@ -166,11 +166,10 @@ type ActiveHoldResponse struct {
 
 type MyTicketResponse struct {
 	ID                uuid.UUID `json:"id"`
-	TicketNumber      string    `json:"ticket_number"`
+	TicketCode        string    `json:"ticket_number"`
+	SerialNo          int       `json:"serial_no"`
 	RouteName         string    `json:"route_name"`
 	Direction         string    `json:"direction"`
-	FromLocation      string    `json:"from_location"`
-	ToLocation        string    `json:"to_location"`
 	PickupLocation    string    `json:"pickup_location"`
 	DropoffLocation   string    `json:"dropoff_location"`
 	Date              string    `json:"date"`
@@ -369,4 +368,36 @@ func GetDayLabel(dayOfWeek int32) string {
 	default:
 		return "Unknown Day"
 	}
+}
+
+func MapDBTicketsToTickets(rows []transport_db.GetUserTicketsByIDRow) []MyTicketResponse {
+
+	var tickets []MyTicketResponse
+
+	for _, row := range rows {
+
+		canCancel := row.Status == "CONFIRMED" && time.Now().Before(row.BookingClosesAt)
+
+		tickets = append(tickets, MyTicketResponse{
+			ID:                row.ID,
+			TicketCode:        row.TicketCode,
+			SerialNo:          int(row.SerialNo),
+			RouteName:         row.Name,
+			Direction:         row.Direction,
+			PickupLocation:    row.Address,
+			DropoffLocation:   row.Address_2,
+			Date:              row.DepartureTime.Format("2006-01-02"),
+			Time:              row.DepartureTime.Format("3:04 PM"),
+			Status:            row.Status,
+			BusType:           row.BusType, // Hardcoded for now
+			PassengerName:     row.PassengerName,
+			PassengerRelation: row.PassengerRelation,
+			IsSelf:            row.PassengerRelation == "SELF",
+			Price:             common.NumericToFloat64(row.BasePrice),
+			CanCancel:         canCancel,
+		})
+
+	}
+
+	return tickets
 }

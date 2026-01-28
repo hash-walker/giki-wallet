@@ -17,6 +17,7 @@ var (
 	ErrDuplicateIdempotency    = errors.New("DUPLICATE_IDEMPOTENCY", http.StatusConflict, "Duplicate transaction detected")
 	ErrDuplicateIdempotencyKey = errors.New("DUPLICATE_IDEMPOTENCY_KEY", http.StatusConflict, "Duplicate idempotency key")
 	ErrTransactionTimeout      = errors.New("TRANSACTION_TIMEOUT", http.StatusRequestTimeout, "Transaction timed out")
+	ErrIdempotentSuccess       = errors.New("IDEMPOTENT_SUCCESS", http.StatusOK, "Transaction Already Succeeded")
 
 	// Gateway Errors
 	ErrGatewayUnavailable = errors.New("GATEWAY_UNAVAILABLE", http.StatusBadGateway, "Payment gateway is currently unavailable")

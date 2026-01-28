@@ -66,7 +66,7 @@ func MapMWalletToTopUpResult(
 		Status:        GatewayStatusToPaymentStatus(mwResp.Status),
 		Message:       mwResp.Message,
 		PaymentMethod: PaymentMethod(existing.PaymentMethod),
-		Amount:        float64(existing.Amount) / 100.0,
+		Amount:        float64(existing.Amount),
 	}
 }
 
@@ -80,7 +80,7 @@ func MapInquiryToTopUpResult(
 		Status:        GatewayStatusToPaymentStatus(inquiryResult.Status),
 		Message:       inquiryResult.Message,
 		PaymentMethod: PaymentMethod(existing.PaymentMethod),
-		Amount:        float64(existing.Amount) / 100.0,
+		Amount:        float64(existing.Amount),
 	}
 }
 
@@ -94,7 +94,7 @@ func MapCardCallbackToTopUpResult(
 		Status:        GatewayStatusToPaymentStatus(callback.Status),
 		Message:       callback.Message,
 		PaymentMethod: PaymentMethod(existing.PaymentMethod),
-		Amount:        float64(existing.Amount) / 100.0,
+		Amount:        float64(existing.Amount),
 	}
 }
 

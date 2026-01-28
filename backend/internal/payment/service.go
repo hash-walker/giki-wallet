@@ -6,12 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math"
 	"net/url"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/hash-walker/giki-wallet/internal/auth"
+	"github.com/hash-walker/giki-wallet/internal/common"
 	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
 	"github.com/hash-walker/giki-wallet/internal/config"
 	"github.com/hash-walker/giki-wallet/internal/payment/gateway"
@@ -23,8 +23,6 @@ import (
 
 	"github.com/hash-walker/giki-wallet/internal/middleware"
 )
-
-var ErrIdempotentSuccess = errors.New("IDEMPOTENT_SUCCESS")
 
 // =============================================================================
 // TYPES
@@ -138,7 +136,8 @@ func (s *Service) InitiatePayment(ctx context.Context, payload TopUpRequest) (*T
 	// create new transaction record
 	// ═══════════════════════════════════════════════════════════════════════════
 
-	amountPaisa := int64(math.Round(payload.Amount * 100))
+	amountPaisa := common.AmountToLowestUnit(payload.Amount)
+
 	if amountPaisa <= 0 {
 		return nil, commonerrors.Wrap(commonerrors.ErrInvalidInput, fmt.Errorf("amount must be greater than 0"))
 	}
@@ -282,7 +281,7 @@ func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.
 	}
 
 	if paymentStatus == PaymentStatusSuccess {
-		err = s.creditWalletFromPayment(ctx, tx, gatewayTxn.UserID, gatewayTxn.Amount, gatewayTxn.TxnRefNo)
+		err = s.creditWalletFromPayment(ctx, tx, gatewayTxn.UserID, gatewayTxn.Amount*100, gatewayTxn.TxnRefNo)
 		if err != nil {
 			return nil, err
 		}
@@ -460,7 +459,6 @@ func (s *Service) creditWalletFromPayment(ctx context.Context, tx pgx.Tx, userID
 
 		// Also check for raw database constraint violation (race condition)
 		if CheckUniqueConstraintViolation(err) {
-			log.Printf("[INFO] Wallet credit idempotent check hit for txn %s", paymentTxnRefNo)
 			return ErrIdempotentSuccess
 		}
 
@@ -486,7 +484,7 @@ func (s *Service) handleExistingTransaction(
 			Status:        PaymentStatusSuccess,
 			Message:       "Transaction has already completed",
 			PaymentMethod: PaymentMethod(existing.PaymentMethod),
-			Amount:        float64(existing.Amount) / 100.0,
+			Amount:        float64(existing.Amount),
 		}, nil
 
 	case payment.CurrentStatus(PaymentStatusPending),
@@ -544,17 +542,14 @@ func (s *Service) checkTransactionStatus(
 		// Credit wallet (must succeed or transaction rolls back)
 		// NOTE: Storing atomic units (Paisas) in DB. Read layer handles conversion.
 		err = s.creditWalletFromPayment(ctx, tx, existing.UserID, existing.Amount, existing.TxnRefNo)
+
 		if err != nil {
 			if errors.Is(err, ErrIdempotentSuccess) {
-				log.Printf("[INFO] Transaction %s already credited (idempotent), skipping commit", existing.TxnRefNo)
-				// Do NOT commit - transaction is aborted due to unique constraint violation
-				// Just return success
 				return MapInquiryToTopUpResult(existing, *inquiryResult), nil
 			}
-			return nil, err // Transaction will rollback via defer
+			return nil, err
 		}
 
-		// Commit transaction (status update + wallet credit)
 		if err := tx.Commit(ctx); err != nil {
 			return nil, commonerrors.Wrap(commonerrors.ErrTransactionCommit, err)
 		}
@@ -608,6 +603,7 @@ func (s *Service) startPollingForTransaction(txRefNo string) {
 		middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrDatabase, fmt.Errorf("failed to acquire db connection for polling: %w", err)), "polling-"+txRefNo)
 		return
 	}
+
 	defer conn.Release()
 
 	paymentQ := payment.New(conn)
@@ -657,125 +653,73 @@ func (s *Service) handlePollingTimeout(paymentQ *payment.Queries, txRefNo string
 	}
 }
 
-// pollTransactionOnce performs a single polling iteration, returns true if polling should stop
 func (s *Service) pollTransactionOnce(ctx context.Context, txRefNo string) bool {
-	// Acquire rate limit token
+	// 1. Acquire Rate Limiter
 	if err := s.rateLimiter.Acquire(ctx); err != nil {
 		middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("rate limiter acquire failed: %w", err)), "polling-"+txRefNo)
 		return true
 	}
+	// Guaranteed release on exit
+	defer s.rateLimiter.Release()
 
-	// Call inquiry API
+	// 2. Inquiry API Call
 	inquiryResult, err := s.gatewayClient.Inquiry(ctx, gateway.InquiryRequest{TxnRefNo: txRefNo})
 	if err != nil {
 		middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrExternalService, fmt.Errorf("inquiry API failed (will retry): %w", err)), "polling-"+txRefNo)
-		s.rateLimiter.Release()
 		return false
 	}
 
 	status := GatewayStatusToPaymentStatus(inquiryResult.Status)
 
-	switch status {
-	case PaymentStatusSuccess:
-
-		tx, err := s.dbPool.Begin(ctx)
-		if err != nil {
-			middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrDatabase, fmt.Errorf("failed to begin transaction for polling: %w", err)), "polling-"+txRefNo)
-			s.rateLimiter.Release()
-			return false // Retry later
-		}
-		defer func(tx pgx.Tx, ctx context.Context) {
-			err := tx.Rollback(ctx)
-			if err != nil {
-				middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrTransactionBegin, fmt.Errorf("failed to rollback transaction for polling: %w", err)), "polling-"+txRefNo)
-				s.rateLimiter.Release()
-				return
-			}
-		}(tx, ctx) // Will rollback if commit doesn't happen
-
-		paymentQ := s.q.WithTx(tx)
-
-		// Update status
-		err = paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
-			Status:   payment.CurrentStatus(status),
-			TxnRefNo: txRefNo,
-		})
-		if err != nil {
-			middleware.LogAppError(commonerrors.Wrap(ErrTransactionUpdate, fmt.Errorf("failed to update status to %s: %w", status, err)), "polling-"+txRefNo)
-			s.rateLimiter.Release()
-			return false // Retry later
-		}
-
-		// Get transaction to get userID and amount for wallet credit
-		gatewayTxn, err := paymentQ.GetTransactionByTxnRefNo(ctx, txRefNo)
-		if err != nil {
-			middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrDatabase, fmt.Errorf("failed to get transaction for wallet credit: %w", err)), "polling-"+txRefNo)
-			s.rateLimiter.Release()
-			return false // Retry later
-		}
-
-		// Credit wallet (must succeed or transaction rolls back)
-		err = s.creditWalletFromPayment(ctx, tx, gatewayTxn.UserID, gatewayTxn.Amount, gatewayTxn.TxnRefNo)
-		if err != nil {
-			middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("failed to credit wallet during polling: %w", err)), "polling-"+txRefNo)
-			s.rateLimiter.Release()
-			return false // Retry later - transaction will rollback via defer
-		}
-
-		// Clear polling status
-		if err := paymentQ.ClearPollingStatus(ctx, txRefNo); err != nil {
-			middleware.LogAppError(commonerrors.Wrap(ErrDatabaseQuery, fmt.Errorf("failed to clear polling status: %w", err)), "polling-"+txRefNo)
-			s.rateLimiter.Release()
-			return false // Retry later
-		}
-
-		// Commit transaction (status update + wallet credit + clear polling)
-		if err := tx.Commit(ctx); err != nil {
-			middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrDatabase, fmt.Errorf("failed to commit polling transaction: %w", err)), "polling-"+txRefNo)
-			s.rateLimiter.Release()
-			return false // Retry later
-		}
-
-		s.rateLimiter.Release()
-		return true
-
-	case PaymentStatusFailed:
-
-		tx, err := s.dbPool.Begin(ctx)
-		defer tx.Rollback(ctx)
-
-		paymentQ := s.q.WithTx(tx)
-
-		err = paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
-			Status:   payment.CurrentStatus(status),
-			TxnRefNo: txRefNo,
-		})
-
-		if err != nil {
-			middleware.LogAppError(commonerrors.Wrap(ErrTransactionUpdate, fmt.Errorf("failed to update status to FAILED: %w", err)), "polling-"+txRefNo)
-		}
-
-		// Clear polling status
-		if err := paymentQ.ClearPollingStatus(ctx, txRefNo); err != nil {
-			middleware.LogAppError(commonerrors.Wrap(ErrDatabaseQuery, fmt.Errorf("failed to clear polling status: %w", err)), "polling-"+txRefNo)
-			s.rateLimiter.Release()
-			return false // Retry later
-		}
-
-		// Commit transaction (status update + wallet credit + clear polling)
-		if err := tx.Commit(ctx); err != nil {
-			middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrTransactionCommit, fmt.Errorf("failed to commit polling transaction: %w", err)), "polling-"+txRefNo)
-			s.rateLimiter.Release()
-			return false // Retry later
-		}
-
-		s.rateLimiter.Release()
-		return true
-
-	default:
-		s.rateLimiter.Release()
+	// Only proceed to DB if status is terminal (Success/Failed)
+	if status != PaymentStatusSuccess && status != PaymentStatusFailed {
 		return false
 	}
+
+	// 3. Database Transaction Block
+	return s.finalizeTransaction(ctx, txRefNo, status)
+}
+
+func (s *Service) finalizeTransaction(ctx context.Context, txRefNo string, status PaymentStatus) bool {
+
+	err := common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
+		paymentQ := s.q.WithTx(tx)
+
+		// Update Status & Clear Polling (Common to both Success and Failure)
+		updateErr := paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
+			Status:   payment.CurrentStatus(status),
+			TxnRefNo: txRefNo,
+		})
+
+		if updateErr != nil {
+			return updateErr
+		}
+
+		if cleaningErr := paymentQ.ClearPollingStatus(ctx, txRefNo); cleaningErr != nil {
+			return cleaningErr
+		}
+
+		if status == PaymentStatusSuccess {
+			gatewayTxn, err := paymentQ.GetTransactionByTxnRefNo(ctx, txRefNo)
+			if err != nil {
+				return err
+			}
+
+			if creditErr := s.creditWalletFromPayment(ctx, tx, gatewayTxn.UserID, gatewayTxn.Amount, gatewayTxn.TxnRefNo); creditErr != nil {
+				middleware.LogAppError(creditErr, "polling-credit-"+txRefNo)
+				return creditErr
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		middleware.LogAppError(fmt.Errorf("finalize transaction failed for %s: %w", txRefNo, err), "polling-finalizer")
+		return false
+	}
+
+	return true
 }
 
 // =============================================================================
