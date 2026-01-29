@@ -30,9 +30,9 @@ export async function topUp(request: TopUpRequest & { timeout?: number }, signal
     // Validate request
     topUpRequestSchema.parse(data);
 
-    console.log(`Initiating topUp with timeout: ${timeout || 60000}ms`);
+    console.log(`Initiating topUp with timeout: ${timeout || 45000}ms`);
     const res = await apiClient.post<TopUpResult>('/payment/topup', data, {
-        timeout: timeout || 60000,
+        timeout: timeout || 45000,
         signal
     });
 

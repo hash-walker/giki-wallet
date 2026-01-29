@@ -4,7 +4,9 @@ import { topUp, getTransactionStatus } from '../api';
 import { TopUpRequest } from '../types';
 
 export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast6: string) => {
+    
     const {
+        formData,
         status,
         timeLeft,
         txnRefNo,
@@ -74,34 +76,31 @@ export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast
         reset();
         setStatus('initiating'); // Show "Connecting" instantly
 
-        // Start 60s visual timer immediately
-        timerIntervalRef.current = setInterval(() => {
-            setTimeLeft((prev) => {
-                if (prev <= 1) {
-                    handleFailure("Payment timed out. Please try again.");
-                    return 0;
-                }
-                return prev - 1;
-            });
-        }, 1000);
-
         try {
-            const uuid = typeof crypto.randomUUID === 'function'
-                ? crypto.randomUUID()
-                : Math.random().toString(36).substring(2) + Date.now().toString(36);
-
+            // Get form data from store
             const request: TopUpRequest = {
-                idempotency_key: uuid,
-                amount,
-                method: 'MWALLET',
-                phone_number: phoneNumber,
-                cnic_last6: cnicLast6
+                idempotency_key: formData.idempotency_key,
+                amount: parseFloat(formData.amount),
+                method: formData.method,
+                phone_number: formData.mobile_number,
+                cnic_last6: formData.cnic_last_six
             };
 
             const result = await topUp(request, abortControllerRef.current.signal);
 
             // Switch from "Connecting" to the "Check your phone" screen
             setStatus('processing');
+
+            // Start 60s visual timer after getting response
+            timerIntervalRef.current = setInterval(() => {
+                setTimeLeft((prev) => {
+                    if (prev <= 1) {
+                        handleFailure("Payment timed out. Please try again.");
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
 
             if (result.status === 'SUCCESS') {
                 handleSuccess();
