@@ -18,12 +18,12 @@ func WithTransaction(ctx context.Context, pool *pgxpool.Pool, fn TransactionFunc
 
 	defer tx.Rollback(ctx)
 
-	if err := fn(tx); err != nil {
-		return err
+	if txErr := fn(tx); txErr != nil {
+		return txErr
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return commonerrors.Wrap(commonerrors.ErrTransactionCommit, err)
+	if commitErr := tx.Commit(ctx); commitErr != nil {
+		return commonerrors.Wrap(commonerrors.ErrTransactionCommit, commitErr)
 	}
 
 	return nil

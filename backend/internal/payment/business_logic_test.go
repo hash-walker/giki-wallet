@@ -314,25 +314,27 @@ func TestBusinessLogic_TransactionTimeout_Handling(t *testing.T) {
 	cleanupTestTransactions(t)
 	defer cleanupTestTransactions(t)
 
+	// Set scenario to pending so start logic leaves it as pending
 	mockGateway.SetScenario(testutils.ScenarioPending)
 	mockGateway.SetInquiryScenario(testutils.ScenarioPending)
 
 	ctx := createIntegrationTestContext()
+	idempotencyKey := uuid.New()
 
-	// Create a pending transaction
+	// 1. Create a pending transaction
 	result, err := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
-		IdempotencyKey: uuid.New(),
+		IdempotencyKey: idempotencyKey,
 	})
 
 	if err != nil {
 		t.Fatalf("InitiatePayment failed: %v", err)
 	}
 
-	// Manually update the transaction's created_at to simulate timeout
+	// 2. Manually backdate the transaction to simulate timeout (> 120s)
 	_, err = testDBPool.Exec(ctx, `
 		UPDATE giki_wallet.gateway_transactions 
 		SET created_at = NOW() - INTERVAL '3 minutes'
@@ -343,21 +345,70 @@ func TestBusinessLogic_TransactionTimeout_Handling(t *testing.T) {
 		t.Fatalf("Failed to update transaction timestamp: %v", err)
 	}
 
-	// Check transaction status again - should timeout and fail
+	// 3. Call checkTransactionStatus explicitly to trigger the timeout logic
+	// (InitiatePayment re-checks status for existing transactions)
 	result2, err := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
-		IdempotencyKey: result.ID, // Use same transaction
+		IdempotencyKey: idempotencyKey, // Use same idempotency key
 	})
 
 	if err != nil {
 		t.Logf("Status check after timeout: %v", err)
 	}
 
-	if result2 != nil && result2.Status != PaymentStatusFailed {
-		t.Logf("Transaction status after timeout: %s", result2.Status)
+	if result2 == nil {
+		t.Fatal("Expected result from timeout check, got nil")
+	}
+
+	if result2.Status != PaymentStatusFailed {
+		t.Errorf("Transaction status after timeout: got %s, want FAILED", result2.Status)
+	}
+
+	if !contains(result2.Message, "timed out") {
+		t.Errorf("Expected timeout message, got: %s", result2.Message)
+	}
+}
+
+func TestBusinessLogic_Idempotency_PayloadMismatch(t *testing.T) {
+	cleanupTestTransactions(t)
+	defer cleanupTestTransactions(t)
+
+	mockGateway.SetScenario(testutils.ScenarioSuccess)
+	ctx := createIntegrationTestContext()
+	idempotencyKey := uuid.New()
+
+	// 1. First request
+	_, err := testService.InitiatePayment(ctx, TopUpRequest{
+		Amount:         500.0,
+		PhoneNumber:    "03001234567",
+		CNICLast6:      "123456",
+		Method:         PaymentMethodMWallet,
+		IdempotencyKey: idempotencyKey,
+	})
+	if err != nil {
+		t.Fatalf("First request failed: %v", err)
+	}
+
+	// 2. Second request with SAME key but DIFFERENT amount
+	// Should return the original transaction (ignoring the new amount) OR error depending on design.
+	// Current implementation: GetByIdempotencyKey -> handleExisting. It ignores the new payload.
+	// This test documents that behavior.
+	result2, err := testService.InitiatePayment(ctx, TopUpRequest{
+		Amount:         9999.0, // Different amount
+		PhoneNumber:    "03001234567",
+		CNICLast6:      "123456",
+		Method:         PaymentMethodMWallet,
+		IdempotencyKey: idempotencyKey,
+	})
+	if err != nil {
+		t.Fatalf("Second request failed: %v", err)
+	}
+
+	if result2.Amount != 500.0 {
+		t.Errorf("Idempotency violation? Returned amount %f, expected original 500.0", result2.Amount)
 	}
 }
 

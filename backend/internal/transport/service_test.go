@@ -346,3 +346,111 @@ func TestErrors_AreDefinedCorrectly(t *testing.T) {
 		})
 	}
 }
+
+func TestMapDBWeeklyTripsToWeeklyTripSummary_BookingStatusLogic(t *testing.T) {
+	tests := []struct {
+		name              string
+		availableSeats    int32
+		physicalStatus    string
+		bookingStatus     string
+		bookingOpensAt    time.Time
+		bookingClosesAt   time.Time
+		expectedAPIStatus string
+	}{
+		{
+			name:              "Cancelled trip",
+			availableSeats:    5,
+			physicalStatus:    "CANCELLED",
+			bookingStatus:     "OPEN",
+			bookingOpensAt:    time.Now().Add(-1 * time.Hour),
+			bookingClosesAt:   time.Now().Add(23 * time.Hour),
+			expectedAPIStatus: "CANCELLED",
+		},
+		{
+			name:              "Closed booking",
+			availableSeats:    5,
+			physicalStatus:    "SCHEDULED",
+			bookingStatus:     "CLOSED",
+			bookingOpensAt:    time.Now().Add(-1 * time.Hour),
+			bookingClosesAt:   time.Now().Add(23 * time.Hour),
+			expectedAPIStatus: "CLOSED",
+		},
+		{
+			name:              "Full trip",
+			availableSeats:    0,
+			physicalStatus:    "SCHEDULED",
+			bookingStatus:     "OPEN",
+			bookingOpensAt:    time.Now().Add(-1 * time.Hour),
+			bookingClosesAt:   time.Now().Add(23 * time.Hour),
+			expectedAPIStatus: "FULL",
+		},
+		{
+			name:              "Locked (not yet open)",
+			availableSeats:    5,
+			physicalStatus:    "SCHEDULED",
+			bookingStatus:     "OPEN",
+			bookingOpensAt:    time.Now().Add(1 * time.Hour),
+			bookingClosesAt:   time.Now().Add(25 * time.Hour),
+			expectedAPIStatus: "LOCKED",
+		},
+		{
+			name:              "Closed (past closing time)",
+			availableSeats:    5,
+			physicalStatus:    "SCHEDULED",
+			bookingStatus:     "OPEN",
+			bookingOpensAt:    time.Now().Add(-25 * time.Hour),
+			bookingClosesAt:   time.Now().Add(-1 * time.Hour),
+			expectedAPIStatus: "CLOSED",
+		},
+		{
+			name:              "Open",
+			availableSeats:    5,
+			physicalStatus:    "SCHEDULED",
+			bookingStatus:     "OPEN",
+			bookingOpensAt:    time.Now().Add(-1 * time.Hour),
+			bookingClosesAt:   time.Now().Add(23 * time.Hour),
+			expectedAPIStatus: "OPEN",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tripID := uuid.New()
+
+			rows := []transport_db.GetWeeklyTripsRow{
+				{
+					ID:              tripID,
+					DepartureTime:   time.Now().Add(24 * time.Hour),
+					BookingOpensAt:  tt.bookingOpensAt,
+					BookingClosesAt: tt.bookingClosesAt,
+					TotalCapacity:   10,
+					AvailableSeats:  tt.availableSeats,
+					Status:          common.StringToText(tt.physicalStatus),
+					BookingStatus:   tt.bookingStatus,
+					RouteName:       "Test Route",
+				},
+			}
+
+			result := MapDBWeeklyTripsToWeeklyTripSummary(rows)
+
+			if len(result.Trips) != 1 {
+				t.Fatalf("Expected 1 trip, got %d", len(result.Trips))
+			}
+
+			if result.Trips[0].BookingStatus != tt.expectedAPIStatus {
+				t.Errorf("BookingStatus mismatch: got %s, want %s", result.Trips[0].BookingStatus, tt.expectedAPIStatus)
+			}
+
+			// Basic counter check
+			if tt.expectedAPIStatus == "LOCKED" && result.Locked != 1 {
+				t.Error("Locked counter not incremented")
+			}
+			if tt.expectedAPIStatus == "OPEN" && result.Opened != 1 {
+				t.Error("Opened counter not incremented")
+			}
+			if result.Scheduled != 1 {
+				t.Error("Scheduled counter not incremented")
+			}
+		})
+	}
+}

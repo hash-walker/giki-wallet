@@ -394,7 +394,7 @@ func (c *JazzCashClient) buildInquiryFields(txnRefNo string) JazzCashFields {
 func mapResponseCodeToStatus(responseCode string) Status {
 	// Key success codes
 	switch responseCode {
-	case "000", "200":
+	case "000", "200", "121":
 		return StatusSuccess
 	}
 
@@ -406,7 +406,7 @@ func mapResponseCodeToStatus(responseCode string) Status {
 
 	// Pending codes
 	switch responseCode {
-	case "157", "124", "210", "121":
+	case "157", "124", "210":
 		return StatusPending
 	}
 

@@ -99,6 +99,7 @@ ORDER BY t.departure_time ASC, ts.sequence_order ASC;
 SELECT
     t.id,
     t.departure_time,
+    t.bus_type,
     t.booking_opens_at,
     t.booking_closes_at,
     t.total_capacity,
@@ -246,7 +247,7 @@ RETURNING trip_id;
 
 SELECT
     t.id, t.status, t.passenger_name, t.passenger_relation, t.serial_no, t.ticket_code,
-    tr.id, tr.departure_time, tr.base_price, tr.bus_type, tr.direction, tr.booking_closes_at,
+    tr.id, tr.departure_time, tr.bus_type, tr.base_price, tr.bus_type, tr.direction, tr.booking_closes_at,
     r.name,
     sp.address,
     sd.address
