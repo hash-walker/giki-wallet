@@ -110,3 +110,21 @@ func GatewayStatusToPaymentStatus(gwStatus gateway.Status) PaymentStatus {
 		return PaymentStatusUnknown
 	}
 }
+
+// AdminGatewayTransaction represents a transaction for the admin panel
+type AdminGatewayTransaction struct {
+	TxnRefNo      string        `json:"txn_ref_no"`
+	UserID        uuid.UUID     `json:"user_id"`
+	UserName      string        `json:"user_name"`
+	UserEmail     string        `json:"user_email"`
+	Amount        string        `json:"amount"` // BigInt as string to avoid precision loss in JS
+	Status        PaymentStatus `json:"status"`
+	PaymentMethod PaymentMethod `json:"payment_method"`
+	CreatedAt     string        `json:"created_at"`
+	UpdatedAt     string        `json:"updated_at"`
+	BillRefID     string        `json:"bill_ref_id,omitempty"`
+}
+
+type UpdateGatewayStatusRequest struct {
+	Status PaymentStatus `json:"status"`
+}

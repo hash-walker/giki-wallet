@@ -21,6 +21,7 @@ const adminNavItems = [
     // Management Group
     { path: '/admin/users', label: 'Users', icon: Users },
     { path: '/admin/transactions', label: 'Transactions', icon: Receipt },
+    { path: '/admin/gateway-transactions', label: 'Gateway Txns', icon: Receipt },
     // History
     { path: '/admin/history', label: 'History', icon: History },
     // Settings

@@ -116,5 +116,10 @@ func (s *Server) MountRoutes() {
 			r.Get("/", s.User.ListUsers)
 			r.Patch("/{user_id}/status", s.User.UpdateUserStatus)
 		})
+
+		r.Route("/transactions/gateway", func(r chi.Router) {
+			r.Get("/", s.Payment.ListGatewayTransactions)
+			r.Post("/{txnRefNo}/verify", s.Payment.VerifyGatewayTransaction)
+		})
 	})
 }

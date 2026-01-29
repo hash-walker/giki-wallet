@@ -61,3 +61,25 @@ SELECT * FROM giki_wallet.payment_audit_log
 WHERE processed = FALSE AND event_type = $1
 ORDER BY received_at
 LIMIT $2;
+
+-- name: ListGatewayTransactions :many
+SELECT 
+    gt.txn_ref_no,
+    gt.user_id,
+    u.name as user_name,
+    u.email as user_email,
+    gt.amount,
+    gt.status,
+    gt.payment_method,
+    gt.created_at,
+    gt.updated_at,
+    gt.bill_ref_id
+FROM giki_wallet.gateway_transactions gt
+JOIN giki_wallet.users u ON gt.user_id = u.id
+ORDER BY gt.created_at DESC;
+
+-- name: ForceUpdateGatewayTransactionStatus :one
+UPDATE giki_wallet.gateway_transactions
+SET status = $1
+WHERE txn_ref_no = $2
+RETURNING *;
