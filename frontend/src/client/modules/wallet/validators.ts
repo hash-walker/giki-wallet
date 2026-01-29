@@ -4,6 +4,14 @@ export const paymentStatusSchema = z.enum(['PENDING', 'SUCCESS', 'FAILED', 'UNKN
 
 export const paymentMethodSchema = z.enum(['MWALLET', 'CARD']);
 
+export const topUpFormSchema = z.object({
+    idempotency_key: z.string(),
+    amount: z.string(),
+    method: paymentMethodSchema,
+    mobile_number: z.string(),
+    cnic_last_six: z.string(),
+});
+
 export const topUpRequestSchema = z.object({
     idempotency_key: z.string(),
     amount: z.number().min(1),

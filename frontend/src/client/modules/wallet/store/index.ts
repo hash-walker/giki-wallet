@@ -1,8 +1,11 @@
 import { create } from 'zustand';
 import { getBalance, getHistory, topUp, getTransactionStatus, type ApiTransaction } from '../api';
 import { type TopUpRequest } from '../types';
+import { z } from 'zod';
+import { topUpFormSchema } from '../validators';
 
 export type PaymentFlowStatus = 'idle' | 'initiating' | 'processing' | 'success' | 'failed';
+export type TopUpFormData = z.infer<typeof topUpFormSchema>;
 
 interface WalletState {
     // Data Slice
@@ -32,7 +35,25 @@ interface PaymentState {
     resetPaymentState: () => void;
 }
 
-type WalletModuleStore = WalletState & PaymentState;
+interface TopUpFormState {
+    // Form Data Slice
+    formData: TopUpFormData;
+    
+    // Actions
+    setAmount: (amount: string) => void;
+    setMobileNumber: (mobile: string) => void;
+    setCnicLastSix: (cnic: string) => void;
+    setMethod: (method: 'MWALLET' | 'CARD') => void;
+    resetFormData: () => void;
+}
+
+type WalletModuleStore = WalletState & PaymentState & TopUpFormState;
+
+const generateIdempotencyKey = () => {
+    return typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : Math.random().toString(36).substring(2) + Date.now().toString(36);
+};
 
 export const useWalletModuleStore = create<WalletModuleStore>((set, get) => ({
     // Initial Data State
@@ -47,6 +68,15 @@ export const useWalletModuleStore = create<WalletModuleStore>((set, get) => ({
     timeLeft: 60,
     txnRefNo: null,
     errorMessage: null,
+
+    // Initial Form Data State
+    formData: {
+        idempotency_key: generateIdempotencyKey(),
+        amount: '',
+        method: 'MWALLET',
+        mobile_number: '',
+        cnic_last_six: '',
+    },
 
     // Data Actions
     fetchBalance: async () => {
@@ -81,5 +111,52 @@ export const useWalletModuleStore = create<WalletModuleStore>((set, get) => ({
         timeLeft: 60,
         txnRefNo: null,
         errorMessage: null
+    }),
+
+    // TopUp Form Actions
+    setAmount: (amount) => set((state) => ({
+        formData: {
+            ...state.formData,
+            amount,
+            // Regenerate idempotency key when amount changes
+            idempotency_key: generateIdempotencyKey(),
+        }
+    })),
+
+    setMobileNumber: (mobile_number) => set((state) => ({
+        formData: {
+            ...state.formData,
+            mobile_number,
+            // Regenerate idempotency key when mobile number changes
+            idempotency_key: generateIdempotencyKey(),
+        }
+    })),
+
+    setCnicLastSix: (cnic_last_six) => set((state) => ({
+        formData: {
+            ...state.formData,
+            cnic_last_six,
+            // Regenerate idempotency key when CNIC changes
+            idempotency_key: generateIdempotencyKey(),
+        }
+    })),
+
+    setMethod: (method) => set((state) => ({
+        formData: {
+            ...state.formData,
+            method,
+            // Regenerate idempotency key when payment method changes
+            idempotency_key: generateIdempotencyKey(),
+        }
+    })),
+
+    resetFormData: () => set({
+        formData: {
+            idempotency_key: generateIdempotencyKey(),
+            amount: '',
+            method: 'MWALLET',
+            mobile_number: '',
+            cnic_last_six: '',
+        }
     }),
 }));

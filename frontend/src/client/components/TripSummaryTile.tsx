@@ -10,6 +10,7 @@ export const TripSummaryTile = () => {
     const [summary, setSummary] = useState<WeeklySummary | null>(null);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
     const fetchSummary = useCallback(async (showLoading = false) => {
         if (showLoading) setLoading(true);
@@ -130,6 +131,15 @@ export const TripSummaryTile = () => {
         </div>
     );
 
+    const getFilteredTrips = () => {
+        if (!activeFilter) return summary.trips;
+        return summary.trips.filter((trip) => trip.booking_status === activeFilter);
+    };
+
+    const handleFilterClick = (filter: string) => {
+        setActiveFilter(activeFilter === filter ? null : filter);
+    };
+
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between px-4">
@@ -212,10 +222,54 @@ export const TripSummaryTile = () => {
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.1em] mb-4">
                         Full Schedule for {formatDate(new Date().toISOString())} - {formatDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString())}
                     </p>
+
+                    {/* Filter Buttons */}
+                    <div className="flex gap-2 mb-4">
+                        <button
+                            onClick={() => handleFilterClick('SCHEDULED')}
+                            className={cn(
+                                "px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all",
+                                activeFilter === 'SCHEDULED'
+                                    ? "bg-primary text-white shadow-lg shadow-primary/30"
+                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                            )}
+                        >
+                            Scheduled
+                        </button>
+                        <button
+                            onClick={() => handleFilterClick('OPEN')}
+                            className={cn(
+                                "px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all",
+                                activeFilter === 'OPEN'
+                                    ? "bg-accent text-white shadow-lg shadow-accent/30"
+                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                            )}
+                        >
+                            Open
+                        </button>
+                        <button
+                            onClick={() => handleFilterClick('FULL')}
+                            className={cn(
+                                "px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all",
+                                activeFilter === 'FULL'
+                                    ? "bg-destructive text-white shadow-lg shadow-destructive/30"
+                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                            )}
+                        >
+                            Full
+                        </button>
+                    </div>
+
                     <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2 no-scrollbar">
-                        {summary.trips.map((trip) => (
-                            <TripItem key={trip.trip_id} trip={trip} />
-                        ))}
+                        {getFilteredTrips().length > 0 ? (
+                            getFilteredTrips().map((trip) => (
+                                <TripItem key={trip.trip_id} trip={trip} />
+                            ))
+                        ) : (
+                            <div className="py-8 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No trips found for this filter</p>
+                            </div>
+                        )}
                     </div>
                     <div className="pt-6 flex justify-center">
                         <button

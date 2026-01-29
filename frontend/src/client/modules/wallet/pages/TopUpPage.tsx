@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
@@ -9,19 +9,30 @@ import { toast } from '@/lib/toast';
 import { topUp } from '../api';
 import { TopUpRequest } from '../types';
 import JazzCashPayment from '../components/JazzCashPayment';
+import { useWalletModuleStore } from '../store';
 
 type PaymentMethod = 'jazzcash' | 'card';
 
 const TopUpPage = () => {
     const navigate = useNavigate();
-    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('jazzcash');
-    const [amount, setAmount] = useState<string>('');
-    const [mobileNumber, setMobileNumber] = useState<string>('');
-    const [cnicLastSix, setCnicLastSix] = useState<string>('');
     const [isLoading, setIsLoading] = useState(false);
 
+    const {
+        formData,
+        setAmount,
+        setMobileNumber,
+        setCnicLastSix,
+        setMethod,
+        resetFormData
+    } = useWalletModuleStore();
+
+    // Initialize form data on page load
+    useEffect(() => {
+        resetFormData();
+    }, [resetFormData]);
+
     const handleCardPayment = async () => {
-        if (!amount) {
+        if (!formData.amount) {
             toast.error('Please enter an amount');
             return;
         }
@@ -29,8 +40,8 @@ const TopUpPage = () => {
         setIsLoading(true);
         try {
             const request: TopUpRequest = {
-                idempotency_key: crypto.randomUUID(),
-                amount: parseFloat(amount),
+                idempotency_key: formData.idempotency_key,
+                amount: parseFloat(formData.amount),
                 method: 'CARD'
             };
 
@@ -64,8 +75,8 @@ const TopUpPage = () => {
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
                 {/* Payment Method Selection */}
                 <PaymentMethodSelector
-                    paymentMethod={paymentMethod}
-                    onPaymentMethodChange={setPaymentMethod}
+                    paymentMethod={formData.method === 'MWALLET' ? 'jazzcash' : 'card'}
+                    onPaymentMethodChange={(method) => setMethod(method === 'jazzcash' ? 'MWALLET' : 'CARD')}
                 />
 
                 {/* Account Details Form (Shared or specific based on UX) */}
@@ -76,19 +87,19 @@ const TopUpPage = () => {
                             type="number"
                             min="1"
                             step="1"
-                            value={amount}
+                            value={formData.amount}
                             onChange={(e) => setAmount(e.target.value)}
                             placeholder="Enter amount"
                             className="bg-gray-50 border-gray-200"
                         />
                     </div>
 
-                    {paymentMethod === 'jazzcash' && (
+                    {formData.method === 'MWALLET' && (
                         <>
                             <Input
                                 label="Mobile Number"
                                 type="tel"
-                                value={mobileNumber}
+                                value={formData.mobile_number}
                                 onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, ''))}
                                 placeholder="03XX-XXXXXXX"
                                 maxLength={11}
@@ -98,7 +109,7 @@ const TopUpPage = () => {
                             <Input
                                 label="Last 6 Digits of CNIC"
                                 type="text"
-                                value={cnicLastSix}
+                                value={formData.cnic_last_six}
                                 onChange={(e) => setCnicLastSix(e.target.value.replace(/\D/g, '').slice(0, 6))}
                                 placeholder="XXXXXX"
                                 maxLength={6}
@@ -109,17 +120,17 @@ const TopUpPage = () => {
                 </div>
 
                 {/* Payment Content */}
-                {paymentMethod === 'jazzcash' ? (
+                {formData.method === 'MWALLET' ? (
                     <JazzCashPayment
-                        amount={parseFloat(amount) || 0}
-                        phoneNumber={mobileNumber}
-                        cnicLast6={cnicLastSix}
+                        amount={parseFloat(formData.amount) || 0}
+                        phoneNumber={formData.mobile_number}
+                        cnicLast6={formData.cnic_last_six}
                     />
                 ) : (
                     <div className="space-y-6">
                         <Button
                             onClick={handleCardPayment}
-                            disabled={isLoading || !amount}
+                            disabled={isLoading || !formData.amount}
                             className="w-full font-semibold text-base py-6 rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all mt-4"
                         >
                             {isLoading ? 'Processing...' : 'Proceed to Payment Gateway'}
