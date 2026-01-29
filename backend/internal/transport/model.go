@@ -281,6 +281,8 @@ func MapDBTripsToTrips(rows []transport_db.GetUpcomingTripsByRouteRow) []TripRes
 				OpensAt:        row.BookingOpensAt,
 				AvailableSeats: int(row.AvailableSeats),
 				Price:          common.NumericToFloat64(row.BasePrice),
+				BusType:        row.BusType,
+				Direction:      row.Direction,
 				Stops:          make([]TripStopItem, 0),
 			}
 
@@ -341,6 +343,8 @@ func MapDBAllTripsToTrips(rows []transport_db.GetAllUpcomingTripsRow) []TripResp
 				OpensAt:        row.BookingOpensAt,
 				AvailableSeats: int(row.AvailableSeats),
 				Price:          common.NumericToFloat64(row.BasePrice),
+				BusType:        row.BusType,
+				Direction:      row.Direction,
 				Stops:          make([]TripStopItem, 0),
 			}
 

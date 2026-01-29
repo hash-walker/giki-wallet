@@ -32,6 +32,7 @@ export interface BookingConfirmationModalProps {
     returnHolds: HeldSeat[];
     passengers: Record<string, Passenger>;
     onUpdatePassenger: (holdId: string, data: Passenger) => void;
+    isStudent?: boolean;
 }
 
 export function BookingConfirmationModal({
@@ -45,6 +46,7 @@ export function BookingConfirmationModal({
     returnHolds,
     passengers,
     onUpdatePassenger,
+    isStudent = false,
 }: BookingConfirmationModalProps) {
     const allHolds = [...outboundHolds, ...returnHolds];
 
@@ -130,19 +132,27 @@ export function BookingConfirmationModal({
                                             placeholder="Enter passenger name"
                                             value={p.name}
                                             onChange={(e) => onUpdatePassenger(h.hold_id, { ...p, name: e.target.value })}
+                                            disabled={isStudent} // Students usually just use their name which is prefilled
                                         />
-                                        <Select
-                                            options={[
-                                                { value: 'SELF', label: 'Self' },
-                                                { value: 'SPOUSE', label: 'Spouse' },
-                                                { value: 'CHILD', label: 'Child' },
-                                            ]}
-                                            value={p.relation}
-                                            onChange={(v) => onUpdatePassenger(h.hold_id, { ...p, relation: v as Passenger['relation'] })}
-                                            placeholder="Select relation"
-                                            className="h-12 rounded-xl bg-slate-50/50 border-slate-100 font-bold text-sm shadow-inner"
-                                            showLabel={false}
-                                        />
+                                        {!isStudent && (
+                                            <Select
+                                                options={[
+                                                    { value: 'SELF', label: 'Self' },
+                                                    { value: 'SPOUSE', label: 'Spouse' },
+                                                    { value: 'CHILD', label: 'Child' },
+                                                ]}
+                                                value={p.relation}
+                                                onChange={(v) => onUpdatePassenger(h.hold_id, { ...p, relation: v as Passenger['relation'] })}
+                                                placeholder="Select relation"
+                                                className="h-12 rounded-xl bg-slate-50/50 border-slate-100 font-bold text-sm shadow-inner"
+                                                showLabel={false}
+                                            />
+                                        )}
+                                        {isStudent && (
+                                            <div className="px-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                                Relation: Self
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             );

@@ -15,6 +15,8 @@ export const tripSchema = z.object({
     available_seats: z.number(),
     price: z.number(),
     stops: z.array(tripStopSchema),
+    bus_type: z.string().optional(),
+    direction: z.string().optional(),
 });
 
 export const quotaUsageSchema = z.object({

@@ -54,6 +54,7 @@ SELECT
     t.status,
     t.booking_status,
     t.direction,
+    t.bus_type,
 
     -- Stop Details
     ts.stop_id,
@@ -79,6 +80,7 @@ SELECT
     t.status,
     t.booking_status,
     t.direction,
+    t.bus_type,
 
     -- Route Details
     r.name as route_name,

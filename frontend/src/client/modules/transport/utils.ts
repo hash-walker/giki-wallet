@@ -61,18 +61,30 @@ export function filterPickupOptions(stops: TripStop[], dropoffId: string | null)
 }
 
 /**
- * Returns true if the first stop is GIKI (Outbound)
+ * Returns true if the trip is from GIKI (Outbound)
  */
-export function isFromGIKI(stops: TripStop[] | undefined): boolean {
+export function isFromGIKI(trip: Trip | undefined): boolean {
+    if (!trip) return false;
+    if (trip.direction === 'OUTBOUND') return true;
+    if (trip.direction === 'INBOUND') return false;
+
+    // Fallback to stop name search
+    const stops = trip.stops;
     if (!stops || stops.length === 0) return false;
     const sorted = [...stops].sort((a, b) => a.sequence - b.sequence);
     return sorted[0].stop_name.toLowerCase().includes('giki');
 }
 
 /**
- * Returns true if the last stop is GIKI (Inbound)
+ * Returns true if the trip is to GIKI (Inbound)
  */
-export function isToGIKI(stops: TripStop[] | undefined): boolean {
+export function isToGIKI(trip: Trip | undefined): boolean {
+    if (!trip) return false;
+    if (trip.direction === 'INBOUND') return true;
+    if (trip.direction === 'OUTBOUND') return false;
+
+    // Fallback to stop name search
+    const stops = trip.stops;
     if (!stops || stops.length === 0) return false;
     const sorted = [...stops].sort((a, b) => a.sequence - b.sequence);
     return sorted[sorted.length - 1].stop_name.toLowerCase().includes('giki');
@@ -104,49 +116,39 @@ export interface UISelectOption {
  * Since current UI assumes "City" selection first, we need to associate Trips with "Cities".
  * We can infer City from the Non-GIKI end of the route.
  */
-export function getUniqueCities(trips: Trip[], direction: 'from-giki' | 'to-giki'): UISelectOption[] {
-    const citiesMap = new Map<string, string>(); // name -> id (we'll use name as ID if no dedicated ID)
+export function getUniqueRoutes(trips: Trip[], direction: 'from-giki' | 'to-giki'): UISelectOption[] {
+    const routesSet = new Set<string>();
 
     trips.forEach(trip => {
-        // Determine trip direction
-        const tripIsFromGIKI = isFromGIKI(trip.stops);
+        const tripIsFromGIKI = isFromGIKI(trip);
         if ((direction === 'from-giki' && !tripIsFromGIKI) || (direction === 'to-giki' && tripIsFromGIKI)) {
-            return; // Skip trips not in requested direction
+            return;
         }
 
-        // Identify the "City" stop. 
-        // If From GIKI, City is the last stop.
-        // If To GIKI, City is the first stop.
-        const sortedStops = [...trip.stops].sort((a, b) => a.sequence - b.sequence);
-        const cityStop = direction === 'from-giki' ? sortedStops[sortedStops.length - 1] : sortedStops[0];
+        if (trip.booking_status === 'CLOSED' || trip.booking_status === 'CANCELLED') {
+            return;
+        }
 
-        // We use stop_name as distinct city identifier for now, or we could group by route_name
-        // Use stop_name for better granularity if multiple drops in same city, 
-        // OR better: use route_name if it represents the city (e.g. "Islamabad Route")
-        // frequent route names: "Daily Islamabad", "Weekend Lahore"
-        // Let's try to extract City from Route Name or fallback to Stop Name
-
-        let cityName = cityStop.stop_name;
-        // Simple heuristic: If route name contains the stop name, use route name? 
-        // Actually, just using the terminal stop name is safest for "Where do you want to go?"
-
-        citiesMap.set(cityStop.stop_name, cityStop.stop_name);
+        routesSet.add(trip.route_name);
     });
 
-    return Array.from(citiesMap.values()).map(name => ({ value: name, label: name }));
+    return Array.from(routesSet).sort().map(name => ({ value: name, label: name }));
 }
 
 /**
- * Get available time slots for a specific "City" (terminal stop name).
+ * Get available time slots for a specific Route Name.
  */
-export function getAvailableTimesForCity(trips: Trip[], cityName: string, direction: 'from-giki' | 'to-giki'): UISelectOption[] {
+export function getAvailableTimesForRoute(trips: Trip[], routeName: string, direction: 'from-giki' | 'to-giki'): UISelectOption[] {
     const relevantTrips = trips.filter(trip => {
-        const tripIsFromGIKI = isFromGIKI(trip.stops);
+        const tripIsFromGIKI = isFromGIKI(trip);
         if ((direction === 'from-giki' && !tripIsFromGIKI) || (direction === 'to-giki' && tripIsFromGIKI)) return false;
 
-        const sortedStops = [...trip.stops].sort((a, b) => a.sequence - b.sequence);
-        const cityStop = direction === 'from-giki' ? sortedStops[sortedStops.length - 1] : sortedStops[0];
-        return cityStop.stop_name === cityName;
+        // Filter out Closed or Cancelled trips for booking
+        if (trip.booking_status === 'CLOSED' || trip.booking_status === 'CANCELLED') {
+            return false;
+        }
+
+        return trip.route_name === routeName;
     });
 
     // Extract unique times
@@ -175,16 +177,18 @@ export function getStopsForTrip(trips: Trip[], tripId: string, direction: 'from-
     const trip = trips.find(t => t.trip_id === tripId);
     if (!trip) return [];
 
-    // Filter relevant stops based on direction
-    // If From GIKI: Pickup is fixed (GIKI), user selects Dropoff.
-    // So we return formatted dropoff options (all stops AFTER GIKI).
-    // If To GIKI: Dropoff is fixed (GIKI), user selects Pickup.
-    // So we return formatted pickup options (all stops BEFORE GIKI).
-
     const sortedStops = [...trip.stops].sort((a, b) => a.sequence - b.sequence);
-    const gikiIndex = sortedStops.findIndex(s => s.stop_name.toLowerCase().includes('giki'));
 
-    if (gikiIndex === -1) return []; // Should not happen for valid trips
+    // Find GIKI stop index
+    let gikiIndex = sortedStops.findIndex(s => s.stop_name.toLowerCase().includes('giki'));
+
+    // Fallback: If no GIKI in name, use direction metadata
+    if (gikiIndex === -1) {
+        if (trip.direction === 'OUTBOUND' || direction === 'from-giki') gikiIndex = 0;
+        else if (trip.direction === 'INBOUND' || direction === 'to-giki') gikiIndex = sortedStops.length - 1;
+    }
+
+    if (gikiIndex === -1) return [];
 
     let validStops: TripStop[] = [];
     if (direction === 'from-giki') {
@@ -195,6 +199,7 @@ export function getStopsForTrip(trips: Trip[], tripId: string, direction: 'from-
         validStops = sortedStops.slice(0, gikiIndex);
     }
 
+    // Sort valid stops based on distance from GIKI (optional, but keep default sequence)
     return validStops.map(s => ({ value: s.stop_id, label: s.stop_name }));
 }
 
