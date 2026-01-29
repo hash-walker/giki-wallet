@@ -9,6 +9,15 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/types"
 )
 
+const (
+	TripStatusOpen      = "OPEN"
+	TripStatusCancelled = "CANCELLED"
+	TripStatusClosed    = "CLOSED"
+	TripStatusFull      = "FULL"
+	TripStatusLocked    = "LOCKED"
+	TripStatusScheduled = "SCHEDULED"
+)
+
 type Route struct {
 	RouteID   uuid.UUID `json:"route_id"`
 	RouteName string    `json:"route_name"`
@@ -76,6 +85,7 @@ type WeeklyTripSummary struct {
 	Scheduled int              `json:"scheduled"`
 	Opened    int              `json:"opened"`
 	Locked    int              `json:"locked"`
+	Full      int              `json:"full"`
 	Trips     []TripSummaryRow `json:"trips"`
 }
 
@@ -86,6 +96,7 @@ type TripSummaryRow struct {
 	AvailableSeats int       `json:"available_seats"`
 	TotalCapacity  int       `json:"total_capacity"`
 	BookingStatus  string    `json:"booking_status"`
+	BusType        string    `json:"bus_type"`
 }
 
 type TripStopItem struct {
@@ -400,4 +411,57 @@ func MapDBTicketsToTickets(rows []transport_db.GetUserTicketsByIDRow) []MyTicket
 	}
 
 	return tickets
+}
+
+func MapDBWeeklyTripsToWeeklyTripSummary(rows []transport_db.GetWeeklyTripsRow) *WeeklyTripSummary {
+	summary := &WeeklyTripSummary{
+		Trips: make([]TripSummaryRow, 0, len(rows)),
+	}
+	now := time.Now()
+
+	for _, row := range rows {
+		summary.Scheduled++
+		apiStatus := calculateTripStatus(row, now)
+
+		switch apiStatus {
+		case TripStatusLocked:
+			summary.Locked++
+		case TripStatusOpen:
+			summary.Opened++
+		case TripStatusFull:
+			summary.Full++
+		}
+
+		summary.Trips = append(summary.Trips, TripSummaryRow{
+			TripID:         row.ID,
+			RouteName:      row.RouteName,
+			DepartureTime:  row.DepartureTime,
+			AvailableSeats: int(row.AvailableSeats),
+			TotalCapacity:  int(row.TotalCapacity),
+			BookingStatus:  apiStatus,
+			BusType:        row.BusType,
+		})
+	}
+
+	return summary
+}
+
+func calculateTripStatus(row transport_db.GetWeeklyTripsRow, now time.Time) string {
+	if common.TextToString(row.Status) == "CANCELLED" {
+		return TripStatusCancelled
+	}
+	if row.BookingStatus == "CLOSED" {
+		return TripStatusClosed
+	}
+	if row.AvailableSeats <= 0 {
+		return TripStatusFull
+	}
+	if now.Before(row.BookingOpensAt) {
+		return TripStatusLocked
+	}
+	if now.After(row.BookingClosesAt) {
+		return TripStatusClosed
+	}
+
+	return TripStatusOpen
 }

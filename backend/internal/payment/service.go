@@ -281,7 +281,7 @@ func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.
 	}
 
 	if paymentStatus == PaymentStatusSuccess {
-		err = s.creditWalletFromPayment(ctx, tx, gatewayTxn.UserID, gatewayTxn.Amount*100, gatewayTxn.TxnRefNo)
+		err = s.creditWalletFromPayment(ctx, tx, gatewayTxn.UserID, gatewayTxn.Amount, gatewayTxn.TxnRefNo)
 		if err != nil {
 			return nil, err
 		}

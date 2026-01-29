@@ -49,8 +49,13 @@ func TestMain(m *testing.M) {
 		os.Setenv("JAZZCASH_WALLET_PAYMENT_URL", "ApplicationAPI/API/2.0/Purchase/DoMWalletTransaction")
 		os.Setenv("JAZZCASH_STATUS_INQUIRY_URL", "ApplicationAPI/API/PaymentInquiry/Inquire")
 		os.Setenv("JAZZCASH_CARD_PAYMENT_URL", "CustomerPortal/transactionmanagement/merchantform/")
+
 		os.Setenv("JAZZCASH_WALLET_REFUND_URL", "ApplicationAPI/API/Purchase/domwalletrefundtransaction")
 		os.Setenv("JAZZCASH_CARD_REFUND_URL", "ApplicationAPI/API/authorize/Refund")
+		os.Setenv("MS_GRAPH_CLIENT_ID", "test_client_id")
+		os.Setenv("MS_GRAPH_TENANT_ID", "test_tenant_id")
+		os.Setenv("MS_GRAPH_CLIENT_SECRET", "test_client_secret")
+		os.Setenv("MS_GRAPH_SENDER_EMAIL", "test@giki.edu.pk")
 	}
 
 	// Connect to database
@@ -114,6 +119,16 @@ func createTestUser() error {
 		VALUES ($1, 'Test User', $2, $3, 'local', 'test_hash', 'bcrypt', true, true, 'student')
 		ON CONFLICT (id) DO NOTHING
 	`, testUserID, email, phoneNumber)
+	// Insert system wallet for tests
+	_, err = testDBPool.Exec(ctx, `
+		INSERT INTO giki_wallet.wallets (name, type, status, currency)
+		VALUES ('GIKI Wallet', 'SYS_LIABILITY', 'ACTIVE', 'PKR'),
+		       ('Transport Revenue', 'SYS_REVENUE', 'ACTIVE', 'PKR')
+	`)
+	if err != nil {
+		fmt.Printf("Warning: Failed to seed system wallets: %v\n", err)
+	}
+
 	return err
 }
 
@@ -657,18 +672,21 @@ func TestIntegration_Database_PollingStatus(t *testing.T) {
 	mockGateway.SetScenario(testutils.ScenarioPending)
 	ctx := createIntegrationTestContext()
 
-	result, _ := testService.InitiatePayment(ctx, TopUpRequest{
+	result, err := testService.InitiatePayment(ctx, TopUpRequest{
 		Amount:         500.0,
 		PhoneNumber:    "03001234567",
 		CNICLast6:      "123456",
 		Method:         PaymentMethodMWallet,
 		IdempotencyKey: uuid.New(),
 	})
+	if err != nil {
+		t.Fatalf("InitiatePayment failed: %v", err)
+	}
 
 	q := payment.New(testDBPool)
 
 	// Test UpdatePollingStatus - first time should succeed
-	_, err := q.UpdatePollingStatus(ctx, result.TxnRefNo)
+	_, err = q.UpdatePollingStatus(ctx, result.TxnRefNo)
 	if err != nil {
 		t.Fatalf("First UpdatePollingStatus should succeed: %v", err)
 	}
@@ -723,6 +741,62 @@ func TestIntegration_Inquiry_Success(t *testing.T) {
 
 	if inquiryResult.Status != gateway.StatusSuccess {
 		t.Errorf("Expected inquiry status SUCCESS, got %s", inquiryResult.Status)
+	}
+}
+
+func TestIntegration_Polling_Flow(t *testing.T) {
+	cleanupTestTransactions(t)
+	defer cleanupTestTransactions(t)
+
+	mockGateway.SetScenario(testutils.ScenarioPending)
+	mockGateway.SetInquiryScenario(testutils.ScenarioPending)
+
+	ctx := createIntegrationTestContext()
+
+	// 1. Create pending transaction
+	result, err := testService.InitiatePayment(ctx, TopUpRequest{
+		Amount:         500.0,
+		PhoneNumber:    "03001234567",
+		CNICLast6:      "123456",
+		Method:         PaymentMethodMWallet,
+		IdempotencyKey: uuid.New(),
+	})
+	if err != nil {
+		t.Fatalf("InitiatePayment failed: %v", err)
+	}
+
+	// 2. Set inquiry to SUCCESS after a short delay (simulating user paying)
+	go func() {
+		time.Sleep(1 * time.Second)
+		mockGateway.SetInquiryScenario(testutils.ScenarioSuccess)
+	}()
+
+	// 3. Start polling (this blocks, so runs in goroutine or we use a modified version)
+	// Since startPollingForTransaction loops until done, we run it in a goroutine
+	done := make(chan struct{})
+	go func() {
+		testService.startPollingForTransaction(result.TxnRefNo)
+		close(done)
+	}()
+
+	// 4. Wait for polling to complete (it should finish when status becomes SUCCESS)
+	// Poller checks every 5s. Give it enough time (e.g., 2 ticks)
+	select {
+	case <-done:
+		// Polling finished
+	case <-time.After(15 * time.Second):
+		t.Fatal("Polling timed out")
+	}
+
+	// 5. Verify status is updated in DB
+	q := payment.New(testDBPool)
+	txn, err := q.GetTransactionByTxnRefNo(ctx, result.TxnRefNo)
+	if err != nil {
+		t.Fatalf("Failed to get transaction: %v", err)
+	}
+
+	if txn.Status != payment.CurrentStatusSUCCESS {
+		t.Errorf("Expected status SUCCESS after polling, got %s", txn.Status)
 	}
 }
 

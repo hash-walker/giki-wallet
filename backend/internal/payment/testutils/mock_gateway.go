@@ -126,9 +126,9 @@ func (m *MockGatewayServer) CreateTestJazzCashClient() *gateway.JazzCashClient {
 		"TEST_MPIN",
 		"http://localhost:8080/callback",
 		baseURL,
-		baseURL+"/ApplicationAPI/API/2.0/Purchase/DoMWalletTransaction",
-		baseURL+"/ApplicationAPI/API/CardPayment",
-		baseURL+"/ApplicationAPI/API/PaymentInquiry/Inquire",
+		"ApplicationAPI/API/2.0/Purchase/DoMWalletTransaction",
+		"ApplicationAPI/API/CardPayment",
+		"ApplicationAPI/API/PaymentInquiry/Inquire",
 	)
 }
 
