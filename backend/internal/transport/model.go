@@ -58,8 +58,6 @@ type CreateTripRequest struct {
 	BasePrice       float64           `json:"base_price"`
 	BusType         string            `json:"bus_type"`
 	Direction       string            `json:"direction"`
-	BusType         string            `json:"bus_type"`
-	Direction       string            `json:"direction"`
 	Stops           []TripStopRequest `json:"stops"`
 }
 
@@ -83,8 +81,6 @@ type TripResponse struct {
 	Price          float64   `json:"price"`
 	BusType        string    `json:"bus_type"`
 	Direction      string    `json:"direction"`
-	BusType        string    `json:"bus_type"`
-	Direction      string    `json:"direction"`
 
 	Stops []TripStopItem `json:"stops"`
 }
@@ -92,6 +88,7 @@ type TripResponse struct {
 type WeeklyTripSummary struct {
 	Scheduled int              `json:"scheduled"`
 	Opened    int              `json:"opened"`
+	Pending   int              `json:"pending"`
 	Pending   int              `json:"pending"`
 	Trips     []TripSummaryRow `json:"trips"`
 }
@@ -103,7 +100,6 @@ type TripSummaryRow struct {
 	AvailableSeats int       `json:"available_seats"`
 	TotalCapacity  int       `json:"total_capacity"`
 	BookingStatus  string    `json:"booking_status"`
-	BusType        string    `json:"bus_type"`
 	BusType        string    `json:"bus_type"`
 }
 
@@ -265,13 +261,11 @@ func MapDBTripsToTrips(rows []transport_db.GetUpcomingTripsByRouteRow) []TripRes
 			if physicalStatus == "CANCELLED" {
 				apiStatus = "CANCELLED"
 			} else if row.BookingStatus == "LOCKED" || row.BookingStatus == "CLOSED" {
-			} else if row.BookingStatus == "LOCKED" || row.BookingStatus == "CLOSED" {
 				apiStatus = "CLOSED"
 			} else {
 				if row.AvailableSeats <= 0 {
 					apiStatus = "FULL"
 				} else if now.Before(row.BookingOpensAt) {
-					apiStatus = "SCHEDULED"
 					apiStatus = "SCHEDULED"
 				} else if now.After(row.BookingClosesAt) {
 					apiStatus = "CLOSED"
@@ -326,13 +320,11 @@ func MapDBAllTripsToTrips(rows []transport_db.GetAllUpcomingTripsRow) []TripResp
 			if physicalStatus == "CANCELLED" {
 				apiStatus = "CANCELLED"
 			} else if row.BookingStatus == "LOCKED" || row.BookingStatus == "CLOSED" {
-			} else if row.BookingStatus == "LOCKED" || row.BookingStatus == "CLOSED" {
 				apiStatus = "CLOSED"
 			} else {
 				if row.AvailableSeats <= 0 {
 					apiStatus = "FULL"
 				} else if now.Before(row.BookingOpensAt) {
-					apiStatus = "SCHEDULED"
 					apiStatus = "SCHEDULED"
 				} else if now.After(row.BookingClosesAt) {
 					apiStatus = "CLOSED"
@@ -423,6 +415,68 @@ func MapDBTicketsToTickets(rows []transport_db.GetUserTicketsByIDRow) []MyTicket
 	}
 
 	return tickets
+}
+
+func MapDBAdminTripsToTrips(rows []transport_db.AdminGetAllTripsRow) []TripResponse {
+
+	tripMap := make(map[uuid.UUID]*TripResponse)
+	var orderedIDs []uuid.UUID
+
+	for _, row := range rows {
+		if _, exists := tripMap[row.TripID]; !exists {
+
+			apiStatus := "OPEN" // Default to Auto-Pilot
+			now := time.Now()
+
+			physicalStatus := common.TextToString(row.Status)
+
+			if physicalStatus == "CANCELLED" {
+				apiStatus = "CANCELLED"
+			} else if row.BookingStatus == "LOCKED" || row.BookingStatus == "CLOSED" {
+				apiStatus = "CLOSED"
+			} else {
+				if row.AvailableSeats <= 0 {
+					apiStatus = "FULL"
+				} else if now.Before(row.BookingOpensAt) {
+					apiStatus = "SCHEDULED"
+				} else if now.After(row.BookingClosesAt) {
+					apiStatus = "CLOSED"
+				} else {
+					apiStatus = "OPEN"
+				}
+			}
+
+			trip := &TripResponse{
+				TripID:         row.TripID,
+				RouteName:      row.RouteName,
+				DepartureTime:  row.DepartureTime,
+				BookingStatus:  apiStatus,
+				OpensAt:        row.BookingOpensAt,
+				AvailableSeats: int(row.AvailableSeats),
+				Price:          common.NumericToFloat64(row.BasePrice),
+				BusType:        row.BusType,
+				Direction:      row.Direction,
+				Stops:          make([]TripStopItem, 0),
+			}
+
+			tripMap[row.TripID] = trip
+			orderedIDs = append(orderedIDs, row.TripID)
+		}
+
+		tripMap[row.TripID].Stops = append(tripMap[row.TripID].Stops, TripStopItem{
+			StopID:   row.StopID,
+			StopName: row.StopName,
+			Sequence: row.SequenceOrder,
+		})
+	}
+
+	// Convert Map back to Slice using the ordered ID list
+	result := make([]TripResponse, 0, len(orderedIDs))
+	for _, id := range orderedIDs {
+		result = append(result, *tripMap[id])
+	}
+
+	return result
 }
 
 func MapDBAdminTripsToTrips(rows []transport_db.AdminGetAllTripsRow) []TripResponse {
