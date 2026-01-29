@@ -19,15 +19,15 @@ export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast
     } = useWalletModuleStore();
 
     const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
-    const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const pollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
     const isActive = useRef(false);
 
     const clearAllTimers = useCallback(() => {
         if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+        if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current);
         timerIntervalRef.current = null;
-        pollIntervalRef.current = null;
+        pollTimeoutRef.current = null;
 
         // Abort any pending requests to free up browser connection pool
         if (abortControllerRef.current) {
@@ -50,21 +50,35 @@ export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast
         setErrorMessage(msg);
     }, [clearAllTimers, setStatus, setErrorMessage]);
 
-    const pollStatus = useCallback(async () => {
-        if (!txnRefNo || status !== 'processing') return;
+    const pollOnce = useCallback(async (currentTxnRefNo: string) => {
         try {
-            const result = await getTransactionStatus(txnRefNo);
+            const result = await getTransactionStatus(currentTxnRefNo);
             if (result.status === 'SUCCESS') handleSuccess();
             else if (result.status === 'FAILED') handleFailure(result.message || "Transaction failed");
         } catch (err) {
             // Silently ignore poll errors, wait for next cycle
         }
-    }, [txnRefNo, status, handleSuccess, handleFailure]);
+    }, [handleSuccess, handleFailure]);
 
     const startPolling = useCallback(() => {
-        if (pollIntervalRef.current) return;
-        pollIntervalRef.current = setInterval(pollStatus, 4000);
-    }, [pollStatus]);
+        if (pollTimeoutRef.current) return;
+
+        const tick = async () => {
+            pollTimeoutRef.current = null;
+
+            const { status: currentStatus, txnRefNo: currentTxnRefNo } = useWalletModuleStore.getState();
+            if (currentStatus !== 'processing' || !currentTxnRefNo) return;
+
+            await pollOnce(currentTxnRefNo);
+
+            const { status: nextStatus, txnRefNo: nextTxnRefNo } = useWalletModuleStore.getState();
+            if (nextStatus === 'processing' && nextTxnRefNo) {
+                pollTimeoutRef.current = setTimeout(tick, 1000);
+            }
+        };
+
+        pollTimeoutRef.current = setTimeout(tick, 1000);
+    }, [pollOnce]);
 
     const initiatePayment = async () => {
         if (isActive.current) return;
@@ -124,12 +138,12 @@ export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible' && status === 'processing') {
-                pollStatus();
+                startPolling();
             }
         };
         document.addEventListener('visibilitychange', handleVisibilityChange);
         return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-    }, [status, pollStatus]);
+    }, [status, startPolling]);
 
     // Cleanup on unmount
     useEffect(() => {
