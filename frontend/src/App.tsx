@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import { ClientLayout } from '@/client/layout/ClientLayout';
-import { AdminLayout, AdminDashboard, RoutesPage, TimeSlotsPage, TicketsPage as AdminTicketsPage, UsersPage, SettingsPage, TransactionsPage, HistoryPage, CreateTripPage, TripsPage } from '@/admin';
+import { AdminLayout, AdminDashboard, RoutesPage, TimeSlotsPage, TicketsPage as AdminTicketsPage, UsersPage, SettingsPage, TransactionsPage, GatewayTransactionsPage, HistoryPage, CreateTripPage, TripsPage } from '@/admin';
 import { HomePage } from '@/client/pages/HomePage';
 import { TransportPage } from '@/client/modules/transport/pages/TransportPage';
 import TopUpPage from '@/client/modules/wallet/pages/TopUpPage';
@@ -144,6 +144,10 @@ const router = createBrowserRouter([
             {
                 path: '/admin/transactions',
                 element: <TransactionsPage />,
+            },
+            {
+                path: '/admin/gateway-transactions',
+                element: <GatewayTransactionsPage />,
             },
             {
                 path: '/admin/history',

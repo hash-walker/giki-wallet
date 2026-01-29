@@ -133,3 +133,37 @@ func (h *Handler) CheckStatus(w http.ResponseWriter, r *http.Request) {
 
 	common.ResponseWithJSON(w, http.StatusOK, result)
 }
+
+// =============================================================================
+// ADMIN HANDLERS
+// =============================================================================
+
+func (h *Handler) ListGatewayTransactions(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	txns, err := h.pService.ListGatewayTransactions(r.Context())
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, txns)
+}
+
+func (h *Handler) VerifyGatewayTransaction(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+	txnRefNo := chi.URLParam(r, "txnRefNo")
+
+	if txnRefNo == "" {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, nil), requestID)
+		return
+	}
+
+	result, err := h.pService.VerifyTransaction(r.Context(), txnRefNo)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, result)
+}

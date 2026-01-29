@@ -758,3 +758,54 @@ func (s *Service) buildAutoSubmitForm(fields gateway.JazzCashFields, jazzcashPos
 
 	return html
 }
+
+// =============================================================================
+// ADMIN SERVICE METHODS
+// =============================================================================
+
+func (s *Service) ListGatewayTransactions(ctx context.Context) ([]AdminGatewayTransaction, error) {
+	txns, err := s.q.ListGatewayTransactions(ctx)
+	if err != nil {
+		return nil, commonerrors.Wrap(ErrDatabaseQuery, err)
+	}
+
+	result := make([]AdminGatewayTransaction, len(txns))
+	for i, txn := range txns {
+		result[i] = AdminGatewayTransaction{
+			TxnRefNo:      txn.TxnRefNo,
+			UserID:        txn.UserID,
+			UserName:      txn.UserName,
+			UserEmail:     txn.UserEmail,
+			Amount:        fmt.Sprintf("%d", txn.Amount),
+			Status:        PaymentStatus(txn.Status),
+			PaymentMethod: PaymentMethod(txn.PaymentMethod),
+			CreatedAt:     txn.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:     txn.UpdatedAt.Format(time.RFC3339),
+			BillRefID:     txn.BillRefID,
+		}
+	}
+	return result, nil
+}
+
+func (s *Service) VerifyTransaction(ctx context.Context, txnRefNo string) (*AdminGatewayTransaction, error) {
+	statusResult, err := s.GetTransactionStatus(ctx, txnRefNo)
+	if err != nil {
+		return nil, err
+	}
+
+	txn, err := s.q.GetTransactionByTxnRefNo(ctx, txnRefNo)
+	if err != nil {
+		return nil, commonerrors.Wrap(ErrDatabaseQuery, err)
+	}
+
+	return &AdminGatewayTransaction{
+		TxnRefNo:      txn.TxnRefNo,
+		UserID:        txn.UserID,
+		Amount:        fmt.Sprintf("%d", txn.Amount),
+		Status:        statusResult.Status,
+		PaymentMethod: PaymentMethod(txn.PaymentMethod),
+		CreatedAt:     txn.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:     txn.UpdatedAt.Format(time.RFC3339),
+		BillRefID:     txn.BillRefID,
+	}, nil
+}
