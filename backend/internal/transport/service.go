@@ -511,6 +511,8 @@ func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.U
 		BasePrice:       common.Float64ToNumeric(req.BasePrice),
 		BusType:         req.BusType,
 		Direction:       req.Direction,
+		BusType:         req.BusType,
+		Direction:       req.Direction,
 	}
 
 	tripID, err := qtx.CreateTrip(ctx, arg)
@@ -563,12 +565,66 @@ func (s *Service) GetWeeklyTripSummary(ctx context.Context) (*WeeklyTripSummary,
 		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}
 
-	return MapDBWeeklyTripsToWeeklyTripSummary(rows), nil
+	summary := &WeeklyTripSummary{
+		Trips: make([]TripSummaryRow, 0, len(rows)),
+	}
+	now := time.Now()
+
+	for _, row := range rows {
+		summary.Scheduled++
+
+		// Logic consistent with MapDBTripsToTrips
+		apiStatus := "OPEN"
+		physicalStatus := common.TextToString(row.Status)
+
+		if physicalStatus == "CANCELLED" {
+			apiStatus = "CANCELLED"
+		} else if row.BookingStatus == "LOCKED" || row.BookingStatus == "CLOSED" {
+			apiStatus = "CLOSED"
+		} else {
+			if row.AvailableSeats <= 0 {
+				apiStatus = "FULL"
+			} else if now.Before(row.BookingOpensAt) {
+				apiStatus = "SCHEDULED"
+			} else if now.After(row.BookingClosesAt) {
+				apiStatus = "CLOSED"
+			} else {
+				apiStatus = "OPEN"
+			}
+		}
+
+		if apiStatus == "SCHEDULED" {
+			summary.Pending++
+		} else if apiStatus == "OPEN" {
+			summary.Opened++
+		}
+
+		summary.Trips = append(summary.Trips, TripSummaryRow{
+			TripID:         row.ID,
+			RouteName:      row.RouteName,
+			DepartureTime:  row.DepartureTime,
+			AvailableSeats: int(row.AvailableSeats),
+			TotalCapacity:  int(row.TotalCapacity),
+			BookingStatus:  apiStatus,
+			BusType:        row.BusType,
+		})
+	}
+
+	return summary, nil
 }
 
 func GenerateRandomCode() string {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	return fmt.Sprintf("%04d", rng.Intn(10000)) // 0000 to 9999
+}
+
+func (s *Service) AdminListTrips(ctx context.Context) ([]TripResponse, error) {
+	rows, err := s.q.AdminGetAllTrips(ctx)
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	return MapDBAdminTripsToTrips(rows), nil
 }
 
 func (s *Service) AdminListTrips(ctx context.Context) ([]TripResponse, error) {

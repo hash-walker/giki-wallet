@@ -111,10 +111,5 @@ func (s *Server) MountRoutes() {
 		r.Get("/trips", s.Transport.AdminListTrips)
 
 		r.Post("/trips", s.Transport.CreateTrip)
-
-		r.Route("/users", func(r chi.Router) {
-			r.Get("/", s.User.ListUsers)
-			r.Patch("/{user_id}/status", s.User.UpdateUserStatus)
-		})
 	})
 }
