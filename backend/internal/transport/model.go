@@ -89,7 +89,10 @@ type WeeklyTripSummary struct {
 	Scheduled int              `json:"scheduled"`
 	Opened    int              `json:"opened"`
 	Pending   int              `json:"pending"`
+<<<<<<< HEAD
 	Pending   int              `json:"pending"`
+=======
+>>>>>>> feature/admin-gateway-transactions
 	Trips     []TripSummaryRow `json:"trips"`
 }
 
@@ -482,6 +485,7 @@ func MapDBAdminTripsToTrips(rows []transport_db.AdminGetAllTripsRow) []TripRespo
 
 	return result
 }
+<<<<<<< HEAD
 
 func MapDBAdminTripsToTrips(rows []transport_db.AdminGetAllTripsRow) []TripResponse {
 
@@ -544,3 +548,5 @@ func MapDBAdminTripsToTrips(rows []transport_db.AdminGetAllTripsRow) []TripRespo
 
 	return result
 }
+=======
+>>>>>>> feature/admin-gateway-transactions

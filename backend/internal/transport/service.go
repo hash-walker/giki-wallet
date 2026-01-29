@@ -511,8 +511,11 @@ func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.U
 		BasePrice:       common.Float64ToNumeric(req.BasePrice),
 		BusType:         req.BusType,
 		Direction:       req.Direction,
+<<<<<<< HEAD
 		BusType:         req.BusType,
 		Direction:       req.Direction,
+=======
+>>>>>>> feature/admin-gateway-transactions
 	}
 
 	tripID, err := qtx.CreateTrip(ctx, arg)
@@ -626,6 +629,7 @@ func (s *Service) AdminListTrips(ctx context.Context) ([]TripResponse, error) {
 
 	return MapDBAdminTripsToTrips(rows), nil
 }
+<<<<<<< HEAD
 
 func (s *Service) AdminListTrips(ctx context.Context) ([]TripResponse, error) {
 	rows, err := s.q.AdminGetAllTrips(ctx)
@@ -635,3 +639,5 @@ func (s *Service) AdminListTrips(ctx context.Context) ([]TripResponse, error) {
 
 	return MapDBAdminTripsToTrips(rows), nil
 }
+=======
+>>>>>>> feature/admin-gateway-transactions
