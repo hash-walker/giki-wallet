@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/hash-walker/giki-wallet/internal/common"
 	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
 	"github.com/hash-walker/giki-wallet/internal/middleware"
@@ -46,4 +48,44 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	common.ResponseWithJSON(w, http.StatusCreated, user)
+}
+
+func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	users, err := h.service.ListUsers(r.Context())
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, users)
+}
+
+func (h *Handler) UpdateUserStatus(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	userIDStr := chi.URLParam(r, "user_id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidUUID, err), requestID)
+		return
+	}
+
+	var params struct {
+		IsActive bool `json:"is_active"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidJSON, err), requestID)
+		return
+	}
+
+	user, err := h.service.UpdateUserStatus(r.Context(), userID, params.IsActive)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, user)
 }

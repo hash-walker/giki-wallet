@@ -4,12 +4,12 @@ import { Modal } from '@/shared/components/ui/Modal';
 import { Input } from '@/shared/components/ui/Input';
 import { Button } from '@/shared/components/ui/button';
 import { Select } from '@/shared/components/ui/Select';
-import { User, UserRole } from '../types';
+import { User } from '../schema';
 
 interface UserFormModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSubmit: (user: Omit<User, 'id'>) => void;
+    onSubmit: (user: Partial<User>) => void;
     user?: User;
 }
 
@@ -22,16 +22,16 @@ export const UserFormModal = ({
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
-    const [role, setRole] = useState<UserRole>('student');
+    const [role, setRole] = useState('student');
     const [isActive, setIsActive] = useState(true);
 
     useEffect(() => {
         if (user) {
             setName(user.name);
             setEmail(user.email);
-            setPhone(user.phone || '');
-            setRole(user.role);
-            setIsActive(user.isActive);
+            setPhone(user.phone_number || '');
+            setRole(user.user_type);
+            setIsActive(user.is_active);
         } else {
             setName('');
             setEmail('');
@@ -43,7 +43,7 @@ export const UserFormModal = ({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (!name || !email) {
             alert('Name and email are required');
             return;
@@ -52,9 +52,9 @@ export const UserFormModal = ({
         onSubmit({
             name,
             email,
-            phone: phone || undefined,
-            role,
-            isActive,
+            phone_number: phone || undefined,
+            user_type: role,
+            is_active: isActive,
         });
     };
 
@@ -107,7 +107,7 @@ export const UserFormModal = ({
                     </label>
                     <Select
                         value={role}
-                        onChange={(value) => setRole(value as UserRole)}
+                        onChange={(value) => setRole(value)}
                         options={[
                             { value: 'student', label: 'Student' },
                             { value: 'employee', label: 'Employee' },

@@ -1,47 +1,26 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/shared/components/ui/button';
 import { Plus } from 'lucide-react';
 import { UsersTable } from '../components/UsersTable';
 import { UserFormModal } from '../components/UserFormModal';
-import { User } from '../types';
-import { toast } from '@/lib/toast';
+import { User } from '../schema';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
 import { PageHeader, TableWrapper } from '../../../shared';
+import { useUserStore } from '../store';
 
 export const UsersPage = () => {
-    // Mock data - replace with API calls
-    const [users, setUsers] = useState<User[]>([
-        {
-            id: 1,
-            name: 'John Doe',
-            email: 'john.doe@example.com',
-            phone: '+92 300 1234567',
-            role: 'student',
-            isActive: true,
-        },
-        {
-            id: 2,
-            name: 'Jane Smith',
-            email: 'jane.smith@example.com',
-            phone: '+92 300 7654321',
-            role: 'employee',
-            isActive: true,
-        },
-        {
-            id: 3,
-            name: 'Admin User',
-            email: 'admin@example.com',
-            role: 'admin',
-            isActive: true,
-        },
-    ]);
+    const { users, isLoading, fetchUsers, toggleUserStatus } = useUserStore();
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | undefined>();
     const [searchTerm, setSearchTerm] = useState('');
     const [filterRole, setFilterRole] = useState<string>('all');
     const [filterStatus, setFilterStatus] = useState<string>('all');
+
+    useEffect(() => {
+        fetchUsers();
+    }, [fetchUsers]);
 
     const handleAddUser = () => {
         setEditingUser(undefined);
@@ -53,49 +32,38 @@ export const UsersPage = () => {
         setIsModalOpen(true);
     };
 
-    const handleDeleteUser = (id: number) => {
+    const handleDeleteUser = (id: string) => {
         if (window.confirm('Are you sure you want to delete this user?')) {
-            setUsers(users.filter(u => u.id !== id));
-            toast.success('User deleted successfully');
+            // TODO: Implement delete in backend if needed
+            console.log('Delete user', id);
         }
     };
 
-    const handleToggleActive = (id: number) => {
-        setUsers(users.map(u => 
-            u.id === id ? { ...u, isActive: !u.isActive } : u
-        ));
+    const handleToggleActive = (id: string) => {
         const user = users.find(u => u.id === id);
-        toast.success(user?.isActive ? 'User deactivated' : 'User activated');
+        if (user) {
+            toggleUserStatus(id, user.is_active);
+        }
     };
 
-    const handleSubmitUser = (userData: Omit<User, 'id'>) => {
-        if (editingUser) {
-            setUsers(users.map(u => 
-                u.id === editingUser.id 
-                    ? { ...userData, id: editingUser.id }
-                    : u
-            ));
-            toast.success('User updated successfully');
-        } else {
-            const newId = Math.max(...users.map(u => u.id), 0) + 1;
-            setUsers([...users, { ...userData, id: newId }]);
-            toast.success('User added successfully');
-        }
+    const handleSubmitUser = (userData: Partial<User>) => {
+        // TODO: Implement Create/Update in store/service
+        console.log('Submit user', userData);
         setIsModalOpen(false);
         setEditingUser(undefined);
     };
 
     // Filter users
     const filteredUsers = users.filter(user => {
-        const matchesSearch = 
+        const matchesSearch =
             user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (user.phone && user.phone.includes(searchTerm));
-        
-        const matchesRole = filterRole === 'all' || user.role === filterRole;
-        const matchesStatus = filterStatus === 'all' || 
-            (filterStatus === 'active' && user.isActive) ||
-            (filterStatus === 'inactive' && !user.isActive);
+            (user.phone_number && user.phone_number.includes(searchTerm));
+
+        const matchesRole = filterRole === 'all' || user.user_type === filterRole;
+        const matchesStatus = filterStatus === 'all' ||
+            (filterStatus === 'active' && user.is_active) ||
+            (filterStatus === 'inactive' && !user.is_active);
 
         return matchesSearch && matchesRole && matchesStatus;
     });
@@ -151,7 +119,7 @@ export const UsersPage = () => {
             </div>
 
             {/* Users Table */}
-            <TableWrapper count={filteredUsers.length} itemName="user">
+            <TableWrapper count={filteredUsers.length} itemName="user" isLoading={isLoading}>
                 <UsersTable
                     users={filteredUsers}
                     onEdit={handleEditUser}

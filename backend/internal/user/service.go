@@ -267,3 +267,30 @@ func (s *Service) createRoleProfile(ctx context.Context, tx pgx.Tx, userID uuid.
 		return ErrInvalidUserType.WithDetails("userType", req.UserType)
 	}
 }
+
+func (s *Service) ListUsers(ctx context.Context) ([]AdminUser, error) {
+	rows, err := s.userQ.ListUsers(ctx)
+	if err != nil {
+		return nil, translateDBError(err)
+	}
+
+	users := make([]AdminUser, len(rows))
+	for i, row := range rows {
+		users[i] = mapDBAdminUserToAdminUser(row)
+	}
+
+	return users, nil
+}
+
+func (s *Service) UpdateUserStatus(ctx context.Context, userID uuid.UUID, isActive bool) (AdminUser, error) {
+	row, err := s.userQ.UpdateUserStatus(ctx, user_db.UpdateUserStatusParams{
+		ID:       userID,
+		IsActive: isActive,
+	})
+
+	if err != nil {
+		return AdminUser{}, translateDBError(err)
+	}
+
+	return mapDBUpdateUserStatusToAdminUser(row), nil
+}
