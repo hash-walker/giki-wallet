@@ -4,7 +4,7 @@ import { topUp, getTransactionStatus } from '../api';
 import { TopUpRequest } from '../types';
 
 export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast6: string) => {
-    
+
     const {
         formData,
         status,
@@ -118,6 +118,11 @@ export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast
 
             if (result.status === 'SUCCESS') {
                 handleSuccess();
+            } else if (result.redirect) {
+                // For CARD payments, redirect to the payment page
+                // Use absolute path for safety if it starts with /api
+                const url = result.redirect.startsWith('/') ? window.location.origin + result.redirect : result.redirect;
+                window.location.assign(url);
             } else if (result.status === 'PENDING') {
                 setTxnRefNo(result.txn_ref_no || null);
                 startPolling();

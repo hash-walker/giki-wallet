@@ -41,6 +41,8 @@ export async function topUp(request: TopUpRequest & { timeout?: number }, signal
 }
 
 export async function getTransactionStatus(txnRefNo: string, signal?: AbortSignal) {
+    console.log("Transaction Status: ", txnRefNo);
     const res = await apiClient.get<TopUpResult>(`/payment/status/${txnRefNo}`, { signal });
+    console.log("Transaction Status: ", res.data);
     return topUpResultSchema.parse(res.data);
 }

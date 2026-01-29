@@ -16,7 +16,7 @@ WHERE idempotency_key = $1;
 SELECT * FROM giki_wallet.gateway_transactions
 WHERE user_id = $1
     AND status IN ('PENDING', 'UNKNOWN')
-LIMIT 1;
+LIMIT 1;    
 
 -- name: GetTransactionByTxnRefNo :one
 

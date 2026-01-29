@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/url"
 	"time"
 
@@ -178,8 +177,6 @@ func (s *Service) InitiatePayment(ctx context.Context, payload TopUpRequest) (*T
 
 	}
 
-	baseURL := config.LoadConfig().Jazzcash.BaseURL
-
 	// ═══════════════════════════════════════════════════════════════════════════
 	// route to payment method handler
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -193,7 +190,7 @@ func (s *Service) InitiatePayment(ctx context.Context, payload TopUpRequest) (*T
 			TxnRefNo:       txnRefNo,
 			Status:         PaymentStatus(gatewayTxn.Status),
 			PaymentMethod:  PaymentMethodCard,
-			PaymentPageURL: fmt.Sprintf("%s/payment/page/%s", baseURL, txnRefNo),
+			PaymentPageURL: fmt.Sprintf("/api/payment/page/%s", txnRefNo),
 		}, nil
 	default:
 		return nil, commonerrors.Wrap(ErrInvalidPaymentMethod, fmt.Errorf("method: %s", payload.Method))
@@ -335,37 +332,6 @@ func (s *Service) initiateMWalletPayment(
 		return nil, commonerrors.Wrap(ErrGatewayUnavailable, err)
 	}
 
-	// ═══════════════════════════════════════════════════════════════════════════
-	// Wait logic (UX requirement): Wait up to 40 seconds
-	// ═══════════════════════════════════════════════════════════════════════════
-
-	maxWait := 40 * time.Second
-	pollInterval := 5 * time.Second
-	start := time.Now()
-
-	for {
-		result, err := s.checkTransactionStatus(ctx, gatewayTxn)
-		if err == nil {
-			// If Success or Failed, return immediately
-			if result.Status == PaymentStatusSuccess || result.Status == PaymentStatusFailed {
-				break
-			}
-		}
-
-		// If 40s passed, break and return PENDING
-		if time.Since(start) >= maxWait {
-			break
-		}
-
-		// Wait before next check
-		select {
-		case <-ctx.Done():
-			log.Printf("[DEBUG] Client disconnected (Context Cancelled) for txn %s: %w", gatewayTxn.TxnRefNo, ctx.Err())
-			break
-		case <-time.After(pollInterval):
-		}
-	}
-
 	return s.checkTransactionStatus(ctx, gatewayTxn)
 }
 
@@ -392,7 +358,7 @@ func (s *Service) initiateCardPayment(
 		AmountPaisa:       AmountToPaisa(txn.Amount),
 		BillRefID:         txn.BillRefID,
 		TxnRefNo:          txn.TxnRefNo,
-		Description:       "GIKI Wallet Top Up",
+		Description:       "GIKI-Wallet-TopUp",
 		ReturnURL:         returnURL,
 		TxnDateTime:       txnDateTime,
 		TxnExpiryDateTime: txnExpiryDateTime,
@@ -615,7 +581,7 @@ func (s *Service) startPollingForTransaction(txRefNo string) {
 	pollCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -729,7 +695,7 @@ func (s *Service) buildAutoSubmitForm(fields gateway.JazzCashFields, jazzcashPos
             <p>Redirecting to payment gateway...</p>
             <form id="payForm" method="POST" action="%s">
                 <input type="hidden" name="pp_Amount" value="%s">
-                <input type="hidden" name="pp_BillRefrence" value="%s">
+                <input type="hidden" name="pp_BillReference" value="%s">
                 <input type="hidden" name="pp_Description" value="%s">
                 <input type="hidden" name="pp_Language" value="EN">
                 <input type="hidden" name="pp_TxnRefNo" value="%s">
@@ -739,17 +705,15 @@ func (s *Service) buildAutoSubmitForm(fields gateway.JazzCashFields, jazzcashPos
                 <input type="hidden" name="pp_TxnCurrency" value="PKR">
                 <input type="hidden" name="pp_TxnDateTime" value="%s">
                 <input type="hidden" name="pp_TxnExpiryDateTime" value="%s">
-                <input type="hidden" name="pp_TxnRefNo" value="%s">
-                <input type="hidden" name="pp_TxnType" value="MPAY">
+                <input type="hidden" name="pp_TxnType" value="%s">
                 <input type="hidden" name="pp_Version" value="1.1">
                 <input type="hidden" name="pp_SecureHash" value="%s">
-                
             </form>
         </body>
         </html>
     `, jazzcashPostURL, fields[gateway.FieldAmount], fields[gateway.FieldBillReference], fields[gateway.FieldDescription],
 		fields[gateway.FieldTxnRefNo], fields[gateway.FieldMerchantID], fields[gateway.FieldPassword], fields[gateway.FieldReturnURL],
-		fields[gateway.FieldTxnDateTime], fields[gateway.FieldTxnExpiryDateTime], fields[gateway.FieldTxnRefNo], fields[gateway.FieldSecureHash],
+		fields[gateway.FieldTxnDateTime], fields[gateway.FieldTxnExpiryDateTime], fields[gateway.FieldTxnType], fields[gateway.FieldSecureHash],
 	)
 
 	return html

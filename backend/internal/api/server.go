@@ -55,20 +55,24 @@ func (s *Server) MountRoutes() {
 		}
 	})
 
-	r.Post("/auth/register", s.User.Register)
+	// r.Post("/auth/register", s.User.Register)
 	r.Post("/auth/signin", s.Auth.Login)
 	r.Post("/auth/signout", s.Auth.Logout)
 	r.Get("/auth/verify", s.Auth.VerifyEmail)
 	r.With(auth.RequireAuth).Get("/auth/me", s.Auth.Me)
 
 	r.Route("/payment", func(r chi.Router) {
-		r.Use(auth.RequireAuth)
-		r.Post("/topup", s.Payment.TopUp)
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireAuth)
+			r.Post("/topup", s.Payment.TopUp)
+			r.Get("/status/{txnRefNo}", s.Payment.CheckStatus)
+		})
+		// Make this public so window.location.assign can access it without headers
 		r.Get("/page/{txnRefNo}", s.Payment.CardPaymentPage)
-		r.Get("/status/{txnRefNo}", s.Payment.CheckStatus)
 	})
 
 	r.Post("/booking/payment/response", s.Payment.CardCallBack)
+	r.Post("/booking/payment/response/", s.Payment.CardCallBack)
 
 	r.Route("/transport", func(r chi.Router) {
 
