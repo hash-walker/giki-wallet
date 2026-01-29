@@ -7,6 +7,7 @@ import { TransportPage } from '@/client/modules/transport/pages/TransportPage';
 import TopUpPage from '@/client/modules/wallet/pages/TopUpPage';
 
 import { TicketsPage } from '@/client/modules/transport/pages/TicketsPage';
+import { BookingConfirmationPage } from '@/client/modules/transport/pages/BookingConfirmationPage';
 import { AccountPage } from '@/shared/modules/auth/pages/AccountPage';
 import { Toaster } from '@/shared/components/ui/sonner';
 import { AuthLayout, SignInPage, SignUpPage, VerifyEmailPage, RequireAuth } from '@/shared/modules/auth';
@@ -64,6 +65,10 @@ const router = createBrowserRouter([
             {
                 index: true,
                 element: <TransportPage />,
+            },
+            {
+                path: 'confirm',
+                element: <BookingConfirmationPage />,
             },
         ],
     },

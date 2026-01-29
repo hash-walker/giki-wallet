@@ -60,6 +60,35 @@ export const TripSummaryTile = () => {
         return () => clearInterval(interval);
     }, [fetchSummary]);
 
+    const counts = useMemo(() => {
+        return {
+            total: filteredTrips.length,
+            opened: filteredTrips.filter(t => t.booking_status === 'OPEN').length,
+            pending: filteredTrips.filter(t => t.booking_status === 'SCHEDULED' || t.booking_status === 'PENDING').length
+        };
+    }, [filteredTrips]);
+
+    const stats = [
+        {
+            label: 'Total',
+            value: counts.total,
+            icon: Calendar,
+            color: 'text-primary'
+        },
+        {
+            label: 'Opened',
+            value: counts.opened,
+            icon: Unlock,
+            color: 'text-accent'
+        },
+        {
+            label: 'Scheduled',
+            value: counts.pending,
+            icon: Clock,
+            color: 'text-slate-400'
+        }
+    ];
+
     if (loading) {
         return (
             <div className="w-full bg-white/50 backdrop-blur-sm border border-slate-100 rounded-[2.5rem] p-8 h-64 flex flex-col items-center justify-center gap-4">
@@ -73,27 +102,6 @@ export const TripSummaryTile = () => {
     }
 
     if (!summary) return null;
-
-    const stats = [
-        {
-            label: 'Total',
-            value: summary.scheduled,
-            icon: Calendar,
-            color: 'text-primary'
-        },
-        {
-            label: 'Opened',
-            value: summary.opened,
-            icon: Unlock,
-            color: 'text-accent'
-        },
-        {
-            label: 'Scheduled',
-            value: summary.pending,
-            icon: Clock,
-            color: 'text-slate-400'
-        }
-    ];
 
     const formatTime = (dateStr: string) => {
         const date = new Date(dateStr);

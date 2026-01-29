@@ -32,20 +32,19 @@ export const TransportPage = () => {
         returnHolds,
         passengers,
         confirmOpen,
+        timeLeft,
+        isWarningModalOpen,
 
         // Actions
         setDirection,
         setRoundTrip,
-        setStage,
         setConfirmOpen,
+        setWarningModalOpen,
         updatePassenger,
         reserveOutbound,
         reserveReturn,
         confirmCurrentBooking
     } = useTransportStore();
-
-    // Timer logic could still be local or moved to store
-    const [timeLeft] = [0];
 
     // Blocker logic
     const blocker = useBlocker(
@@ -124,7 +123,12 @@ export const TransportPage = () => {
                             <TransportBookingCard
                                 direction={direction}
                                 allTrips={allTrips}
-                                onBook={(s) => reserveOutbound(s, user?.name)}
+                                onBook={async (s) => {
+                                    await reserveOutbound(s, user?.name);
+                                    if (!roundTrip && user?.user_type === 'employee') {
+                                        navigate('/transport/confirm');
+                                    }
+                                }}
                                 loading={tripsLoading}
                             />
                         </div>
@@ -142,7 +146,12 @@ export const TransportPage = () => {
                             <TransportBookingCard
                                 direction={direction === 'from-giki' ? 'to-giki' : 'from-giki'}
                                 allTrips={allTrips}
-                                onBook={(s) => reserveReturn(s, user?.name)}
+                                onBook={async (s) => {
+                                    await reserveReturn(s, user?.name);
+                                    if (user?.user_type === 'employee') {
+                                        navigate('/transport/confirm');
+                                    }
+                                }}
                                 loading={tripsLoading}
                             />
                         </div>
@@ -150,7 +159,7 @@ export const TransportPage = () => {
                 </div>
 
                 <BookingConfirmationModal
-                    isOpen={confirmOpen}
+                    isOpen={confirmOpen && user?.user_type === 'student'}
                     onClose={() => {
                         setConfirmOpen(false);
                         releaseAllHolds();
@@ -163,17 +172,25 @@ export const TransportPage = () => {
                     returnHolds={returnHolds}
                     passengers={passengers}
                     onUpdatePassenger={updatePassenger}
+                    isStudent={user?.user_type === 'student'}
                 />
 
                 <AbandonBookingModal
-                    isOpen={blocker.state === 'blocked'}
-                    onClose={() => blocker.reset?.()}
-                    timeLeft={0}
+                    isOpen={blocker.state === 'blocked' || isWarningModalOpen}
+                    onClose={() => {
+                        if (blocker.state === 'blocked') blocker.reset?.();
+                        setWarningModalOpen(false);
+                    }}
+                    timeLeft={timeLeft}
                     onAbandon={async () => {
                         await releaseAllHolds();
-                        blocker.proceed?.();
+                        if (blocker.state === 'blocked') blocker.proceed?.();
+                        setWarningModalOpen(false);
                     }}
-                    onStay={() => blocker.reset?.()}
+                    onStay={() => {
+                        if (blocker.state === 'blocked') blocker.reset?.();
+                        setWarningModalOpen(false);
+                    }}
                 />
             </div>
         </div>

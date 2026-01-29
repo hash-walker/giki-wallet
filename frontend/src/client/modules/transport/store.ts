@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useAuthStore } from '@/shared/stores/authStore';
 import {
     getAllUpcomingTrips,
     getQuota,
@@ -41,6 +42,11 @@ interface TransportState {
     outboundHolds: SessionHold[];
     returnHolds: SessionHold[];
 
+    // Timer & Constraint State
+    timeLeft: number; // Seconds remaining
+    heldCity: string | null; // Locked city for round trip return
+    isWarningModalOpen: boolean;
+
     // Confirmation State
     passengers: Record<string, Passenger>;
     confirmOpen: boolean;
@@ -48,12 +54,15 @@ interface TransportState {
     // Actions
     fetchData: (showLoading?: boolean) => Promise<void>;
     releaseAllHolds: () => Promise<void>;
+    startTimer: (expiresAt: string) => void;
+    stopTimer: () => void;
 
     // Flow Actions
     setDirection: (d: 'from-giki' | 'to-giki') => void;
     setRoundTrip: (isRoundTrip: boolean) => void;
     setStage: (stage: 'select_outbound' | 'select_return') => void;
     setConfirmOpen: (isOpen: boolean) => void;
+    setWarningModalOpen: (isOpen: boolean) => void;
     updatePassenger: (holdId: string, passenger: Passenger) => void;
     resetBookingFlow: () => void;
 
@@ -77,6 +86,8 @@ function getApiErrorMessage(err: unknown): string {
     );
 }
 
+let timerInterval: ReturnType<typeof setInterval> | null = null;
+
 export const useTransportStore = create<TransportState>((set, get) => ({
     allTrips: [],
     quota: null,
@@ -93,58 +104,86 @@ export const useTransportStore = create<TransportState>((set, get) => ({
     returnSelection: null,
     outboundHolds: [],
     returnHolds: [],
+    timeLeft: 0,
+    heldCity: null,
+    isWarningModalOpen: false,
     passengers: {},
     confirmOpen: false,
 
     setDirection: (direction) => {
-        // If changing direction, we should probably reset selections?
-        // But user might just be exploring. Let's keep it simple.
-        // If they had holds, we should probably release them if they switch context completely,
-        // but let's let the user manually abandon or let timeouts handle it for now to avoid accidental data loss.
-        // Actually, matching TransportPage logic: "if d !== direction void doReleaseHolds()"
-        const current = get().direction;
-        if (current !== direction) {
-            get().releaseAllHolds(); // This resets flow too
-            set({ direction, stage: 'select_outbound' });
+        const { direction: current, activeHolds } = get();
+        if (current === direction) return;
+
+        if (activeHolds.length > 0) {
+            set({ isWarningModalOpen: true });
         } else {
-            set({ direction });
+            // Safe to switch
+            set({ direction, stage: 'select_outbound' });
         }
     },
 
     setRoundTrip: (roundTrip) => {
-        const { roundTrip: current, stage } = get();
-        if (roundTrip) {
-            set({ roundTrip: true });
+        const { roundTrip: current, activeHolds } = get();
+        if (current === roundTrip) return;
+
+        if (activeHolds.length > 0 && current === true && roundTrip === false) {
+            // Downgrading to One Way while having holds
+            set({ isWarningModalOpen: true });
         } else {
-            // Switching to One Way
-            if (current && stage === 'select_return') {
-                // Abandon return holds if any?
-                // Simple approach: Release all and restart flow if they are in middle of complicating things,
-                // OR just clear return selection.
-                // TransportPage logic: "void doReleaseHolds(); setStage('select_outbound')"
-                get().releaseAllHolds();
-                set({ stage: 'select_outbound' });
-            }
-            set({ roundTrip: false });
+            set({ roundTrip });
         }
     },
 
     setStage: (stage) => set({ stage }),
     setConfirmOpen: (confirmOpen) => set({ confirmOpen }),
+    setWarningModalOpen: (isWarningModalOpen) => set({ isWarningModalOpen }),
 
     updatePassenger: (holdId, passenger) => set(state => ({
         passengers: { ...state.passengers, [holdId]: passenger }
     })),
 
-    resetBookingFlow: () => set({
-        stage: 'select_outbound',
-        outboundSelection: null,
-        returnSelection: null,
-        outboundHolds: [],
-        returnHolds: [],
-        passengers: {},
-        confirmOpen: false
-    }),
+    resetBookingFlow: () => {
+        get().stopTimer();
+        set({
+            stage: 'select_outbound',
+            outboundSelection: null,
+            returnSelection: null,
+            outboundHolds: [],
+            returnHolds: [],
+            heldCity: null,
+            passengers: {},
+            confirmOpen: false,
+            isWarningModalOpen: false,
+            timeLeft: 0
+        });
+    },
+
+    startTimer: (expiresAt) => {
+        get().stopTimer();
+        const expiry = new Date(expiresAt).getTime();
+
+        const tick = () => {
+            const now = Date.now();
+            const diff = Math.max(0, Math.floor((expiry - now) / 1000));
+            set({ timeLeft: diff });
+
+            if (diff <= 0) {
+                get().stopTimer();
+                get().releaseAllHolds();
+                toast.error('Reservation expired');
+            }
+        };
+
+        tick();
+        timerInterval = setInterval(tick, 1000);
+    },
+
+    stopTimer: () => {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+    },
 
     fetchData: async (showLoading = true) => {
         if (showLoading) set({ loading: true });
@@ -154,13 +193,31 @@ export const useTransportStore = create<TransportState>((set, get) => ({
                 getQuota(),
                 getActiveHolds()
             ]);
+
+            const user = useAuthStore.getState().user;
+            const role = user?.user_type.toUpperCase();
+            const filteredTrips = (tripsData || []).filter(trip => {
+                if (!role || role.includes('ADMIN')) return true;
+                return trip.bus_type === role;
+            });
+
             set({
-                allTrips: tripsData,
+                allTrips: filteredTrips,
                 quota: quotaData,
                 activeHolds: holdsData,
                 initialized: true,
                 error: null
             });
+
+            // If there's an active hold, start timer for the one expiring soonest
+            if (holdsData.length > 0) {
+                const soonest = holdsData.reduce((prev, curr) =>
+                    new Date(prev.expires_at) < new Date(curr.expires_at) ? prev : curr
+                );
+                get().startTimer(soonest.expires_at);
+            } else {
+                get().stopTimer();
+            }
         } catch (e) {
             const msg = getApiErrorMessage(e);
             set({ error: msg });
@@ -174,6 +231,7 @@ export const useTransportStore = create<TransportState>((set, get) => ({
         set({ loading: true });
         try {
             await releaseAllActiveHolds();
+            get().stopTimer(); // Explicit stop
             await get().fetchData(false);
             get().resetBookingFlow();
             toast.success('Reservations released');
@@ -203,11 +261,21 @@ export const useTransportStore = create<TransportState>((set, get) => ({
                 newPassengers[h.hold_id] = { name: userName || '', relation: 'SELF' };
             });
 
+            // Find the trip to lock the city
+            const trip = get().allTrips.find(t => t.trip_id === selection.tripId);
+            const cityName = trip?.route_name.split(' - ').find(c => !c.toUpperCase().includes('GIKI')) || null;
+
             set(state => ({
                 outboundSelection: selection,
                 outboundHolds: resp.holds,
+                heldCity: cityName,
                 passengers: { ...state.passengers, ...newPassengers }
             }));
+
+            // Start timer from response
+            if (resp.holds.length > 0) {
+                get().startTimer(resp.holds[0].expires_at);
+            }
 
             if (get().roundTrip) {
                 set({ stage: 'select_return' });
@@ -249,6 +317,11 @@ export const useTransportStore = create<TransportState>((set, get) => ({
                 confirmOpen: true // Always confirm after return selection
             }));
 
+            // Restart/Update timer if needed (usually expiry is synced in backend)
+            if (resp.holds.length > 0) {
+                get().startTimer(resp.holds[0].expires_at);
+            }
+
         } catch (e) {
             const msg = getApiErrorMessage(e);
             toast.error(msg);
@@ -271,6 +344,7 @@ export const useTransportStore = create<TransportState>((set, get) => ({
             }));
 
             await confirmBatch({ confirmations });
+            get().stopTimer(); // Stop timer on success
             await get().fetchData(false);
 
             toast.success('Booking confirmed!');
