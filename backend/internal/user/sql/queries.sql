@@ -48,3 +48,15 @@ RETURNING id, name, email, phone_number, auth_provider, external_id, password_ha
 INSERT INTO giki_wallet.access_tokens(token_hash, user_id, type, expires_at)
 VALUES ($1, $2, $3, $4);
 
+-- name: ListUsers :many
+SELECT id, name, email, phone_number, is_active, is_verified, user_type, created_at, updated_at
+FROM giki_wallet.users
+ORDER BY created_at DESC;
+
+-- name: UpdateUserStatus :one
+UPDATE giki_wallet.users
+SET is_active = $2, updated_at = NOW()
+WHERE id = $1
+RETURNING id, name, email, phone_number, is_active, is_verified, user_type, created_at, updated_at;
+
+

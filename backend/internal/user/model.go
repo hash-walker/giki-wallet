@@ -85,3 +85,43 @@ func mapDBEmployeeToEmployee(e userdb.GikiWalletEmployeeProfile) Employee {
 		Department:   common.TextToString(e.Department),
 	}
 }
+
+type AdminUser struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Email       string    `json:"email"`
+	PhoneNumber string    `json:"phone_number"`
+	IsActive    bool      `json:"is_active"`
+	IsVerified  bool      `json:"is_verified"`
+	UserType    string    `json:"user_type"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func mapDBAdminUserToAdminUser(u userdb.ListUsersRow) AdminUser {
+	return AdminUser{
+		ID:          u.ID,
+		Name:        u.Name,
+		Email:       u.Email,
+		PhoneNumber: u.PhoneNumber,
+		IsActive:    u.IsActive,
+		IsVerified:  u.IsVerified,
+		UserType:    u.UserType,
+		CreatedAt:   u.CreatedAt,
+		UpdatedAt:   u.UpdatedAt,
+	}
+}
+
+func mapDBUpdateUserStatusToAdminUser(u userdb.UpdateUserStatusRow) AdminUser {
+	return AdminUser{
+		ID:          u.ID,
+		Name:        u.Name,
+		Email:       u.Email,
+		PhoneNumber: u.PhoneNumber,
+		IsActive:    u.IsActive,
+		IsVerified:  u.IsVerified,
+		UserType:    u.UserType,
+		CreatedAt:   u.CreatedAt,
+		UpdatedAt:   u.UpdatedAt,
+	}
+}
