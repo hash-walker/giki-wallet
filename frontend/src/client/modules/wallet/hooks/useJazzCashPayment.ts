@@ -74,7 +74,7 @@ export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast
         isActive.current = true;
 
         reset();
-        setStatus('initiating'); // Show "Connecting" instantly
+        setStatus('initiating'); // Show "Processing" or loading state
 
         try {
             // Get form data from store
@@ -88,7 +88,7 @@ export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast
 
             const result = await topUp(request, abortControllerRef.current.signal);
 
-            // Switch from "Connecting" to the "Check your phone" screen
+            // Only after receiving response, switch to processing state and start countdown
             setStatus('processing');
 
             // Start 60s visual timer after getting response

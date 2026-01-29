@@ -83,7 +83,7 @@ const JazzCashPayment: React.FC<JazzCashPaymentProps> = ({
 
                 {(status === 'initiating' || status === 'processing') ? (
                     <div className="space-y-8 py-4 animate-in fade-in duration-700">
-                        <div className="text-center">
+                        {status === 'processing'? (<div className="text-center">
                             <div className="relative inline-block">
                                 <div className="absolute inset-0 bg-primary/10 rounded-full scale-150 animate-ping opacity-20" />
                                 <h1 className="text-6xl font-black text-gray-900 tabular-nums">
@@ -91,7 +91,7 @@ const JazzCashPayment: React.FC<JazzCashPaymentProps> = ({
                                 </h1>
                             </div>
                             <p className="text-gray-400 text-sm font-bold uppercase tracking-tighter mt-4">Remaining Seconds</p>
-                        </div>
+                        </div>): <></>}
 
                         <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
                             <div className="flex gap-4 items-center">
