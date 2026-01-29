@@ -38,12 +38,6 @@ export const TripSummaryTile = () => {
     useEffect(() => {
         fetchSummary(true);
 
-        // Polling for "real-time" updates every 30 seconds
-        const interval = setInterval(() => {
-            fetchSummary(false);
-        }, 30000);
-
-        return () => clearInterval(interval);
     }, [fetchSummary]);
 
     if (loading) {
