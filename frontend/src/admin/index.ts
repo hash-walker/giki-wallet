@@ -7,5 +7,6 @@ export { UsersPage } from './modules/users';
 export { TransactionsPage } from './modules/transactions';
 export { HistoryPage } from './modules/history';
 export { SettingsPage } from './modules/settings';
+export * from './modules/trips';
 export type { User, UserRole } from './modules/users';
 

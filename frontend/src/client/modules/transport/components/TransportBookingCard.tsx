@@ -200,7 +200,7 @@ export const TransportBookingCard = ({
     };
 
     const isFull = currentTrip ? (currentTrip.available_seats <= 0 || currentTrip.booking_status === 'FULL') : false;
-    const isLocked = currentTrip?.booking_status === 'LOCKED';
+    const isScheduled = currentTrip?.booking_status === 'SCHEDULED';
     const isStudent = false; // We don't have explicit student/employee flag on Trip yet, or infer from route name? 
     // Assuming generic for now, strict "Student" bus logic might rely on route_name parsing if needed.
     const maxTickets = Math.min(3, currentTrip?.available_seats || 0);
@@ -266,13 +266,13 @@ export const TransportBookingCard = ({
                             />
                             <Button
                                 className="flex-1 font-semibold"
-                                disabled={isFull || isLocked}
+                                disabled={isFull || isScheduled}
                                 variant={isFull ? "secondary" : "default"}
                                 onClick={handleBook}
                             >
                                 {mode === 'collect'
                                     ? isFull ? "Sold Out" : "Save Selection"
-                                    : isFull ? "Full" : (isLocked ? "Locked" : "Book")}
+                                    : isFull ? "Full" : (isScheduled ? "Scheduled" : "Book")}
                             </Button>
                         </div>
                     </div>
@@ -356,13 +356,13 @@ export const TransportBookingCard = ({
                 <div className={sharedCityName === undefined ? "w-[16%]" : "w-[19%]"}>
                     <Button
                         className="w-full font-semibold shadow-sm"
-                        disabled={!hasCompleteSelection || isFull || isLocked}
+                        disabled={!hasCompleteSelection || isFull || isScheduled}
                         variant={!hasCompleteSelection || isFull ? "secondary" : "default"}
                         onClick={handleBook}
                     >
                         {mode === 'collect'
                             ? isFull ? "Sold Out" : "Save Selection"
-                            : isFull ? "Waitlist" : (isLocked ? "Opents Soon" : "Book Now")}
+                            : isFull ? "Waitlist" : (isScheduled ? "Scheduled" : "Book Now")}
                     </Button>
                 </div>
             </div>

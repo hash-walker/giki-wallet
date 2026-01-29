@@ -258,6 +258,17 @@ func (h *Handler) GetAllUpcomingTrips(w http.ResponseWriter, r *http.Request) {
 
 	common.ResponseWithJSON(w, http.StatusOK, trips)
 }
+func (h *Handler) AdminListTrips(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	trips, err := h.service.AdminListTrips(r.Context())
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, trips)
+}
 
 func (h *Handler) GetWeeklyTripSummary(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
