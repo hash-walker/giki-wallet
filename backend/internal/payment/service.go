@@ -343,29 +343,25 @@ func (s *Service) initiateMWalletPayment(
 	pollInterval := 5 * time.Second
 	start := time.Now()
 
-	log.Printf("[DEBUG] Entering 40s wait loop for txn %s at %s", gatewayTxn.TxnRefNo, start.Format(time.RFC3339Nano))
-
 	for {
 		result, err := s.checkTransactionStatus(ctx, gatewayTxn)
 		if err == nil {
 			// If Success or Failed, return immediately
 			if result.Status == PaymentStatusSuccess || result.Status == PaymentStatusFailed {
-				log.Printf("[DEBUG] Transaction %s finished early with status %s", gatewayTxn.TxnRefNo, result.Status)
-				return result, nil
+				break
 			}
 		}
 
 		// If 40s passed, break and return PENDING
 		if time.Since(start) >= maxWait {
-			log.Printf("[DEBUG] 40s timeout reached for txn %s", gatewayTxn.TxnRefNo)
 			break
 		}
 
 		// Wait before next check
 		select {
 		case <-ctx.Done():
-			log.Printf("[DEBUG] Client disconnected (Context Cancelled) for txn %s", gatewayTxn.TxnRefNo)
-			return nil, ctx.Err()
+			log.Printf("[DEBUG] Client disconnected (Context Cancelled) for txn %s: %w", gatewayTxn.TxnRefNo, ctx.Err())
+			break
 		case <-time.After(pollInterval):
 		}
 	}
