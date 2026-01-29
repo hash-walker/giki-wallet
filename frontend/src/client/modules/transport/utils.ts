@@ -17,8 +17,8 @@ export function statusBadge(status: Trip['booking_status']) {
             return { label: 'Open', cls: 'bg-green-100 text-green-800' };
         case 'FULL':
             return { label: 'Full', cls: 'bg-red-100 text-red-800' };
-        case 'LOCKED':
-            return { label: 'Locked', cls: 'bg-yellow-100 text-yellow-800' };
+        case 'SCHEDULED':
+            return { label: 'Scheduled', cls: 'bg-blue-100 text-blue-800' };
         case 'CLOSED':
             return { label: 'Closed', cls: 'bg-gray-100 text-gray-700' };
         case 'CANCELLED':

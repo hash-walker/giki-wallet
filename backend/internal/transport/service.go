@@ -509,6 +509,8 @@ func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.U
 		TotalCapacity:   int32(req.TotalCapacity),
 		AvailableSeats:  int32(req.TotalCapacity),
 		BasePrice:       common.Float64ToNumeric(req.BasePrice),
+		BusType:         req.BusType,
+		Direction:       req.Direction,
 	}
 
 	tripID, err := qtx.CreateTrip(ctx, arg)
@@ -567,4 +569,13 @@ func (s *Service) GetWeeklyTripSummary(ctx context.Context) (*WeeklyTripSummary,
 func GenerateRandomCode() string {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	return fmt.Sprintf("%04d", rng.Intn(10000)) // 0000 to 9999
+}
+
+func (s *Service) AdminListTrips(ctx context.Context) ([]TripResponse, error) {
+	rows, err := s.q.AdminGetAllTrips(ctx)
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	return MapDBAdminTripsToTrips(rows), nil
 }

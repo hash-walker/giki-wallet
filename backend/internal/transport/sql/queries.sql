@@ -33,9 +33,9 @@ ORDER BY day_of_week ASC, departure_time ASC;
 -- name: CreateTrip :one
 INSERT INTO giki_transport.trip(
     route_id, departure_time, booking_opens_at, booking_closes_at,
-    total_capacity, available_seats, base_price, direction, status
+    total_capacity, available_seats, base_price, direction, bus_type, status
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'SCHEDULED')
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'SCHEDULED')
 RETURNING id;
 
 -- name: CreateTripStop :exec
@@ -95,6 +95,33 @@ WHERE t.departure_time > NOW()
   AND t.status != 'COMPLETED'
 ORDER BY t.departure_time ASC, ts.sequence_order ASC;
 
+-- name: AdminGetAllTrips :many
+SELECT
+    t.id as trip_id,
+    t.departure_time,
+    t.booking_opens_at,
+    t.booking_closes_at,
+    t.total_capacity,
+    t.available_seats,
+    t.base_price,
+    t.status,
+    t.booking_status,
+    t.direction,
+    t.bus_type,
+
+    -- Route Details
+    r.name as route_name,
+
+    -- Stop Details
+    ts.stop_id,
+    s.address as stop_name,
+    ts.sequence_order
+FROM giki_transport.trip t
+         JOIN giki_transport.routes r ON t.route_id = r.id
+         JOIN giki_transport.trip_stops ts ON t.id = ts.trip_id
+         JOIN giki_transport.stops s ON ts.stop_id = s.id
+ORDER BY t.departure_time DESC, ts.sequence_order ASC;
+
 -- name: GetWeeklyTrips :many
 SELECT
     t.id,
@@ -106,6 +133,7 @@ SELECT
     t.available_seats,
     t.status,
     t.booking_status,
+    t.bus_type,
     r.name as route_name
 FROM giki_transport.trip t
 JOIN giki_transport.routes r ON t.route_id = r.id

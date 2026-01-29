@@ -56,6 +56,8 @@ type CreateTripRequest struct {
 	BookingClosesAt time.Time         `json:"booking_closes_at"`
 	TotalCapacity   int               `json:"total_capacity"`
 	BasePrice       float64           `json:"base_price"`
+	BusType         string            `json:"bus_type"`
+	Direction       string            `json:"direction"`
 	Stops           []TripStopRequest `json:"stops"`
 }
 
@@ -77,6 +79,8 @@ type TripResponse struct {
 	OpensAt        time.Time `json:"opens_at"`
 	AvailableSeats int       `json:"available_seats"`
 	Price          float64   `json:"price"`
+	BusType        string    `json:"bus_type"`
+	Direction      string    `json:"direction"`
 
 	Stops []TripStopItem `json:"stops"`
 }
@@ -256,13 +260,13 @@ func MapDBTripsToTrips(rows []transport_db.GetUpcomingTripsByRouteRow) []TripRes
 
 			if physicalStatus == "CANCELLED" {
 				apiStatus = "CANCELLED"
-			} else if row.BookingStatus == "CLOSED" {
+			} else if row.BookingStatus == "LOCKED" || row.BookingStatus == "CLOSED" {
 				apiStatus = "CLOSED"
 			} else {
 				if row.AvailableSeats <= 0 {
 					apiStatus = "FULL"
 				} else if now.Before(row.BookingOpensAt) {
-					apiStatus = "LOCKED"
+					apiStatus = "SCHEDULED"
 				} else if now.After(row.BookingClosesAt) {
 					apiStatus = "CLOSED"
 				} else {
@@ -315,13 +319,13 @@ func MapDBAllTripsToTrips(rows []transport_db.GetAllUpcomingTripsRow) []TripResp
 
 			if physicalStatus == "CANCELLED" {
 				apiStatus = "CANCELLED"
-			} else if row.BookingStatus == "CLOSED" {
+			} else if row.BookingStatus == "LOCKED" || row.BookingStatus == "CLOSED" {
 				apiStatus = "CLOSED"
 			} else {
 				if row.AvailableSeats <= 0 {
 					apiStatus = "FULL"
 				} else if now.Before(row.BookingOpensAt) {
-					apiStatus = "LOCKED"
+					apiStatus = "SCHEDULED"
 				} else if now.After(row.BookingClosesAt) {
 					apiStatus = "CLOSED"
 				} else {

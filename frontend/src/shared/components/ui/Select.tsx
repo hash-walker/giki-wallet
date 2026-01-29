@@ -43,7 +43,7 @@ export const Select = ({
             )}
             <select
                 className={cn(
-                    "w-full border border-gray-300 rounded-lg px-3 py-2.5 bg-white focus:ring-2 focus:ring-primary focus:border-transparent text-sm transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed",
+                    "w-full border border-gray-300 rounded-lg px-3 py-2.5 bg-white text-gray-900 focus:ring-2 focus:ring-primary focus:border-transparent text-sm transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed",
                     selectClassName
                 )}
                 value={value || ''}

@@ -10,7 +10,7 @@ export const tripSchema = z.object({
     trip_id: z.string().uuid(),
     route_name: z.string(),
     departure_time: z.string(), // ISO String
-    booking_status: z.enum(['OPEN', 'LOCKED', 'FULL', 'CLOSED', 'CANCELLED']),
+    booking_status: z.enum(['OPEN', 'SCHEDULED', 'FULL', 'CLOSED', 'CANCELLED']),
     opens_at: z.string(),
     available_seats: z.number(),
     price: z.number(),
@@ -81,7 +81,7 @@ export const routeTemplateSchema = z.object({
 export const weeklySummarySchema = z.object({
     scheduled: z.number(),
     opened: z.number(),
-    locked: z.number(),
+    pending: z.number(),
     trips: z.array(z.object({
         trip_id: z.string().uuid(),
         route_name: z.string(),
@@ -89,6 +89,7 @@ export const weeklySummarySchema = z.object({
         available_seats: z.number(),
         total_capacity: z.number(),
         booking_status: z.string(),
+        bus_type: z.string(),
     })),
 });
 
