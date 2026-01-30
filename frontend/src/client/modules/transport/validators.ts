@@ -1,5 +1,12 @@
 import { z } from 'zod';
 
+export interface APIResponse<T> {
+    success: boolean;
+    data: T;
+    error?: any;
+    meta?: any;
+}
+
 export const tripStopSchema = z.object({
     stop_id: z.string().uuid(),
     stop_name: z.string(),
@@ -81,6 +88,7 @@ export const routeTemplateSchema = z.object({
 });
 
 // Zod Schema matching the new Go struct
+// Zod Schema matching the new Go struct
 export const weeklyTripSchema = z.object({
     id: z.string().uuid(),
     route_name: z.string(),
@@ -89,11 +97,10 @@ export const weeklyTripSchema = z.object({
     departure_time: z.string(), // ISO String from Go time.Time
     booking_opens_at: z.string(),
     booking_closes_at: z.string(),
-    status: z.enum(['OPEN', 'SCHEDULED', 'CLOSED']), 
+    status: z.string(), // Backend returns generic string for now, or enum
     available_seats: z.number(),
     total_capacity: z.number(),
 });
-
 
 export const holdSeatsResponseSchema = z.object({
     holds: z.array(z.object({

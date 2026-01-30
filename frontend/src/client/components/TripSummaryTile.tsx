@@ -18,12 +18,10 @@ export const TripSummaryTile = () => {
         if (showLoading) setLoading(true);
         try {
             const data = await getWeeklySummary();
-            console.log('Weekly Summary Data:', data);
-            if (Array.isArray(data)) {
-                setTrips(data);
-            }
+            setTrips(data || []);
         } catch (error) {
             if (showLoading) console.error('Failed to fetch weekly summary:', error);
+            // Handle 409 specifically if needed, but [] works for empty state
         } finally {
             if (showLoading) setLoading(false);
         }
@@ -40,9 +38,10 @@ export const TripSummaryTile = () => {
     const stats = useMemo(() => {
         return trips.reduce(
             (acc, trip) => {
-                if (trip.status === 'OPEN') acc.opened++;
-                else if (trip.status === 'SCHEDULED') acc.scheduled++;
-                else acc.locked++; // Assuming CLOSED counts as locked
+                const status = trip.status;
+                if (status === 'OPEN') acc.opened++;
+                else if (status === 'SCHEDULED') acc.scheduled++;
+                else acc.locked++; // Assuming CLOSED counts as locked/pending
                 return acc;
             },
             { scheduled: 0, opened: 0, locked: 0 }
@@ -50,10 +49,10 @@ export const TripSummaryTile = () => {
     }, [trips]);
 
     // Helper formatters
-    const formatTime = (dateStr: string) => 
+    const formatTime = (dateStr: string) =>
         new Date(dateStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
-    const formatDate = (dateStr: string) => 
+    const formatDate = (dateStr: string) =>
         new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
     if (loading) {
@@ -68,8 +67,6 @@ export const TripSummaryTile = () => {
         );
     }
 
-    // Don't render if no data (optional, depends on preference)
-    if (!loading && trips.length === 0) return null;
 
     const statItems = [
         { label: 'Scheduled', value: stats.scheduled, icon: Calendar, color: 'text-primary' },
@@ -101,7 +98,7 @@ export const TripSummaryTile = () => {
                 <span className={cn(
                     "text-[8px] font-black uppercase tracking-widest",
                     trip.status === 'OPEN' ? "text-accent" :
-                    trip.available_seats === 0 ? "text-destructive" : "text-slate-400"
+                        trip.available_seats === 0 ? "text-destructive" : "text-slate-400"
                 )}>
                     {trip.status}
                 </span>
