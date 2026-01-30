@@ -45,11 +45,11 @@ func (h *Handler) TopUp(w http.ResponseWriter, r *http.Request) {
 
 	switch response.Status {
 	case PaymentStatusSuccess:
-		common.ResponseWithJSON(w, http.StatusOK, response)
+		common.ResponseWithJSON(w, http.StatusOK, response, requestID)
 	case PaymentStatusFailed:
-		common.ResponseWithJSON(w, http.StatusOK, response)
+		common.ResponseWithJSON(w, http.StatusOK, response, requestID)
 	default:
-		common.ResponseWithJSON(w, http.StatusAccepted, response)
+		common.ResponseWithJSON(w, http.StatusAccepted, response, requestID)
 	}
 }
 
@@ -131,7 +131,7 @@ func (h *Handler) CheckStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	common.ResponseWithJSON(w, http.StatusOK, result)
+	common.ResponseWithJSON(w, http.StatusOK, result, requestID)
 }
 
 // =============================================================================
@@ -147,7 +147,7 @@ func (h *Handler) ListGatewayTransactions(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	common.ResponseWithJSON(w, http.StatusOK, txns)
+	common.ResponseWithJSON(w, http.StatusOK, txns, requestID)
 }
 
 func (h *Handler) VerifyGatewayTransaction(w http.ResponseWriter, r *http.Request) {
@@ -165,5 +165,5 @@ func (h *Handler) VerifyGatewayTransaction(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	common.ResponseWithJSON(w, http.StatusOK, result)
+	common.ResponseWithJSON(w, http.StatusOK, result, requestID)
 }

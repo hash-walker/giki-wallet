@@ -34,12 +34,30 @@ func TestHandleError_WrappedError(t *testing.T) {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	if response["code"] != "UNAUTHORIZED" {
-		t.Errorf("expected code UNAUTHORIZED, got %v", response["code"])
+	if response["success"] != false {
+		t.Errorf("expected success false, got %v", response["success"])
 	}
 
-	if response["message"] != baseErr.Message {
-		t.Errorf("expected message %q, got %q", baseErr.Message, response["message"])
+	errMap, ok := response["error"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected error object, got %v", response["error"])
+	}
+
+	if errMap["code"] != "UNAUTHORIZED" {
+		t.Errorf("expected code UNAUTHORIZED, got %v", errMap["code"])
+	}
+
+	if errMap["message"] != baseErr.Message {
+		t.Errorf("expected message %q, got %q", baseErr.Message, errMap["message"])
+	}
+
+	metaMap, ok := response["meta"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected meta object, got %v", response["meta"])
+	}
+
+	if metaMap["request_id"] != requestID {
+		t.Errorf("expected request_id %s, got %s", requestID, metaMap["request_id"])
 	}
 }
 

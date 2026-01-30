@@ -56,14 +56,13 @@ func (h *Handler) HoldSeats(w http.ResponseWriter, r *http.Request) {
 		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidJSON, err), requestID)
 		return
 	}
-
 	resp, err := h.service.HoldSeats(r.Context(), userID, userRole, req)
 	if err != nil {
 		middleware.HandleError(w, err, requestID)
 		return
 	}
 
-	common.ResponseWithJSON(w, http.StatusCreated, resp)
+	common.ResponseWithJSON(w, http.StatusCreated, resp, requestID)
 }
 
 func (h *Handler) GetQuota(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +81,7 @@ func (h *Handler) GetQuota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	common.ResponseWithJSON(w, http.StatusOK, resp)
+	common.ResponseWithJSON(w, http.StatusOK, resp, requestID)
 }
 
 func (h *Handler) ConfirmBatch(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +106,7 @@ func (h *Handler) ConfirmBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	common.ResponseWithJSON(w, http.StatusOK, resp)
+	common.ResponseWithJSON(w, http.StatusOK, resp, requestID)
 }
 
 //func (h *Handler) CancelTicket(w http.ResponseWriter, r *http.Request) {
@@ -141,7 +140,7 @@ func (h *Handler) ReleaseHold(w http.ResponseWriter, r *http.Request) {
 	// We don't really care if it fails (e.g. already expired), just return OK
 	_ = h.service.ReleaseAllHolds(r.Context(), holdID)
 
-	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"status": "RELEASED"})
+	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"status": "RELEASED"}, requestID)
 }
 
 func (h *Handler) GetActiveHolds(w http.ResponseWriter, r *http.Request) {
@@ -158,7 +157,7 @@ func (h *Handler) GetActiveHolds(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	common.ResponseWithJSON(w, http.StatusOK, resp)
+	common.ResponseWithJSON(w, http.StatusOK, resp, requestID)
 }
 
 func (h *Handler) ReleaseAllActiveHolds(w http.ResponseWriter, r *http.Request) {
@@ -187,7 +186,7 @@ func (h *Handler) ListRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	common.ResponseWithJSON(w, http.StatusOK, routes)
+	common.ResponseWithJSON(w, http.StatusOK, routes, requestID)
 }
 
 func (h *Handler) GetRouteTemplate(w http.ResponseWriter, r *http.Request) {
@@ -206,7 +205,7 @@ func (h *Handler) GetRouteTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	common.ResponseWithJSON(w, http.StatusOK, routeTemplate)
+	common.ResponseWithJSON(w, http.StatusOK, routeTemplate, requestID)
 }
 
 func (h *Handler) CreateTrip(w http.ResponseWriter, r *http.Request) {
@@ -225,7 +224,7 @@ func (h *Handler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := CreateTripResponse{TripID: tripID}
-	common.ResponseWithJSON(w, http.StatusCreated, response)
+	common.ResponseWithJSON(w, http.StatusCreated, response, requestID)
 }
 
 func (h *Handler) HandleWeeklyTrips(w http.ResponseWriter, r *http.Request) {
@@ -237,7 +236,7 @@ func (h *Handler) HandleWeeklyTrips(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	common.ResponseWithJSON(w, http.StatusOK, trips)
+	common.ResponseWithJSON(w, http.StatusOK, trips, requestID)
 }
 
 //func (h *Handler) AdminListTrips(w http.ResponseWriter, r *http.Request) {

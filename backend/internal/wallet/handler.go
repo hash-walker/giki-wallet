@@ -34,7 +34,7 @@ func (h *Handler) GetBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	common.ResponseWithJSON(w, http.StatusOK, res)
+	common.ResponseWithJSON(w, http.StatusOK, res, requestID)
 }
 
 func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
@@ -52,5 +52,5 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	common.ResponseWithJSON(w, http.StatusOK, res)
+	common.ResponseWithJSON(w, http.StatusOK, res, requestID)
 }

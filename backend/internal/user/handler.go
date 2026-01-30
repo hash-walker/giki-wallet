@@ -47,7 +47,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	common.ResponseWithJSON(w, http.StatusCreated, user)
+	common.ResponseWithJSON(w, http.StatusCreated, user, requestID)
 }
 
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +59,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	common.ResponseWithJSON(w, http.StatusOK, users)
+	common.ResponseWithJSON(w, http.StatusOK, users, requestID)
 }
 
 func (h *Handler) UpdateUserStatus(w http.ResponseWriter, r *http.Request) {
@@ -87,5 +87,5 @@ func (h *Handler) UpdateUserStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	common.ResponseWithJSON(w, http.StatusOK, user)
+	common.ResponseWithJSON(w, http.StatusOK, user, requestID)
 }

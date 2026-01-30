@@ -62,7 +62,7 @@ func (s *Service) HoldSeats(ctx context.Context, userID uuid.UUID, userRole stri
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, commonerrors.New("NO_POLICY", 500, "No quota policy found for user role")
+			return nil, ErrNoQuotaPolicy
 		}
 		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}
@@ -79,7 +79,7 @@ func (s *Service) HoldSeats(ctx context.Context, userID uuid.UUID, userRole stri
 
 	// 4. Validate quota
 	if (usage + int64(req.Count)) > int64(rule.WeeklyLimit) {
-		return nil, commonerrors.New("QUOTA_EXCEEDED", 403, "Weekly booking quota exceeded")
+		return nil, ErrQuotaExceeded
 	}
 
 	// 5. Loop and lock seats
@@ -237,7 +237,7 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 
 		// 3. Validate passenger name
 		if item.PassengerName == "" {
-			return nil, commonerrors.New("INVALID_PASSENGER_NAME", 400, "Passenger name is required")
+			return nil, ErrInvalidPassengerName
 		}
 
 		// 4. Get trip price
@@ -324,7 +324,7 @@ func (s *Service) CancelTicketWithRole(ctx context.Context, ticketID uuid.UUID, 
 	ticket, err := qtx.GetTicketForCancellation(ctx, ticketID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return commonerrors.New("CANCELLATION_CLOSED", 403, "Cancellation window closed or ticket not found")
+			return ErrCancellationClosed
 		}
 		return commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}

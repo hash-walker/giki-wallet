@@ -48,7 +48,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := ToLoginResponse(*res)
-	common.ResponseWithJSON(w, http.StatusOK, response)
+	common.ResponseWithJSON(w, http.StatusOK, response, requestID)
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +72,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	common.ResponseWithJSON(w, http.StatusOK, ToLoginResponse(LoginResult{User: u}))
+	common.ResponseWithJSON(w, http.StatusOK, ToLoginResponse(LoginResult{User: u}), requestID)
 }
 
 func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
@@ -92,5 +92,5 @@ func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	common.ResponseWithJSON(w, http.StatusOK, ToLoginResponse(*res))
+	common.ResponseWithJSON(w, http.StatusOK, ToLoginResponse(*res), requestID)
 }

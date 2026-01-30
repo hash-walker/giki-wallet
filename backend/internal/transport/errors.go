@@ -20,4 +20,9 @@ var (
 	ErrTicketNotFound       = errors.New("TICKET_NOT_FOUND", http.StatusNotFound, "Ticket not found")
 	ErrRefundFailed         = errors.New("REFUND_FAILED", http.StatusInternalServerError, "Failed to process refund")
 	ErrNoWeekTripsAvailable = errors.New("NO_WEEK_TRIPS_AVAILABLE", http.StatusConflict, "No week trips available")
+
+	ErrQuotaExceeded        = errors.New("QUOTA_EXCEEDED", http.StatusConflict, "Weekly booking quota exceeded")
+	ErrNoQuotaPolicy        = errors.New("NO_QUOTA_POLICY", http.StatusInternalServerError, "No quota policy found for user role")
+	ErrInvalidPassengerName = errors.New("INVALID_PASSENGER_NAME", http.StatusBadRequest, "Passenger name is required")
+	ErrCancellationClosed   = errors.New("CANCELLATION_CLOSED", http.StatusConflict, "Cancellation window has closed")
 )

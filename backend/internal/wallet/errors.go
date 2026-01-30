@@ -10,8 +10,8 @@ var (
 	// Wallet Errors
 	ErrWalletNotFound      = errors.New("WALLET_NOT_FOUND", http.StatusNotFound, "Wallet not found")
 	ErrWalletInactive      = errors.New("WALLET_INACTIVE", http.StatusForbidden, "Wallet is inactive")
-	ErrInsufficientBalance = errors.New("INSUFFICIENT_BALANCE", http.StatusBadRequest, "Insufficient wallet balance")
-	ErrInsufficientFunds   = errors.New("INSUFFICIENT_FUNDS", http.StatusBadRequest, "Insufficient funds")
+	ErrInsufficientBalance = errors.New("INSUFFICIENT_BALANCE", http.StatusConflict, "Insufficient wallet balance")
+	ErrInsufficientFunds   = errors.New("INSUFFICIENT_FUNDS", http.StatusConflict, "Insufficient funds")
 
 	// Ledger Errors
 	ErrDuplicateLedgerEntry = errors.New("DUPLICATE_LEDGER_ENTRY", http.StatusConflict, "Duplicate ledger entry")

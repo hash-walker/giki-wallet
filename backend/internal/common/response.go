@@ -5,27 +5,45 @@ import (
 	"net/http"
 )
 
-type ErrorResponse struct {
-	Error string `json:"error"`
+type APIResponse struct {
+	Success bool         `json:"success"`
+	Data    interface{}  `json:"data,omitempty"`
+	Error   interface{}  `json:"error,omitempty"`
+	Meta    ResponseMeta `json:"meta"`
 }
 
-func ResponseWithError(w http.ResponseWriter, code int, msg string) {
+type ResponseMeta struct {
+	RequestID string `json:"request_id"`
+}
 
+func ResponseWithError(w http.ResponseWriter, code int, msg string, requestID string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 
-	err := json.NewEncoder(w).Encode(ErrorResponse{Error: msg})
-	if err != nil {
-		return
+	response := APIResponse{
+		Success: false,
+		Error: map[string]string{
+			"message": msg,
+		},
+		Meta: ResponseMeta{
+			RequestID: requestID,
+		},
 	}
 
+	_ = json.NewEncoder(w).Encode(response)
 }
 
-func ResponseWithJSON(w http.ResponseWriter, code int, payload interface{}) {
+func ResponseWithJSON(w http.ResponseWriter, code int, payload interface{}, requestID string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	err := json.NewEncoder(w).Encode(payload)
-	if err != nil {
-		return
+
+	response := APIResponse{
+		Success: true,
+		Data:    payload,
+		Meta: ResponseMeta{
+			RequestID: requestID,
+		},
 	}
+
+	_ = json.NewEncoder(w).Encode(response)
 }

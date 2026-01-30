@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"runtime/debug"
@@ -11,20 +12,17 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/common/errors"
 )
 
-// ErrorHandler is a middleware that recovers from panics and provides consistent error handling
-
 func ErrorHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
 				requestID := GetRequestID(r.Context())
 
-				// Log panic with stack trace
 				log.Printf("PANIC RECOVERED: requestID=%s, path=%s, method=%s, error=%v\n%s",
 					requestID, r.URL.Path, r.Method, err, string(debug.Stack()))
 
 				appErr := errors.ErrInternal
-				common.ResponseWithError(w, appErr.StatusCode, appErr.Message)
+				common.ResponseWithError(w, appErr.StatusCode, appErr.Message, requestID)
 			}
 		}()
 
@@ -32,7 +30,6 @@ func ErrorHandler(next http.Handler) http.Handler {
 	})
 }
 
-// HandleError is a helper to handle errors consistently across handlers
 func HandleError(w http.ResponseWriter, err error, requestID string) {
 	if err == nil {
 		return
@@ -42,27 +39,40 @@ func HandleError(w http.ResponseWriter, err error, requestID string) {
 
 	var appErr *errors.AppError
 	if std_errors.As(err, &appErr) {
-		// Send user-facing error response
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(appErr.StatusCode)
 
-		response := map[string]any{
-			"code":    appErr.Code,
-			"message": appErr.Message,
-		}
-		if len(appErr.Details) > 0 {
-			response["details"] = appErr.Details
+		response := common.APIResponse{
+			Success: false,
+			Error: map[string]interface{}{
+				"code":    appErr.Code,
+				"message": appErr.Message,
+				"details": appErr.Details,
+			},
+			Meta: common.ResponseMeta{
+				RequestID: requestID,
+			},
 		}
 
-		common.ResponseWithJSON(w, appErr.StatusCode, response)
+		_ = json.NewEncoder(w).Encode(response)
 		return
 	}
 
 	appErr = errors.ErrInternal
-	common.ResponseWithError(w, appErr.StatusCode, appErr.Message)
+	response := common.APIResponse{
+		Success: false,
+		Error: map[string]string{
+			"code":    appErr.Code,
+			"message": appErr.Message,
+		},
+		Meta: common.ResponseMeta{
+			RequestID: requestID,
+		},
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(appErr.StatusCode)
+	_ = json.NewEncoder(w).Encode(response)
 }
-
-// LogAppError logs the error details consistently with request context
 
 func LogAppError(err error, requestID string) {
 	if err == nil {
