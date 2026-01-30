@@ -54,11 +54,11 @@ CREATE TABLE giki_transport.trip (
 
     departure_time TIMESTAMPTZ NOT NULL,
 
-    booking_opens_at TIMESTAMPTZ NOT NULL,
-    booking_closes_at TIMESTAMPTZ NOT NULL,
+    booking_open_offset_hours INT NOT NULL,
+    booking_close_offset_hours INT NOT NULL,
 
     direction VARCHAR(10) NOT NULL DEFAULT 'OUTBOUND', -- 'OUTBOUND' or 'INBOUND'
-    base_price DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    base_price INT NOT NULL DEFAULT 0,
 
     bus_type VARCHAR(50) NOT NULL,
 
@@ -66,7 +66,6 @@ CREATE TABLE giki_transport.trip (
     available_seats INT NOT NULL,
 
     status VARCHAR(20) DEFAULT 'SCHEDULED',
-    booking_status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

@@ -66,7 +66,8 @@ func main() {
 
 	// Initialize Worker first
 	newWorker := worker.NewWorker(pool, newMailer)
-	go newWorker.Start(ctx)
+	go newWorker.StartJobTicker(ctx)
+	go newWorker.StartStatusTicker(ctx)
 
 	// Initialize Services with dependencies
 	userService := user.NewService(pool, newWorker)

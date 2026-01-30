@@ -32,3 +32,22 @@ SET status = 'FAILED',
     END,
     updated_at = NOW()
 WHERE id = $1;
+
+-- name: AutoOpenTrips :exec
+-- Moves SCHEDULED -> OPEN
+-- Trigger: Current Time >= (Departure - Open Offset)
+UPDATE giki_transport.trip
+SET status = 'OPEN', updated_at = NOW()
+WHERE status = 'SCHEDULED'
+  AND NOW() >= (departure_time - (booking_open_offset_hours * INTERVAL '1 hour'));
+
+-- name: AutoCloseTrips :exec
+-- Moves OPEN -> CLOSED
+-- Trigger: Current Time >= (Departure - Close Offset) OR Seats are 0
+UPDATE giki_transport.trip
+SET status = 'CLOSED', updated_at = NOW()
+WHERE status = 'OPEN'
+  AND (
+    NOW() >= (departure_time - (booking_close_offset_hours * INTERVAL '1 hour'))
+        OR available_seats <= 0
+);

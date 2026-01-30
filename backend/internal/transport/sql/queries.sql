@@ -9,13 +9,13 @@ ORDER BY name ASC;
 
 -- name: GetRouteStopsDetails :many
 SELECT
-    -- route details
+
     r.id as route_id, r.name as route_name,
     r.default_booking_open_offset_hours,
     r.default_booking_close_offset_hours,
-    -- stops details
+
     s.id as stop_id, s.address as stop_name,
-    -- route specific stops sequence
+
     rms.default_sequence_order,
     rms.is_default_active
 FROM giki_transport.routes as r
@@ -32,10 +32,31 @@ ORDER BY day_of_week ASC, departure_time ASC;
 
 -- name: CreateTrip :one
 INSERT INTO giki_transport.trip(
-    route_id, departure_time, booking_opens_at, booking_closes_at,
-    total_capacity, available_seats, base_price, direction, bus_type, status
+    route_id,
+    departure_time,
+    booking_open_offset_hours,
+    booking_close_offset_hours,
+    total_capacity,
+    available_seats,
+    base_price,
+    direction,
+    bus_type,
+    status
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'SCHEDULED')
+VALUES (
+           $1, $2, $3, $4, $5, $6, $7, $8, $9,
+           CASE
+               -- If creation happens AFTER the closing window (e.g. last minute admin entry)
+               WHEN NOW() >= ($2 - ($4 * INTERVAL '1 hour')) THEN 'CLOSED'
+
+               -- If creation happens BEFORE the window opens
+               -- (Departure - Open Offset)
+               WHEN NOW() < ($2 - ($3 * INTERVAL '1 hour')) THEN 'SCHEDULED'
+
+               -- Logic 3: Otherwise, it is currently active
+               ELSE 'OPEN'
+               END
+       )
 RETURNING id;
 
 -- name: CreateTripStop :exec
@@ -46,13 +67,12 @@ VALUES ($1, $2, $3);
 SELECT
     t.id as trip_id,
     t.departure_time,
-    t.booking_opens_at,
-    t.booking_closes_at,
+    t.booking_open_offset_hours,
+    t.booking_close_offset_hours,
     t.total_capacity,
     t.available_seats,
     t.base_price,
     t.status,
-    t.booking_status,
     t.direction,
     t.bus_type,
 
@@ -68,46 +88,17 @@ WHERE t.route_id = $1
   AND t.status != 'COMPLETED'
 ORDER BY t.departure_time ASC, ts.sequence_order ASC;
 
--- name: GetAllUpcomingTrips :many
-SELECT
-    t.id as trip_id,
-    t.departure_time,
-    t.booking_opens_at,
-    t.booking_closes_at,
-    t.total_capacity,
-    t.available_seats,
-    t.base_price,
-    t.status,
-    t.booking_status,
-    t.direction,
-    t.bus_type,
-
-    -- Route Details
-    r.name as route_name,
-
-    -- Stop Details
-    ts.stop_id,
-    s.address as stop_name,
-    ts.sequence_order
-FROM giki_transport.trip t
-         JOIN giki_transport.routes r ON t.route_id = r.id
-         JOIN giki_transport.trip_stops ts ON t.id = ts.trip_id
-         JOIN giki_transport.stops s ON ts.stop_id = s.id
-WHERE t.departure_time > NOW()
-  AND t.status != 'COMPLETED'
-ORDER BY t.departure_time ASC, ts.sequence_order ASC;
 
 -- name: AdminGetAllTrips :many
 SELECT
     t.id as trip_id,
     t.departure_time,
-    t.booking_opens_at,
-    t.booking_closes_at,
+    t.booking_open_offset_hours,
+    t.booking_close_offset_hours,
     t.total_capacity,
     t.available_seats,
     t.base_price,
     t.status,
-    t.booking_status,
     t.direction,
     t.bus_type,
 
@@ -124,25 +115,6 @@ FROM giki_transport.trip t
          JOIN giki_transport.stops s ON ts.stop_id = s.id
 ORDER BY t.departure_time DESC, ts.sequence_order ASC;
 
--- name: GetWeeklyTrips :many
-SELECT
-    t.id,
-    t.departure_time,
-    t.bus_type,
-    t.booking_opens_at,
-    t.booking_closes_at,
-    t.total_capacity,
-    t.available_seats,
-    t.status,
-    t.booking_status,
-    t.bus_type,
-    r.name as route_name
-FROM giki_transport.trip t
-JOIN giki_transport.routes r ON t.route_id = r.id
-WHERE t.departure_time >= NOW()
-  AND t.departure_time <= NOW() + INTERVAL '7 days'
-  AND t.status != 'COMPLETED'
-ORDER BY t.departure_time ASC;
 
 -- name: GetTrip :one
 SELECT * FROM giki_transport.trip WHERE id = $1;
@@ -190,14 +162,14 @@ SELECT COUNT(*) FROM (
 -- =============================================
 
 -- name: DecreaseTripSeat :one
--- Atomic lock. Returns new count to verify success.
+
 UPDATE giki_transport.trip
 SET available_seats = available_seats - 1
 WHERE id = $1 AND available_seats > 0
 RETURNING available_seats;
 
 -- name: CreateBlankHold :one
--- Creates a hold WITHOUT name (Step 1: Lock)
+
 INSERT INTO giki_transport.trip_holds (
     trip_id, user_id, pickup_stop_id, dropoff_stop_id, expires_at
 ) VALUES ($1, $2, $3, $4, $5)
@@ -215,7 +187,7 @@ DELETE FROM giki_transport.trip_holds WHERE id = $1;
 -- =============================================
 
 -- name: ConfirmBookingWithDetails :one
--- Moves Hold -> Ticket AND inserts the Passenger Names (Step 2: Fill & Pay)
+
 INSERT INTO giki_transport.tickets (
     trip_id, user_id, serial_no, ticket_code, pickup_stop_id, dropoff_stop_id,
     status, passenger_name, passenger_relation
@@ -229,32 +201,26 @@ RETURNING id;
 -- =============================================
 
 -- name: IncrementTripSeat :exec
--- Used when Hold expires or Ticket is Cancelled.
+
 UPDATE giki_transport.trip
 SET available_seats = available_seats + 1
 WHERE id = $1 AND available_seats < total_capacity;
 
 -- name: GetExpiredHolds :many
--- Uses SKIP LOCKED to allow multiple workers.
+
 SELECT id, trip_id FROM giki_transport.trip_holds
 WHERE expires_at < NOW()
 FOR UPDATE SKIP LOCKED LIMIT 50;
 
 -- name: GetTicketForCancellation :one
--- Retrieves ticket ONLY IF:
--- 1. It is currently CONFIRMED
--- 2. The cancellation window is still OPEN (NOW < booking_closes_at)
 SELECT
-    t.id,
-    t.trip_id,
-    t.user_id,
-    t.status,
-    tr.base_price
+    t.id, t.trip_id, t.user_id, t.status, tr.base_price
 FROM giki_transport.tickets t
          JOIN giki_transport.trip tr ON t.trip_id = tr.id
-WHERE t.id = sqlc.arg(ticket_id)
+WHERE t.id = $1
   AND t.status = 'CONFIRMED'
-  AND NOW() < tr.booking_closes_at;
+  -- LOGIC: Allow cancel ONLY IF Current Time < (Departure - Close Offset)
+  AND NOW() < (tr.departure_time - (tr.booking_close_offset_hours * INTERVAL '1 hour'));
 
 -- name: SetTicketCancelled :exec
 UPDATE giki_transport.tickets
@@ -277,7 +243,7 @@ RETURNING trip_id;
 
 SELECT
     t.id, t.status, t.passenger_name, t.passenger_relation, t.serial_no, t.ticket_code,
-    tr.id, tr.departure_time, tr.bus_type, tr.base_price, tr.bus_type, tr.direction, tr.booking_closes_at,
+    tr.id, tr.departure_time, tr.bus_type, tr.base_price, tr.bus_type, tr.direction, tr.booking_close_offset_hours,
     r.name,
     sp.address,
     sd.address
@@ -288,3 +254,30 @@ FROM giki_transport.tickets t
          JOIN giki_transport.stops sd ON t.dropoff_stop_id = sd.id
 WHERE t.user_id = $1
 ORDER BY tr.departure_time DESC;
+
+-- name: GetUpcomingTripsForWeek :many
+SELECT
+    t.id as trip_id,
+    r.name as route_name,
+    t.direction,
+    t.bus_type,
+
+    t.departure_time,
+
+    -- CALCULATED FIELDS: Convert offsets back to real timestamps for the UI
+    (t.departure_time - (t.booking_open_offset_hours * INTERVAL '1 hour'))::TIMESTAMPTZ as booking_opens_at,
+    (t.departure_time - (t.booking_close_offset_hours * INTERVAL '1 hour'))::TIMESTAMPTZ as booking_closes_at,
+
+    t.status,
+    t.available_seats,
+    t.total_capacity
+
+
+FROM giki_transport.trip t
+         JOIN giki_transport.routes r ON t.route_id = r.id
+WHERE
+
+    t.departure_time > NOW()
+  AND t.departure_time < (NOW() + INTERVAL '7 days')
+
+ORDER BY t.departure_time ASC;

@@ -76,8 +76,8 @@ func (s *Server) MountRoutes() {
 
 	r.Route("/transport", func(r chi.Router) {
 
-		r.Get("/trips/upcoming", s.Transport.GetAllUpcomingTrips)
-		r.Get("/weekly-summary", s.Transport.GetWeeklyTripSummary)
+		//r.Get("/trips/upcoming", s.Transport.GetAllUpcomingTrips)
+		r.Get("/weekly-summary", s.Transport.HandleWeeklyTrips)
 
 		// Protected routes (Auth required for booking)
 		r.Group(func(r chi.Router) {
@@ -86,10 +86,10 @@ func (s *Server) MountRoutes() {
 			r.Post("/holds", s.Transport.HoldSeats)
 			r.Get("/holds/active", s.Transport.GetActiveHolds)
 			r.Delete("/holds/active", s.Transport.ReleaseAllActiveHolds)
-			r.Get("/tickets", s.Transport.GetMyTickets)
+			//r.Get("/tickets", s.Transport.GetMyTickets)
 			r.Post("/confirm", s.Transport.ConfirmBatch)
-			r.Delete("/holds/{hold_id}", s.Transport.ReleaseHold)
-			r.Delete("/tickets/{ticket_id}", s.Transport.CancelTicket)
+			r.Delete("/holds", s.Transport.ReleaseHold)
+			//r.Delete("/tickets/{ticket_id}", s.Transport.CancelTicket)
 		})
 	})
 
@@ -111,8 +111,8 @@ func (s *Server) MountRoutes() {
 
 		r.Get("/routes", s.Transport.ListRoutes)
 		r.Get("/routes/{route_id}/template", s.Transport.GetRouteTemplate)
-		r.Get("/routes/{route_id}/trips/upcoming", s.Transport.GetUpcomingTrips)
-		r.Get("/trips", s.Transport.AdminListTrips)
+		//r.Get("/routes/{route_id}/trips/upcoming", s.Transport.GetUpcomingTrips)
+		//r.Get("/trips", s.Transport.AdminListTrips)
 
 		r.Post("/trips", s.Transport.CreateTrip)
 

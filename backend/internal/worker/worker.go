@@ -52,7 +52,7 @@ func (w *JobWorker) EnqueueIn(ctx context.Context, jobType string, payload inter
 	return nil
 }
 
-func (w *JobWorker) Start(ctx context.Context) {
+func (w *JobWorker) StartJobTicker(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
@@ -62,6 +62,28 @@ func (w *JobWorker) Start(ctx context.Context) {
 			return // Shutdown gracefully
 		case <-ticker.C:
 			w.processNextJob(ctx)
+		}
+	}
+}
+
+func (w *JobWorker) StartStatusTicker(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			// 1. Open trips that are ready
+			if err := w.q.AutoOpenTrips(ctx); err != nil {
+				log.Println("Error opening trips:", err)
+			}
+
+			// 2. Close trips that are expiring or full
+			if err := w.q.AutoCloseTrips(ctx); err != nil {
+				log.Println("Error closing trips:", err)
+			}
 		}
 	}
 }

@@ -110,24 +110,24 @@ func (h *Handler) ConfirmBatch(w http.ResponseWriter, r *http.Request) {
 	common.ResponseWithJSON(w, http.StatusOK, resp)
 }
 
-func (h *Handler) CancelTicket(w http.ResponseWriter, r *http.Request) {
-	requestID := middleware.GetRequestID(r.Context())
-	userRole := getUserRoleForTransport(r)
-
-	ticketIDParam := chi.URLParam(r, "ticket_id")
-	ticketID, err := uuid.Parse(ticketIDParam)
-	if err != nil {
-		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err).WithDetails("ticketID", ticketIDParam), requestID)
-		return
-	}
-
-	if err := h.service.CancelTicket(r.Context(), ticketID, userRole); err != nil {
-		middleware.HandleError(w, err, requestID)
-		return
-	}
-
-	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"status": "CANCELLED"})
-}
+//func (h *Handler) CancelTicket(w http.ResponseWriter, r *http.Request) {
+//	requestID := middleware.GetRequestID(r.Context())
+//	userRole := getUserRoleForTransport(r)
+//
+//	ticketIDParam := chi.URLParam(r, "ticket_id")
+//	ticketID, err := uuid.Parse(ticketIDParam)
+//	if err != nil {
+//		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err).WithDetails("ticketID", ticketIDParam), requestID)
+//		return
+//	}
+//
+//	if err := h.service.CancelTicket(r.Context(), ticketID, userRole); err != nil {
+//		middleware.HandleError(w, err, requestID)
+//		return
+//	}
+//
+//	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"status": "CANCELLED"})
+//}
 
 func (h *Handler) ReleaseHold(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
@@ -139,7 +139,7 @@ func (h *Handler) ReleaseHold(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// We don't really care if it fails (e.g. already expired), just return OK
-	_ = h.service.ReleaseHold(r.Context(), holdID)
+	_ = h.service.ReleaseAllHolds(r.Context(), holdID)
 
 	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"status": "RELEASED"})
 }
@@ -228,17 +228,10 @@ func (h *Handler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 	common.ResponseWithJSON(w, http.StatusCreated, response)
 }
 
-func (h *Handler) GetUpcomingTrips(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandleWeeklyTrips(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
-	routeIDParam := chi.URLParam(r, "route_id")
-	routeID, err := uuid.Parse(routeIDParam)
 
-	if err != nil {
-		middleware.HandleError(w, commonerrors.Wrap(ErrInvalidRouteID, err).WithDetails("routeID", routeIDParam), requestID)
-		return
-	}
-
-	trips, err := h.service.GetUpcomingTrips(r.Context(), routeID)
+	trips, err := h.service.GetWeeklyTrips(r.Context())
 	if err != nil {
 		middleware.HandleError(w, err, requestID)
 		return
@@ -247,54 +240,31 @@ func (h *Handler) GetUpcomingTrips(w http.ResponseWriter, r *http.Request) {
 	common.ResponseWithJSON(w, http.StatusOK, trips)
 }
 
-func (h *Handler) GetAllUpcomingTrips(w http.ResponseWriter, r *http.Request) {
-	requestID := middleware.GetRequestID(r.Context())
-
-	trips, err := h.service.GetAllUpcomingTrips(r.Context())
-	if err != nil {
-		middleware.HandleError(w, err, requestID)
-		return
-	}
-
-	common.ResponseWithJSON(w, http.StatusOK, trips)
-}
-func (h *Handler) AdminListTrips(w http.ResponseWriter, r *http.Request) {
-	requestID := middleware.GetRequestID(r.Context())
-
-	trips, err := h.service.AdminListTrips(r.Context())
-	if err != nil {
-		middleware.HandleError(w, err, requestID)
-		return
-	}
-
-	common.ResponseWithJSON(w, http.StatusOK, trips)
-}
-
-func (h *Handler) GetWeeklyTripSummary(w http.ResponseWriter, r *http.Request) {
-	requestID := middleware.GetRequestID(r.Context())
-
-	summary, err := h.service.GetWeeklyTripSummary(r.Context())
-	if err != nil {
-		middleware.HandleError(w, err, requestID)
-		return
-	}
-
-	common.ResponseWithJSON(w, http.StatusOK, summary)
-}
-
-func (h *Handler) GetMyTickets(w http.ResponseWriter, r *http.Request) {
-	requestID := middleware.GetRequestID(r.Context())
-	userID, ok := auth.GetUserIDFromContext(r.Context())
-	if !ok {
-		middleware.HandleError(w, commonerrors.ErrUnauthorized, requestID)
-		return
-	}
-
-	tickets, err := h.service.GetMyTickets(r.Context(), userID)
-	if err != nil {
-		middleware.HandleError(w, err, requestID)
-		return
-	}
-
-	common.ResponseWithJSON(w, http.StatusOK, tickets)
-}
+//func (h *Handler) AdminListTrips(w http.ResponseWriter, r *http.Request) {
+//	requestID := middleware.GetRequestID(r.Context())
+//
+//	trips, err := h.service.AdminListTrips(r.Context())
+//	if err != nil {
+//		middleware.HandleError(w, err, requestID)
+//		return
+//	}
+//
+//	common.ResponseWithJSON(w, http.StatusOK, trips)
+//}
+//
+//func (h *Handler) GetMyTickets(w http.ResponseWriter, r *http.Request) {
+//	requestID := middleware.GetRequestID(r.Context())
+//	userID, ok := auth.GetUserIDFromContext(r.Context())
+//	if !ok {
+//		middleware.HandleError(w, commonerrors.ErrUnauthorized, requestID)
+//		return
+//	}
+//
+//	tickets, err := h.service.GetMyTickets(r.Context(), userID)
+//	if err != nil {
+//		middleware.HandleError(w, err, requestID)
+//		return
+//	}
+//
+//	common.ResponseWithJSON(w, http.StatusOK, tickets)
+//}
