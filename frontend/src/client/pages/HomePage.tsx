@@ -2,8 +2,8 @@ import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { WalletPage } from '@/client/modules/wallet/pages/WalletPage';
 import { ServiceTiles } from '@/client/components/ServiceTiles';
-import { TripSummaryTile } from '@/client/components/TripSummaryTile';
 import { useAuthStore } from '@/shared/stores/authStore';
+import { TripSummaryTile } from '../components/TripSummaryTile';
 
 export const HomePage = () => {
     const navigate = useNavigate();
@@ -20,9 +20,7 @@ export const HomePage = () => {
                     <WalletPage />
                 </div>
             )}
-
-            <TripSummaryTile />
-
+            <TripSummaryTile/>
             <ServiceTiles onTransportClick={openTransport} />
         </div>
     );

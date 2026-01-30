@@ -1,88 +1,60 @@
-import { useEffect, useState, useCallback, useMemo, ReactNode } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Calendar, Lock, Unlock, Loader2, ChevronRight, Bus, Users, Clock, Radio } from 'lucide-react';
-import { getWeeklySummary, type WeeklySummary } from '../modules/transport/api';
-import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
+import { z } from 'zod';
+import { cn } from '@/lib/utils';
 import { Modal } from '@/shared/components/ui/Modal';
-import { useAuthStore } from '@/shared/stores/authStore';
+import { getWeeklySummary } from '@/client/modules/transport/api';
+
+import type { WeeklyTrip } from '@/client/modules/transport/validators';
 
 export const TripSummaryTile = () => {
     const navigate = useNavigate();
-    const { user } = useAuthStore();
-    const [summary, setSummary] = useState<WeeklySummary | null>(null);
+    const [trips, setTrips] = useState<WeeklyTrip[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
     const fetchSummary = useCallback(async (showLoading = false) => {
         if (showLoading) setLoading(true);
         try {
             const data = await getWeeklySummary();
-            // Production-ready validation
-            if (data && typeof data === 'object') {
-                setSummary({
-                    scheduled: data.scheduled || 0,
-                    opened: data.opened || 0,
-                    pending: data.pending || 0,
-                    trips: Array.isArray(data.trips) ? data.trips : []
-                });
+            console.log('Weekly Summary Data:', data);
+            if (Array.isArray(data)) {
+                setTrips(data);
             }
         } catch (error) {
-            // Only log errors if we were explicitly showing loading (initial Load or user-triggered)
-            // Background polling errors should be silent to avoid console clutter.
-            if (showLoading) {
-                console.error('Failed to fetch weekly summary:', error);
-            }
+            if (showLoading) console.error('Failed to fetch weekly summary:', error);
         } finally {
             if (showLoading) setLoading(false);
         }
     }, []);
 
-    const filteredTrips = useMemo(() => {
-        if (!summary) return [];
-        if (!user) return summary.trips; // Guest sees both
-
-        const role = user.user_type.toUpperCase();
-        // If it's an admin, show both
-        if (role.includes('ADMIN')) return summary.trips;
-
-        // Otherwise filter by user type (STUDENT or EMPLOYEE)
-        return summary.trips.filter(trip => trip.bus_type === role);
-    }, [summary, user]);
-
     useEffect(() => {
         fetchSummary(true);
-
+        // Polling every 30 seconds
+        const interval = setInterval(() => fetchSummary(false), 30000);
+        return () => clearInterval(interval);
     }, [fetchSummary]);
 
-    const counts = useMemo(() => {
-        return {
-            total: filteredTrips.length,
-            opened: filteredTrips.filter(t => t.booking_status === 'OPEN').length,
-            pending: filteredTrips.filter(t => t.booking_status === 'SCHEDULED' || t.booking_status === 'PENDING').length
-        };
-    }, [filteredTrips]);
+    // Efficiently calculate stats on the client side
+    const stats = useMemo(() => {
+        return trips.reduce(
+            (acc, trip) => {
+                if (trip.status === 'OPEN') acc.opened++;
+                else if (trip.status === 'SCHEDULED') acc.scheduled++;
+                else acc.locked++; // Assuming CLOSED counts as locked
+                return acc;
+            },
+            { scheduled: 0, opened: 0, locked: 0 }
+        );
+    }, [trips]);
 
-    const stats = [
-        {
-            label: 'Total',
-            value: counts.total,
-            icon: Calendar,
-            color: 'text-primary'
-        },
-        {
-            label: 'Opened',
-            value: counts.opened,
-            icon: Unlock,
-            color: 'text-accent'
-        },
-        {
-            label: 'Scheduled',
-            value: counts.pending,
-            icon: Clock,
-            color: 'text-slate-400'
-        }
-    ];
+    // Helper formatters
+    const formatTime = (dateStr: string) => 
+        new Date(dateStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+    const formatDate = (dateStr: string) => 
+        new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
     if (loading) {
         return (
@@ -96,47 +68,23 @@ export const TripSummaryTile = () => {
         );
     }
 
-    if (!summary) return null;
+    // Don't render if no data (optional, depends on preference)
+    if (!loading && trips.length === 0) return null;
 
-    const formatTime = (dateStr: string) => {
-        const date = new Date(dateStr);
-        return date.toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-        });
-    };
+    const statItems = [
+        { label: 'Scheduled', value: stats.scheduled, icon: Calendar, color: 'text-primary' },
+        { label: 'Opened', value: stats.opened, icon: Unlock, color: 'text-accent' },
+        { label: 'Locked', value: stats.locked, icon: Lock, color: 'text-slate-400' }
+    ];
 
-    const formatDate = (dateStr: string) => {
-        const date = new Date(dateStr);
-        return date.toLocaleDateString('en-US', {
-            weekday: 'short',
-            month: 'short',
-            day: 'numeric'
-        });
-    };
-
-    const TripItem = ({ trip, className }: { trip: any, className?: string }) => (
-        <div
-            className={cn(
-                "flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-100 hover:border-primary/20 hover:bg-slate-50/50 transition-all duration-300",
-                className
-            )}
-        >
+    const TripItem = ({ trip, className }: { trip: WeeklyTrip, className?: string }) => (
+        <div className={cn("flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-100 hover:border-primary/20 hover:bg-slate-50/50 transition-all duration-300", className)}>
             <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500">
                     <Clock className="w-5 h-5" />
                 </div>
                 <div>
-                    <div className="flex items-center gap-2">
-                        <p className="text-xs font-black text-slate-900 tracking-tight uppercase leading-none">{trip.route_name}</p>
-                        <span className={cn(
-                            "px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter border",
-                            trip.bus_type === 'STUDENT' ? "bg-blue-50 text-blue-600 border-blue-100" : "bg-purple-50 text-purple-600 border-purple-100"
-                        )}>
-                            {trip.bus_type}
-                        </span>
-                    </div>
+                    <p className="text-xs font-black text-slate-900 tracking-tight uppercase leading-none">{trip.route_name}</p>
                     <div className="flex items-center gap-2 mt-1.5">
                         <span className="text-[9px] font-bold text-slate-400 uppercase">{formatDate(trip.departure_time)}</span>
                         <span className="w-1 h-1 rounded-full bg-slate-200" />
@@ -152,24 +100,14 @@ export const TripSummaryTile = () => {
                 </div>
                 <span className={cn(
                     "text-[8px] font-black uppercase tracking-widest",
-                    trip.booking_status === 'OPEN' ? "text-accent" :
-                        trip.booking_status === 'SCHEDULED' ? "text-primary" :
-                            trip.booking_status === 'FULL' ? "text-destructive" : "text-slate-400"
+                    trip.status === 'OPEN' ? "text-accent" :
+                    trip.available_seats === 0 ? "text-destructive" : "text-slate-400"
                 )}>
-                    {trip.booking_status}
+                    {trip.status}
                 </span>
             </div>
         </div>
     );
-
-    const getFilteredTrips = () => {
-        if (!activeFilter) return summary.trips;
-        return summary.trips.filter((trip) => trip.booking_status === activeFilter);
-    };
-
-    const handleFilterClick = (filter: string) => {
-        setActiveFilter(activeFilter === filter ? null : filter);
-    };
 
     return (
         <div className="space-y-4">
@@ -180,13 +118,11 @@ export const TripSummaryTile = () => {
                 </div>
                 <div className="flex items-center gap-1">
                     <div className="w-1.5 h-1.5 rounded-full bg-accent animate-ping" />
-                    <span className="text-[8px] font-black text-accent uppercase tracking-widest">Real-time updates</span>
+                    <span className="text-[8px] font-black text-accent uppercase tracking-widest">Real-time</span>
                 </div>
             </div>
 
-            <div
-                className="group relative overflow-hidden bg-white border border-slate-100 rounded-[2.5rem] p-6 md:p-8 shadow-sm hover:shadow-2xl hover:shadow-primary/5 hover:border-primary/20 transition-all duration-500"
-            >
+            <div className="group relative overflow-hidden bg-white border border-slate-100 rounded-[2.5rem] p-6 md:p-8 shadow-sm hover:shadow-2xl hover:shadow-primary/5 hover:border-primary/20 transition-all duration-500">
                 {/* Background Decor */}
                 <div className="absolute top-0 right-0 -mr-24 -mt-24 w-80 h-80 rounded-full bg-primary/5 blur-3xl group-hover:bg-primary/10 transition-colors duration-500 pointer-events-none" />
                 <div className="absolute bottom-0 left-0 -ml-24 -mb-24 w-64 h-64 rounded-full bg-accent/5 blur-3xl group-hover:bg-accent/10 transition-colors duration-500 pointer-events-none" />
@@ -200,12 +136,12 @@ export const TripSummaryTile = () => {
                             </div>
                             <div>
                                 <h3 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">Weekly Trips</h3>
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Available for the next 7 days</p>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Next 7 Days</p>
                             </div>
                         </div>
 
                         <div className="flex items-center gap-4">
-                            {stats.map((stat) => (
+                            {statItems.map((stat) => (
                                 <div key={stat.label} className="flex flex-col items-center px-4 py-2 rounded-2xl bg-slate-50 border border-slate-100/50">
                                     <span className={cn("text-xs font-black", stat.color)}>{stat.value}</span>
                                     <span className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">{stat.label}</span>
@@ -216,27 +152,27 @@ export const TripSummaryTile = () => {
 
                     {/* Trip Detail List (Limited to 2) */}
                     <div className="space-y-3">
-                        {filteredTrips.length > 0 ? (
+                        {trips.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                {filteredTrips.slice(0, 2).map((trip) => (
-                                    <TripItem key={trip.trip_id} trip={trip} />
+                                {trips.slice(0, 2).map((trip) => (
+                                    <TripItem key={trip.id} trip={trip} />
                                 ))}
                             </div>
                         ) : (
                             <div className="py-8 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No matching trips scheduled this week</p>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No trips scheduled</p>
                             </div>
                         )}
 
-                        {filteredTrips.length > 2 && (
+                        {trips.length > 2 && (
                             <div className="pt-2 flex justify-center">
-                                <span
+                                <button
                                     onClick={() => setIsModalOpen(true)}
                                     className="text-[10px] font-black text-primary uppercase tracking-widest hover:underline cursor-pointer flex items-center gap-1 group/btn"
                                 >
-                                    View {filteredTrips.length - 2} more trips
+                                    View {trips.length - 2} more trips
                                     <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-                                </span>
+                                </button>
                             </div>
                         )}
                     </div>
@@ -251,14 +187,11 @@ export const TripSummaryTile = () => {
             >
                 <div className="space-y-4">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.1em] mb-4">
-                        Full Schedule for {formatDate(new Date().toISOString())} - {formatDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString())}
-                        {user && !user.user_type.toUpperCase().includes('ADMIN') && (
-                            <span className="ml-2 text-primary">(Filtered for {user.user_type}s)</span>
-                        )}
+                        Full Schedule
                     </p>
                     <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2 no-scrollbar">
-                        {filteredTrips.map((trip) => (
-                            <TripItem key={trip.trip_id} trip={trip} />
+                        {trips.map((trip) => (
+                            <TripItem key={trip.id} trip={trip} />
                         ))}
                     </div>
                     <div className="pt-6 flex justify-center">

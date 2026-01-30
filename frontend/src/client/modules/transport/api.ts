@@ -4,7 +4,7 @@ import {
     type RouteTemplate,
     type Trip,
     type TripStop,
-    type WeeklySummary,
+    type WeeklyTrip,
     type HoldSeatsRequest,
     type HoldSeatsResponse,
     type ConfirmBatchRequest,
@@ -18,7 +18,7 @@ export type {
     RouteTemplate,
     Trip,
     TripStop,
-    WeeklySummary,
+    WeeklyTrip,
     HoldSeatsRequest,
     HoldSeatsResponse,
     ConfirmBatchRequest,
@@ -70,8 +70,9 @@ export async function releaseHold(holdId: string) {
     await apiClient.delete(`/transport/holds/${holdId}`);
 }
 
+
 export async function getWeeklySummary() {
-    const res = await apiClient.get<WeeklySummary>('/transport/weekly-summary');
+    const res = await apiClient.get<WeeklyTrip[]>('/transport/weekly-summary');
     return res.data;
 }
 

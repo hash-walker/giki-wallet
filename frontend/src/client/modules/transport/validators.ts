@@ -80,20 +80,20 @@ export const routeTemplateSchema = z.object({
     })),
 });
 
-export const weeklySummarySchema = z.object({
-    scheduled: z.number(),
-    opened: z.number(),
-    pending: z.number(),
-    trips: z.array(z.object({
-        trip_id: z.string().uuid(),
-        route_name: z.string(),
-        departure_time: z.string(),
-        available_seats: z.number(),
-        total_capacity: z.number(),
-        booking_status: z.string(),
-        bus_type: z.string(),
-    })),
+// Zod Schema matching the new Go struct
+export const weeklyTripSchema = z.object({
+    id: z.string().uuid(),
+    route_name: z.string(),
+    direction: z.string(),
+    bus_type: z.string(),
+    departure_time: z.string(), // ISO String from Go time.Time
+    booking_opens_at: z.string(),
+    booking_closes_at: z.string(),
+    status: z.enum(['OPEN', 'SCHEDULED', 'CLOSED']), 
+    available_seats: z.number(),
+    total_capacity: z.number(),
 });
+
 
 export const holdSeatsResponseSchema = z.object({
     holds: z.array(z.object({
@@ -111,7 +111,7 @@ export const confirmBatchResponseSchema = z.object({
 
 export type TransportRoute = z.infer<typeof transportRouteSchema>;
 export type RouteTemplate = z.infer<typeof routeTemplateSchema>;
-export type WeeklySummary = z.infer<typeof weeklySummarySchema>;
+export type WeeklyTrip = z.infer<typeof weeklyTripSchema>;
 export type HoldSeatsResponse = z.infer<typeof holdSeatsResponseSchema>;
 export type ConfirmBatchResponse = z.infer<typeof confirmBatchResponseSchema>;
 
