@@ -474,6 +474,9 @@ func (s *Service) GetWeeklyTrips(ctx context.Context) ([]WeeklyTripResponse, err
 	rows, err := s.q.GetUpcomingTripsForWeek(ctx)
 
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNoWeekTripsAvailable
+		}
 		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}
 
