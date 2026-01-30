@@ -39,12 +39,12 @@ export const TripSummaryTile = () => {
         return trips.reduce(
             (acc, trip) => {
                 const status = trip.status;
-                if (status === 'OPEN') acc.opened++;
+                if (status === 'OPEN') acc.open++;
                 else if (status === 'SCHEDULED') acc.scheduled++;
-                else acc.locked++; // Assuming CLOSED counts as locked/pending
+                else if (status === 'CLOSED') acc.closed++;
                 return acc;
             },
-            { scheduled: 0, opened: 0, locked: 0 }
+            { scheduled: 0, open: 0, closed: 0 }
         );
     }, [trips]);
 
@@ -70,8 +70,8 @@ export const TripSummaryTile = () => {
 
     const statItems = [
         { label: 'Scheduled', value: stats.scheduled, icon: Calendar, color: 'text-primary' },
-        { label: 'Opened', value: stats.opened, icon: Unlock, color: 'text-accent' },
-        { label: 'Locked', value: stats.locked, icon: Lock, color: 'text-slate-400' }
+        { label: 'Open', value: stats.open, icon: Unlock, color: 'text-accent' },
+        { label: 'Closed', value: stats.closed, icon: Lock, color: 'text-slate-400' }
     ];
 
     const TripItem = ({ trip, className }: { trip: WeeklyTrip, className?: string }) => (

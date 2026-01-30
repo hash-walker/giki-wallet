@@ -102,23 +102,6 @@ type WeeklyTripResponse struct {
 	TotalCapacity  int32  `json:"total_capacity"`
 }
 
-type WeeklyTripSummary struct {
-	Scheduled int              `json:"scheduled"`
-	Opened    int              `json:"opened"`
-	Pending   int              `json:"pending"`
-	Trips     []TripSummaryRow `json:"trips"`
-}
-
-type TripSummaryRow struct {
-	TripID         uuid.UUID `json:"trip_id"`
-	RouteName      string    `json:"route_name"`
-	DepartureTime  time.Time `json:"departure_time"`
-	AvailableSeats int       `json:"available_seats"`
-	TotalCapacity  int       `json:"total_capacity"`
-	BookingStatus  string    `json:"booking_status"`
-	BusType        string    `json:"bus_type"`
-}
-
 type TripStopItem struct {
 	StopID   uuid.UUID `json:"stop_id"`
 	StopName string    `json:"stop_name"`
