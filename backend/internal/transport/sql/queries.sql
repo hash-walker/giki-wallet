@@ -63,30 +63,46 @@ RETURNING id;
 INSERT INTO giki_transport.trip_stops (trip_id, stop_id, sequence_order)
 VALUES ($1, $2, $3);
 
--- name: GetUpcomingTripsByRoute :many
+-- name: GetWeeklyTripsWithStops :many
 SELECT
     t.id as trip_id,
-    t.departure_time,
-    t.booking_open_offset_hours,
-    t.booking_close_offset_hours,
-    t.total_capacity,
-    t.available_seats,
-    t.base_price,
-    t.status,
+    r.id as route_id,
+    r.name as route_name,
     t.direction,
     t.bus_type,
 
-    -- Stop Details
-    ts.stop_id,
-    s.address as stop_name,
-    ts.sequence_order
+    t.departure_time,
+
+    -- Calculated Offsets
+    (t.departure_time - (t.booking_open_offset_hours * INTERVAL '1 hour'))::TIMESTAMPTZ as booking_opens_at,
+    (t.departure_time - (t.booking_close_offset_hours * INTERVAL '1 hour'))::TIMESTAMPTZ as booking_closes_at,
+
+    t.status,
+    t.available_seats,
+    t.total_capacity,
+    t.base_price,
+
+    (
+        SELECT COALESCE(JSON_AGG(
+                                JSON_BUILD_OBJECT(
+                                        'stop_id', s.id,
+                                        'stop_name', s.address,
+                                        'sequence', ts.sequence_order
+                                ) ORDER BY ts.sequence_order ASC
+                        ), '[]')::text
+        FROM giki_transport.trip_stops ts
+                 JOIN giki_transport.stops s ON ts.stop_id = s.id
+        WHERE ts.trip_id = t.id
+    ) as stops_json
+
 FROM giki_transport.trip t
-         JOIN giki_transport.trip_stops ts ON t.id = ts.trip_id
-         JOIN giki_transport.stops s ON ts.stop_id = s.id
-WHERE t.route_id = $1
-  AND t.departure_time > NOW()
-  AND t.status != 'COMPLETED'
-ORDER BY t.departure_time ASC, ts.sequence_order ASC;
+         JOIN giki_transport.routes r ON t.route_id = r.id
+WHERE
+    t.departure_time > NOW()
+  AND t.departure_time < (NOW() + INTERVAL '7 days')
+  AND t.status != 'CLOSED'
+
+ORDER BY t.departure_time ASC;
 
 
 -- name: AdminGetAllTrips :many
@@ -143,7 +159,7 @@ SELECT COUNT(*) FROM (
                 JOIN giki_transport.trip tr ON t.trip_id = tr.id
        WHERE t.user_id = sqlc.arg(user_id)
          AND t.status = 'CONFIRMED'
-         AND t.booking_time > NOW() - INTERVAL '7 days'
+         AND tr.departure_time > NOW() - INTERVAL '7 days'
          AND tr.direction = sqlc.arg(direction)
 
        UNION ALL
@@ -239,14 +255,39 @@ DELETE FROM giki_transport.trip_holds
 WHERE user_id = $1 AND expires_at > NOW()
 RETURNING trip_id;
 
--- name: GetUserTicketsByID :many
 
+-- name: GetUserTicketsByID :many
 SELECT
-    t.id, t.status, t.passenger_name, t.passenger_relation, t.serial_no, t.ticket_code,
-    tr.id, tr.departure_time, tr.bus_type, tr.base_price, tr.bus_type, tr.direction, tr.booking_close_offset_hours,
-    r.name,
-    sp.address,
-    sd.address
+    t.id AS ticket_id,
+    t.status AS ticket_status,
+    t.passenger_name,
+    t.passenger_relation,
+    t.serial_no,
+    t.ticket_code,
+    t.booking_time,
+
+    tr.id AS trip_id,
+    tr.departure_time,
+    tr.bus_type,
+    tr.base_price,
+    tr.direction,
+
+    r.name AS route_name,
+
+    (CASE
+        WHEN tr.direction = 'INBOUND' THEN sp.address
+        ELSE sd.address
+    END)::text AS relevant_location,
+
+    sp.address AS pickup_location,
+    sd.address AS dropoff_location,
+
+    (
+        t.status = 'CONFIRMED' AND
+        tr.status != 'CANCELLED' AND
+        NOW() < (tr.departure_time - (tr.booking_close_offset_hours * INTERVAL '1 hour'))
+        )::BOOLEAN AS is_cancellable
+
 FROM giki_transport.tickets t
          JOIN giki_transport.trip tr ON t.trip_id = tr.id
          JOIN giki_transport.routes r ON tr.route_id = r.id

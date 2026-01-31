@@ -76,20 +76,17 @@ func (s *Server) MountRoutes() {
 
 	r.Route("/transport", func(r chi.Router) {
 
-		//r.Get("/trips/upcoming", s.Transport.GetAllUpcomingTrips)
 		r.Get("/weekly-summary", s.Transport.HandleWeeklyTrips)
+		r.Get("/routes", s.Transport.ListRoutes)
 
-		// Protected routes (Auth required for booking)
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireAuth)
 			r.Get("/quota", s.Transport.GetQuota)
 			r.Post("/holds", s.Transport.HoldSeats)
 			r.Get("/holds/active", s.Transport.GetActiveHolds)
 			r.Delete("/holds/active", s.Transport.ReleaseAllActiveHolds)
-			//r.Get("/tickets", s.Transport.GetMyTickets)
+			r.Get("/tickets", s.Transport.GetUserTickets)
 			r.Post("/confirm", s.Transport.ConfirmBatch)
-			r.Delete("/holds", s.Transport.ReleaseHold)
-			//r.Delete("/tickets/{ticket_id}", s.Transport.CancelTicket)
 		})
 	})
 

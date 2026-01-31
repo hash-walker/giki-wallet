@@ -30,21 +30,111 @@ func NewService(dbPool *pgxpool.Pool, walletService *wallet.Service) *Service {
 }
 
 // =============================================================================
-// BATCH OPERATIONS
+// 1. TRIP MANAGEMENT (The New Logic)
 // =============================================================================
 
-// HoldSeats locks N seats atomically with quota checking
+func (s *Service) GetWeeklyTrips(ctx context.Context) ([]TripResponse, error) {
+
+	rows, err := s.q.GetWeeklyTripsWithStops(ctx)
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	return mapDbTripsToResponse(rows), nil
+}
+
+func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.UUID, error) {
+	tx, err := s.dbPool.Begin(ctx)
+	if err != nil {
+		return uuid.Nil, commonerrors.Wrap(ErrTripCreationFailed, err)
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.q.WithTx(tx)
+
+	tripID, err := qtx.CreateTrip(ctx, transport_db.CreateTripParams{
+		RouteID:                 req.RouteID,
+		DepartureTime:           req.DepartureTime,
+		BookingOpenOffsetHours:  int32(req.BookingOpenOffsetHours),
+		BookingCloseOffsetHours: int32(req.BookingCloseOffsetHours),
+		TotalCapacity:           int32(req.TotalCapacity),
+		AvailableSeats:          int32(req.TotalCapacity),
+		BasePrice:               req.BasePrice,
+		BusType:                 req.BusType,
+		Direction:               req.Direction,
+	})
+	if err != nil {
+		return uuid.Nil, commonerrors.Wrap(ErrTripCreationFailed, err)
+	}
+
+	for i, stop := range req.Stops {
+		err := qtx.CreateTripStop(ctx, transport_db.CreateTripStopParams{
+			TripID:        tripID,
+			StopID:        stop.StopID,
+			SequenceOrder: int32(i + 1), // 1-based index
+		})
+		if err != nil {
+			return uuid.Nil, commonerrors.Wrap(ErrTripCreationFailed, err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return uuid.Nil, commonerrors.Wrap(ErrTripCreationFailed, err)
+	}
+
+	return tripID, nil
+}
+
+// =============================================================================
+// 2. ROUTE INFO
+// =============================================================================
+
+func (s *Service) RoutesList(ctx context.Context) ([]Route, error) {
+	rows, err := s.q.GetAllRoutes(ctx)
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	routes := make([]Route, len(rows))
+	for i, row := range rows {
+		routes[i] = mapDBRouteToRoute(row)
+	}
+	return routes, nil
+}
+
+func (s *Service) GetRouteTemplate(ctx context.Context, routeID uuid.UUID) (*RouteTemplateResponse, error) {
+	routeTemplateRows, err := s.q.GetRouteStopsDetails(ctx, routeID)
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+	if len(routeTemplateRows) == 0 {
+		return nil, ErrRouteNotFound
+	}
+
+	weeklyScheduleRows, err := s.q.GetRouteWeeklySchedule(ctx, routeID)
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	return mapDBRouteTemplateToRouteTemplate(routeTemplateRows, weeklyScheduleRows), nil
+}
+
+// =============================================================================
+// 3. BOOKING & HOLD LOGIC
+// =============================================================================
+
 func (s *Service) HoldSeats(ctx context.Context, userID uuid.UUID, userRole string, req HoldSeatsRequest) (*HoldSeatsResponse, error) {
 
 	tx, err := s.dbPool.Begin(ctx)
 	if err != nil {
 		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}
-
 	defer tx.Rollback(ctx)
 	qtx := s.q.WithTx(tx)
 
-	// 1. Get trip details
+	if _, lockErr := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1))", userID.String()); lockErr != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, lockErr)
+	}
+
 	trip, err := qtx.GetTrip(ctx, req.TripID)
 
 	if err != nil {
@@ -54,7 +144,6 @@ func (s *Service) HoldSeats(ctx context.Context, userID uuid.UUID, userRole stri
 		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}
 
-	// 2. Check quota
 	rule, err := qtx.GetQuotaRule(ctx, transport_db.GetQuotaRuleParams{
 		UserRole:  userRole,
 		Direction: trip.Direction,
@@ -67,7 +156,6 @@ func (s *Service) HoldSeats(ctx context.Context, userID uuid.UUID, userRole stri
 		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}
 
-	// 3. Get current usage
 	usage, err := qtx.GetWeeklyTicketCountByDirection(ctx, transport_db.GetWeeklyTicketCountByDirectionParams{
 		UserID:    userID,
 		Direction: trip.Direction,
@@ -77,17 +165,15 @@ func (s *Service) HoldSeats(ctx context.Context, userID uuid.UUID, userRole stri
 		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}
 
-	// 4. Validate quota
 	if (usage + int64(req.Count)) > int64(rule.WeeklyLimit) {
 		return nil, ErrQuotaExceeded
 	}
 
-	// 5. Loop and lock seats
 	var holds []HoldTicketResponse
 	expiry := time.Now().Add(5 * time.Minute)
 
 	for i := 0; i < req.Count; i++ {
-		// Atomic decrement
+
 		_, err := qtx.DecreaseTripSeat(ctx, req.TripID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -96,7 +182,6 @@ func (s *Service) HoldSeats(ctx context.Context, userID uuid.UUID, userRole stri
 			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 		}
 
-		// Create blank hold
 		hold, err := qtx.CreateBlankHold(ctx, transport_db.CreateBlankHoldParams{
 			TripID:        req.TripID,
 			UserID:        userID,
@@ -104,7 +189,6 @@ func (s *Service) HoldSeats(ctx context.Context, userID uuid.UUID, userRole stri
 			DropoffStopID: req.DropoffStopID,
 			ExpiresAt:     expiry,
 		})
-
 		if err != nil {
 			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 		}
@@ -122,8 +206,101 @@ func (s *Service) HoldSeats(ctx context.Context, userID uuid.UUID, userRole stri
 	return &HoldSeatsResponse{Holds: holds}, nil
 }
 
+func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole string, items []ConfirmItem) (*ConfirmBatchResponse, error) {
+	tx, err := s.dbPool.Begin(ctx)
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+	defer tx.Rollback(ctx)
+	qtx := s.q.WithTx(tx)
+
+	var userWalletID, revenueWalletID uuid.UUID
+	if userRole == "STUDENT" {
+		userWallet, err := s.wallet.GetOrCreateWallet(ctx, tx, userID)
+		if err != nil {
+			return nil, err
+		}
+		userWalletID = userWallet.ID
+
+		revWallet, err := s.wallet.GetSystemWalletByName(ctx, wallet.TransportSystemWallet, wallet.SystemWalletRevenue)
+		if err != nil {
+			return nil, err
+		}
+		revenueWalletID = revWallet
+	}
+
+	var tickets []BookTicketResponse
+
+	for _, item := range items {
+
+		hold, err := qtx.GetHold(ctx, item.HoldID)
+		if err != nil {
+			return nil, ErrHoldExpired
+		}
+
+		if time.Now().After(hold.ExpiresAt) {
+			return nil, ErrHoldExpired
+		}
+
+		price, err := qtx.GetTripPrice(ctx, hold.TripID)
+
+		if err != nil {
+			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
+
+		var ticketID uuid.UUID
+		for i := 0; i < 5; i++ {
+			code := GenerateRandomCode()
+			ticketID, err = qtx.ConfirmBookingWithDetails(ctx, transport_db.ConfirmBookingWithDetailsParams{
+				TripID:            hold.TripID,
+				UserID:            userID,
+				TicketCode:        code,
+				PickupStopID:      hold.PickupStopID,
+				DropoffStopID:     hold.DropoffStopID,
+				PassengerName:     item.PassengerName,
+				PassengerRelation: item.PassengerRelation,
+			})
+			if err == nil {
+				break
+			}
+		}
+		if err != nil {
+			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
+
+		_ = qtx.DeleteHold(ctx, item.HoldID)
+
+		if userRole == "STUDENT" && price > 0 {
+			err = s.wallet.ExecuteTransaction(
+				ctx,
+				tx,
+				userWalletID,
+				revenueWalletID,
+				int64(price),
+				"TRANSPORT_BOOKING",
+				ticketID.String(),
+				fmt.Sprintf("Ticket for %s", item.PassengerName),
+			)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		tickets = append(tickets, BookTicketResponse{
+			TicketID: ticketID,
+			Status:   "CONFIRMED",
+		})
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	return &ConfirmBatchResponse{Tickets: tickets}, nil
+}
+
 func (s *Service) GetUserQuota(ctx context.Context, userID uuid.UUID, userRole string) (*QuotaResponse, error) {
-	// Directions to check
+
 	directions := []string{"OUTBOUND", "INBOUND"}
 	resp := &QuotaResponse{}
 
@@ -207,111 +384,6 @@ func (s *Service) ReleaseAllHolds(ctx context.Context, userID uuid.UUID) error {
 	return tx.Commit(ctx)
 }
 
-// ConfirmBatch finalizes multiple holds with passenger details and wallet deduction
-func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole string, items []ConfirmItem) (*ConfirmBatchResponse, error) {
-
-	tx, err := s.dbPool.Begin(ctx)
-	if err != nil {
-		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
-	defer tx.Rollback(ctx)
-	qtx := s.q.WithTx(tx)
-
-	var tickets []BookTicketResponse
-	var totalPrice int32
-
-	for _, item := range items {
-		// 1. Get hold
-		hold, err := qtx.GetHold(ctx, item.HoldID)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return nil, ErrHoldExpired
-			}
-			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-		}
-
-		// 2. Check expiry
-		if time.Now().After(hold.ExpiresAt) {
-			return nil, ErrHoldExpired
-		}
-
-		// 3. Validate passenger name
-		if item.PassengerName == "" {
-			return nil, ErrInvalidPassengerName
-		}
-
-		// 4. Get trip price
-		basePrice, err := qtx.GetTripPrice(ctx, hold.TripID)
-		if err != nil {
-			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-		}
-
-		price := basePrice
-		totalPrice += price
-
-		maxRetries := 5
-		var ticketID uuid.UUID
-		for i := 0; i < maxRetries; i++ {
-			code := GenerateRandomCode()
-
-			ticketID, err = qtx.ConfirmBookingWithDetails(ctx, transport_db.ConfirmBookingWithDetailsParams{
-				TripID:            hold.TripID,
-				UserID:            userID,
-				TicketCode:        code,
-				PickupStopID:      hold.PickupStopID,
-				DropoffStopID:     hold.DropoffStopID,
-				PassengerName:     item.PassengerName,
-				PassengerRelation: item.PassengerRelation,
-			})
-
-			if err == nil {
-				break
-			}
-
-		}
-
-		// 5. Create ticket with passenger details
-
-		if err != nil {
-			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-		}
-
-		// 6. Delete hold
-		if err := qtx.DeleteHold(ctx, item.HoldID); err != nil {
-			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-		}
-
-		tickets = append(tickets, BookTicketResponse{
-			TicketID: ticketID,
-			Status:   "CONFIRMED",
-		})
-	}
-
-	// 7. Wallet deduction (Students only)
-	if userRole == "STUDENT" && totalPrice > 0 {
-		userWallet, err := s.wallet.GetOrCreateWallet(ctx, tx, userID)
-		if err != nil {
-			return nil, err
-		}
-
-		revenueWalletID, err := s.wallet.GetSystemWalletByName(ctx, wallet.TransportSystemWallet, wallet.SystemWalletRevenue)
-		if err != nil {
-			return nil, err
-		}
-
-		err = s.wallet.ExecuteTransaction(ctx, tx, userWallet.ID, revenueWalletID, int64(totalPrice), "TRANSPORT_BOOKING", userID.String(), "Transport ticket purchase")
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
-
-	return &ConfirmBatchResponse{Tickets: tickets}, nil
-}
-
 func (s *Service) CancelTicketWithRole(ctx context.Context, ticketID uuid.UUID, userRole string) error {
 	tx, err := s.dbPool.Begin(ctx)
 	if err != nil {
@@ -370,122 +442,17 @@ func (s *Service) CancelTicketWithRole(ctx context.Context, ticketID uuid.UUID, 
 	return nil
 }
 
-//func (s *Service) GetMyTickets(ctx context.Context, userID uuid.UUID) ([]MyTicketResponse, error) {
-//
-//	rows, err := s.q.GetUserTicketsByID(ctx, userID)
-//
-//	if err != nil {
-//		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-//	}
-//
-//	res := MapDBTicketsToTickets(rows)
-//
-//	return res, nil
-//}
-
-// =============================================================================
-// ROUTE & TRIP MANAGEMENT
-// =============================================================================
-
-func (s *Service) RoutesList(ctx context.Context) ([]Route, error) {
-	rows, err := s.q.GetAllRoutes(ctx)
+func (s *Service) GetUserTickets(ctx context.Context, userID uuid.UUID) ([]MyTicketResponse, error) {
+	rows, err := s.q.GetUserTicketsByID(ctx, userID)
 	if err != nil {
 		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}
-
-	routes := make([]Route, len(rows))
-	for i, row := range rows {
-		routes[i] = mapDBRouteToRoute(row)
-	}
-
-	return routes, nil
-}
-
-func (s *Service) GetRouteTemplate(ctx context.Context, routeID uuid.UUID) (*RouteTemplateResponse, error) {
-
-	routeTemplateRows, err := s.q.GetRouteStopsDetails(ctx, routeID)
-	if err != nil {
-		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
-
-	if len(routeTemplateRows) == 0 {
-		return nil, ErrRouteNotFound
-	}
-
-	weeklyScheduleRows, err := s.q.GetRouteWeeklySchedule(ctx, routeID)
-	if err != nil {
-		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
-
-	response := mapDBRouteTemplateToRouteTemplate(routeTemplateRows, weeklyScheduleRows)
-
-	return response, nil
-}
-
-func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.UUID, error) {
-
-	tx, err := s.dbPool.Begin(ctx)
-	if err != nil {
-		return uuid.Nil, commonerrors.Wrap(ErrTripCreationFailed, err)
-	}
-
-	defer tx.Rollback(ctx)
-
-	qtx := s.q.WithTx(tx)
-
-	arg := transport_db.CreateTripParams{
-		RouteID:                 req.RouteID,
-		DepartureTime:           req.DepartureTime,
-		BookingOpenOffsetHours:  int32(req.BookingOpenOffsetHours),
-		BookingCloseOffsetHours: int32(req.BookingCloseOffsetHours),
-		TotalCapacity:           int32(req.TotalCapacity),
-		AvailableSeats:          int32(req.TotalCapacity),
-		BasePrice:               req.BasePrice,
-		BusType:                 req.BusType,
-		Direction:               req.Direction,
-	}
-
-	tripID, err := qtx.CreateTrip(ctx, arg)
-	if err != nil {
-		return uuid.Nil, commonerrors.Wrap(ErrTripCreationFailed, err)
-	}
-
-	for i, stop := range req.Stops {
-		err := qtx.CreateTripStop(ctx, transport_db.CreateTripStopParams{
-			TripID:        tripID,
-			StopID:        stop.StopID,
-			SequenceOrder: int32(i + 1), // Force 1, 2, 3 sequence based on array order
-		})
-
-		if err != nil {
-			return uuid.Nil, commonerrors.Wrap(ErrTripCreationFailed, err)
-		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return uuid.Nil, commonerrors.Wrap(ErrTripCreationFailed, err)
-	}
-
-	return tripID, nil
-}
-
-func (s *Service) GetWeeklyTrips(ctx context.Context) ([]WeeklyTripResponse, error) {
-
-	rows, err := s.q.GetUpcomingTripsForWeek(ctx)
-
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNoWeekTripsAvailable
-		}
-		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
-
-	return mapDbTripsToResponse(rows), nil
+	return mapDBTicketsToResponse(rows), nil
 }
 
 func GenerateRandomCode() string {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return fmt.Sprintf("%04d", rng.Intn(10000)) // 0000 to 9999
+	return fmt.Sprintf("%04d", rng.Intn(10000))
 }
 
 //func (s *Service) AdminListTrips(ctx context.Context) ([]TripResponse, error) {

@@ -73,6 +73,12 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	// Create system wallets
+	if err := createSystemWallets(); err != nil {
+		fmt.Printf("Failed to create system wallets: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Create services
 	testWalletSvc = wallet.NewService(testDBPool)
 	testTransportSvc = NewService(testDBPool, testWalletSvc)
@@ -127,6 +133,55 @@ func createTestUsers() error {
 		`, u.id, "Test User", u.email, u.phone)
 		if err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func createSystemWallets() error {
+	ctx := context.Background()
+
+	wallets := []struct {
+		name  string
+		wType string
+		email string
+		phone string
+	}{
+		{"GIKI Wallet", "SYS_LIABILITY", "liability@giki.edu.pk", "00000000001"},
+		{"Transport Revenue", "SYS_REVENUE", "revenue@giki.edu.pk", "00000000002"},
+	}
+
+	for _, w := range wallets {
+		// 1. Get or Create User for this wallet
+		var sysUserID uuid.UUID
+		err := testDBPool.QueryRow(ctx, "SELECT id FROM giki_wallet.users WHERE email = $1", w.email).Scan(&sysUserID)
+		if err != nil {
+			// Create
+			sysUserID = uuid.New()
+			_, err = testDBPool.Exec(ctx, `
+				INSERT INTO giki_wallet.users (id, name, email, phone_number, auth_provider, password_hash, password_algo, is_active, is_verified, user_type)
+				VALUES ($1, 'System', $2, $3, 'local', 'hash', 'bcrypt', true, true, 'system')
+			`, sysUserID, w.email, w.phone)
+			if err != nil {
+				return fmt.Errorf("failed to create system user for %s: %w", w.name, err)
+			}
+		}
+
+		// 2. Create Wallet if not exists
+		var exists bool
+		err = testDBPool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM giki_wallet.wallets WHERE name=$1 AND type=$2)", w.name, w.wType).Scan(&exists)
+		if err != nil {
+			return err
+		}
+
+		if !exists {
+			_, err = testDBPool.Exec(ctx, `
+				INSERT INTO giki_wallet.wallets (id, user_id, name, type, status, currency, created_at)
+				VALUES (gen_random_uuid(), $1, $2, $3, 'ACTIVE', 'PKR', NOW())
+			`, sysUserID, w.name, w.wType)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -201,14 +256,14 @@ func createTestTransportData() error {
 	// Create trip with direction
 	testTripID = uuid.New()
 	departureTime := time.Now().Add(24 * time.Hour)
-	bookingOpensAt := time.Now().Add(-1 * time.Hour)
-	bookingClosesAt := time.Now().Add(23 * time.Hour)
+	// bookingOpensAt := time.Now().Add(-1 * time.Hour) // Removed
+	// bookingClosesAt := time.Now().Add(23 * time.Hour) // Removed
 
 	_, err = testDBPool.Exec(ctx, `
-		INSERT INTO giki_transport.trip (id, route_id, driver_id, departure_time, booking_opens_at, booking_closes_at, direction, total_capacity, available_seats, base_price, status, booking_status)
-		VALUES ($1, $2, $3, $4, $5, $6, 'OUTBOUND', 10, 10, 500, 'SCHEDULED', 'OPEN')
+		INSERT INTO giki_transport.trip (id, route_id, driver_id, departure_time, booking_open_offset_hours, booking_close_offset_hours, direction, total_capacity, available_seats, base_price, status, bus_type)
+		VALUES ($1, $2, $3, $4, 24, 1, 'OUTBOUND', 10, 10, 500, 'SCHEDULED', 'LUXURY')
 		ON CONFLICT (id) DO NOTHING
-	`, testTripID, testRouteID, driverID, departureTime, bookingOpensAt, bookingClosesAt)
+	`, testTripID, testRouteID, driverID, departureTime)
 	if err != nil {
 		return err
 	}
@@ -520,7 +575,7 @@ func TestIntegration_CancelTicket_Success(t *testing.T) {
 	ticketID := confirmResp.Tickets[0].TicketID
 
 	// Cancel ticket
-	err := testTransportSvc.CancelTicket(ctx, ticketID, "STUDENT")
+	err := testTransportSvc.CancelTicketWithRole(ctx, ticketID, "STUDENT")
 	if err != nil {
 		t.Fatalf("CancelTicket failed: %v", err)
 	}

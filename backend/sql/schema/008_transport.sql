@@ -143,9 +143,7 @@ CREATE TABLE giki_transport.trip_holds (
         passenger_relation VARCHAR(20),
 
         expires_at TIMESTAMPTZ NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-
-        UNIQUE(trip_id, user_id)
+        created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 

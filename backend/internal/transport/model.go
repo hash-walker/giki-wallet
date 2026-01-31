@@ -1,21 +1,13 @@
 package transport
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/hash-walker/giki-wallet/internal/common"
 	"github.com/hash-walker/giki-wallet/internal/transport/transport_db"
 	"github.com/hash-walker/giki-wallet/internal/types"
-)
-
-const (
-	TripStatusOpen      = "OPEN"
-	TripStatusCancelled = "CANCELLED"
-	TripStatusClosed    = "CLOSED"
-	TripStatusFull      = "FULL"
-	TripStatusLocked    = "LOCKED"
-	TripStatusScheduled = "SCHEDULED"
 )
 
 type Route struct {
@@ -70,36 +62,22 @@ type CreateTripResponse struct {
 }
 
 type TripResponse struct {
-	TripID        uuid.UUID `json:"trip_id"`
-	RouteName     string    `json:"route_name"`
-	DepartureTime time.Time `json:"departure_time"`
-
-	Status string `json:"status"`
-
-	OpensAt        time.Time `json:"opens_at"`
-	AvailableSeats int       `json:"available_seats"`
-	Price          float64   `json:"price"`
-	BusType        string    `json:"bus_type"`
-	Direction      string    `json:"direction"`
-
-	Stops []TripStopItem `json:"stops"`
-}
-
-type WeeklyTripResponse struct {
 	ID        uuid.UUID `json:"id"`
+	RouteID   uuid.UUID `json:"route_id"`
 	RouteName string    `json:"route_name"`
 	Direction string    `json:"direction"`
 	BusType   string    `json:"bus_type"`
 
-	// Timestamps
 	DepartureTime   time.Time `json:"departure_time"`
 	BookingOpensAt  time.Time `json:"booking_opens_at"`
 	BookingClosesAt time.Time `json:"booking_closes_at"`
 
-	// Status & Capacity
-	Status         string `json:"status"` // OPEN, SCHEDULED, CLOSED
+	Status         string `json:"status"`
 	AvailableSeats int32  `json:"available_seats"`
 	TotalCapacity  int32  `json:"total_capacity"`
+	BasePrice      int32  `json:"base_price"`
+
+	Stops []TripStopItem `json:"stops"`
 }
 
 type TripStopItem struct {
@@ -179,22 +157,95 @@ type ActiveHoldResponse struct {
 }
 
 type MyTicketResponse struct {
-	ID                uuid.UUID `json:"id"`
-	TicketCode        string    `json:"ticket_number"`
-	SerialNo          int       `json:"serial_no"`
-	RouteName         string    `json:"route_name"`
-	Direction         string    `json:"direction"`
-	PickupLocation    string    `json:"pickup_location"`
-	DropoffLocation   string    `json:"dropoff_location"`
-	Date              string    `json:"date"`
-	Time              string    `json:"time"`
-	Status            string    `json:"status"`
-	BusType           string    `json:"bus_type"`
-	PassengerName     string    `json:"passenger_name"`
-	PassengerRelation string    `json:"passenger_relation"`
-	IsSelf            bool      `json:"is_self"`
-	Price             float64   `json:"price"`
-	CanCancel         bool      `json:"can_cancel"`
+	TicketID   uuid.UUID `json:"ticket_id"`
+	TicketCode string    `json:"ticket_code"`
+	SerialNo   int32     `json:"serial_no"`
+	Status     string    `json:"status"`
+
+	PassengerName     string `json:"passenger_name"`
+	PassengerRelation string `json:"passenger_relation"`
+	IsSelf            bool   `json:"is_self"`
+
+	RouteName string `json:"route_name"`
+	Direction string `json:"direction"`
+
+	// NEW: The single most important location for the List View
+	RelevantLocation string `json:"relevant_location"`
+
+	// Detailed locations
+	PickupLocation  string `json:"pickup_location"`
+	DropoffLocation string `json:"dropoff_location"`
+
+	DepartureTime time.Time `json:"departure_time"`
+	BusType       string    `json:"bus_type"`
+	Price         int32     `json:"price"`
+	IsCancellable bool      `json:"is_cancellable"`
+}
+
+func mapDBTicketsToResponse(rows []transport_db.GetUserTicketsByIDRow) []MyTicketResponse {
+	tickets := make([]MyTicketResponse, 0, len(rows))
+
+	for _, row := range rows {
+
+		tickets = append(tickets, MyTicketResponse{
+			TicketID:   row.TicketID,
+			TicketCode: row.TicketCode,
+			SerialNo:   row.SerialNo,
+			Status:     row.TicketStatus,
+
+			PassengerName:     row.PassengerName,
+			PassengerRelation: row.PassengerRelation,
+			IsSelf:            row.PassengerRelation == "SELF",
+
+			RouteName: row.RouteName,
+			Direction: row.Direction,
+			
+			RelevantLocation: row.RelevantLocation,
+
+			PickupLocation:  row.PickupLocation,
+			DropoffLocation: row.DropoffLocation,
+
+			DepartureTime: row.DepartureTime,
+			BusType:       row.BusType,
+			Price:         row.BasePrice,
+			IsCancellable: row.IsCancellable,
+		})
+	}
+
+	return tickets
+}
+
+func mapDbTripsToResponse(rows []transport_db.GetWeeklyTripsWithStopsRow) []TripResponse {
+
+	dtos := make([]TripResponse, 0, len(rows))
+
+	for _, row := range rows {
+
+		var stops []TripStopItem
+		if err := json.Unmarshal([]byte(row.StopsJson), &stops); err != nil {
+			stops = []TripStopItem{}
+		}
+
+		dtos = append(dtos, TripResponse{
+			ID:        row.TripID,
+			RouteID:   row.RouteID,
+			RouteName: row.RouteName,
+			Direction: row.Direction,
+			BusType:   row.BusType,
+
+			DepartureTime:   row.DepartureTime,
+			BookingOpensAt:  row.BookingOpensAt,
+			BookingClosesAt: row.BookingClosesAt,
+
+			Status:         common.TextToString(row.Status),
+			AvailableSeats: row.AvailableSeats,
+			TotalCapacity:  row.TotalCapacity,
+			BasePrice:      row.BasePrice,
+
+			Stops: stops,
+		})
+	}
+	return dtos
 }
 
 func mapDBRouteTemplateToRouteTemplate(rows []transport_db.GetRouteStopsDetailsRow, weeklyScheduleRows []transport_db.GikiTransportRouteWeeklySchedule) *RouteTemplateResponse {
@@ -245,128 +296,9 @@ func mapDBRouteToRoute(row transport_db.GetAllRoutesRow) Route {
 }
 
 func GetDayLabel(dayOfWeek int32) string {
-	switch dayOfWeek {
-	case 1:
-		return "Monday"
-	case 2:
-		return "Tuesday"
-	case 3:
-		return "Wednesday"
-	case 4:
-		return "Thursday"
-	case 5:
-		return "Friday"
-	case 6:
-		return "Saturday"
-	case 7:
-		return "Sunday"
-	default:
-		return "Unknown Day"
+	days := []string{"", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}
+	if dayOfWeek >= 1 && dayOfWeek <= 7 {
+		return days[dayOfWeek]
 	}
+	return "Unknown Day"
 }
-
-func mapDbTripsToResponse(rows []transport_db.GetUpcomingTripsForWeekRow) []WeeklyTripResponse {
-	// Pre-allocate slice for performance
-	trips := make([]WeeklyTripResponse, 0, len(rows))
-
-	for _, row := range rows {
-		trips = append(trips, mapSingleTripRow(row))
-	}
-
-	return trips
-}
-
-func mapSingleTripRow(row transport_db.GetUpcomingTripsForWeekRow) WeeklyTripResponse {
-
-	return WeeklyTripResponse{
-		ID:        row.TripID,
-		RouteName: row.RouteName,
-		Direction: row.Direction,
-		BusType:   row.BusType,
-
-		DepartureTime:   row.DepartureTime,
-		BookingOpensAt:  row.BookingOpensAt,
-		BookingClosesAt: row.BookingClosesAt,
-
-		Status:         common.TextToString(row.Status),
-		AvailableSeats: row.AvailableSeats,
-		TotalCapacity:  row.TotalCapacity,
-	}
-}
-
-//func MapDBTicketsToTickets(rows []transport_db.GetUserTicketsByIDRow) []MyTicketResponse {
-//
-//	var tickets []MyTicketResponse
-//
-//	for _, row := range rows {
-//
-//		canCancel := row.Status == "CONFIRMED" && time.Now().Before(row.BookingClosesAt)
-//
-//		tickets = append(tickets, MyTicketResponse{
-//			ID:                row.ID,
-//			TicketCode:        row.TicketCode,
-//			SerialNo:          int(row.SerialNo),
-//			RouteName:         row.Name,
-//			Direction:         row.Direction,
-//			PickupLocation:    row.Address,
-//			DropoffLocation:   row.Address_2,
-//			Date:              row.DepartureTime.Format("2006-01-02"),
-//			Time:              row.DepartureTime.Format("3:04 PM"),
-//			Status:            row.Status,
-//			BusType:           row.BusType, // Hardcoded for now
-//			PassengerName:     row.PassengerName,
-//			PassengerRelation: row.PassengerRelation,
-//			IsSelf:            row.PassengerRelation == "SELF",
-//			Price:             common.NumericToFloat64(row.BasePrice),
-//			CanCancel:         canCancel,
-//		})
-//
-//	}
-//
-//	return tickets
-//}
-
-//func MapDBAdminTripsToTrips(rows []transport_db.AdminGetAllTripsRow) []TripResponse {
-//
-//	tripMap := make(map[uuid.UUID]*TripResponse)
-//	var orderedIDs []uuid.UUID
-//
-//	for _, row := range rows {
-//		if _, exists := tripMap[row.TripID]; !exists {
-//
-//			now := time.Now()
-//
-//			physicalStatus := common.TextToString(row.Status)
-//
-//			trip := &TripResponse{
-//				TripID:         row.TripID,
-//				RouteName:      row.RouteName,
-//				DepartureTime:  row.DepartureTime,
-//				Status:         row.Status,
-//				OpensAt:        row.BookingOpenOffsetHours,
-//				AvailableSeats: int(row.AvailableSeats),
-//				Price:          common.NumericToFloat64(row.BasePrice),
-//				BusType:        row.BusType,
-//				Direction:      row.Direction,
-//				Stops:          make([]TripStopItem, 0),
-//			}
-//
-//			tripMap[row.TripID] = trip
-//			orderedIDs = append(orderedIDs, row.TripID)
-//		}
-//
-//		tripMap[row.TripID].Stops = append(tripMap[row.TripID].Stops, TripStopItem{
-//			StopID:   row.StopID,
-//			StopName: row.StopName,
-//			Sequence: row.SequenceOrder,
-//		})
-//	}
-//
-//	// Convert Map back to Slice using the ordered ID list
-//	result := make([]TripResponse, 0, len(orderedIDs))
-//	for _, id := range orderedIDs {
-//		result = append(result, *tripMap[id])
-//	}
-//
-//	return result
-//}

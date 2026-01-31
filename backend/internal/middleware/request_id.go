@@ -13,7 +13,6 @@ const requestIDKey contextKey = "request_id"
 
 func RequestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Check if request ID already exists in header (from load balancer, etc.)
 		requestID := r.Header.Get("X-Request-ID")
 
 		if requestID == "" {
@@ -28,7 +27,6 @@ func RequestID(next http.Handler) http.Handler {
 	})
 }
 
-// GetRequestID extracts the request ID from context
 func GetRequestID(ctx context.Context) string {
 	if requestID, ok := ctx.Value(requestIDKey).(string); ok {
 		return requestID

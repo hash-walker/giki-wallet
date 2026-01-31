@@ -112,49 +112,109 @@ ON CONFLICT DO NOTHING;
 
 select * from giki_transport.quota_rules;
 
--- 6. POPULATE SAMPLE TRIPS
--- ...
--- Outbound: GIKI to Islamabad (Scheduled for tomorrow 9 AM)
-INSERT INTO giki_transport.trip (route_id, driver_id, departure_time, booking_opens_at, booking_closes_at, direction, total_capacity, available_seats, base_price, status, booking_status)
+INSERT INTO giki_transport.trip (
+    route_id,
+    driver_id,
+    departure_time,
+
+    booking_open_offset_hours,   -- Hours BEFORE departure to open
+    booking_close_offset_hours,  -- Hours BEFORE departure to close
+
+    total_capacity,
+    available_seats,
+    base_price,
+    direction,
+    bus_type,
+
+    status -- We let the DB calculate this, but for seed data we can force it or let the default logic run.
+    -- Since we are bypassing the 'CreateTrip' function here, we must manually set valid statuses
+    -- OR trust the timestamps match the status we write.
+)
 VALUES
-(
-    (SELECT id FROM giki_transport.routes WHERE name = 'GIKI to Islamabad'),
-    (SELECT id FROM giki_transport.driver WHERE name = 'Imran Khan'),
-    CURRENT_DATE + 1 + TIME '09:00:00',
-    CURRENT_DATE - 1,
-    CURRENT_DATE + 1 + TIME '08:00:00',
-    'OUTBOUND', 30, 30, 800, 'SCHEDULED', 'OPEN'
-);
+    -- ==============================================================================
+    -- SCENARIO 1: THE "LIVE" TRIP (Status: OPEN)
+    -- Logic: Departs in 2 Days. Opens 5 Days before.
+    -- Result: We are in the middle of the window.
+    -- ==============================================================================
+    (
+        (SELECT id FROM giki_transport.routes WHERE name = 'GIKI to Islamabad' LIMIT 1),
+        (SELECT id FROM giki_transport.driver LIMIT 1),
+        NOW() + INTERVAL '2 days',  -- Departs day after tomorrow
+        120,                        -- Opens 5 days before (120h)
+        2,                          -- Closes 2 hours before
+        50, 48,                     -- 2 seats already taken
+        800.00,
+        'OUTBOUND',
+        'EMPLOYEE',
+        'OPEN'
+    ),
 
--- Inbound: Islamabad to GIKI (Scheduled for tomorrow 5 PM)
-INSERT INTO giki_transport.trip (route_id, driver_id, departure_time, booking_opens_at, booking_closes_at, direction, total_capacity, available_seats, base_price, status, booking_status)
-VALUES
-(
-    (SELECT id FROM giki_transport.routes WHERE name = 'Islamabad to GIKI'),
-    (SELECT id FROM giki_transport.driver WHERE name = 'Imran Khan'),
-    CURRENT_DATE + 1 + TIME '17:00:00',
-    CURRENT_DATE - 1,
-    CURRENT_DATE + 1 + TIME '16:00:00',
-    'INBOUND', 30, 30, 800, 'SCHEDULED', 'OPEN'
-);
+    -- ==============================================================================
+    -- SCENARIO 2: THE "COMING SOON" TRIP (Status: SCHEDULED)
+    -- Logic: Departs in 7 Days. Opens 2 Days before.
+    -- Result: It is too early to book.
+    -- ==============================================================================
+    (
+        (SELECT id FROM giki_transport.routes WHERE name = 'GIKI to Peshawar' LIMIT 1),
+        (SELECT id FROM giki_transport.driver OFFSET 1 LIMIT 1),
+        NOW() + INTERVAL '7 days',  -- Departs next week
+        48,                         -- Opens only 48h before
+        2,
+        30, 30,
+        700.00,
+        'OUTBOUND',
+        'STUDENT',
+        'SCHEDULED'
+    ),
 
--- Trip Stops for Sample Trips
--- Trip 1 (Outbound)
-INSERT INTO giki_transport.trip_stops (trip_id, stop_id, sequence_order)
-SELECT 
-    (SELECT id FROM giki_transport.trip WHERE direction = 'OUTBOUND' LIMIT 1),
-    rms.stop_id,
-    rms.default_sequence_order
-FROM giki_transport.route_master_stops rms
-JOIN giki_transport.routes r ON rms.route_id = r.id
-WHERE r.name = 'GIKI to Islamabad';
+    -- ==============================================================================
+    -- SCENARIO 3: THE "MISSED IT" TRIP (Status: CLOSED)
+    -- Logic: Departs in 1 Hour. Closed 2 Hours before.
+    -- Result: The booking window closed 1 hour ago.
+    -- ==============================================================================
+    (
+        (SELECT id FROM giki_transport.routes WHERE name = 'GIKI to Abbottabad' LIMIT 1),
+        (SELECT id FROM giki_transport.driver LIMIT 1),
+        NOW() + INTERVAL '1 hour',  -- Bus is about to leave
+        120,
+        2,                          -- Closed 2 hours before departure (so closed 1 hour ago)
+        30, 5,
+        600.00,
+        'OUTBOUND',
+        'EMPLOYEE',
+        'CLOSED'
+    ),
 
--- Trip 2 (Inbound)
-INSERT INTO giki_transport.trip_stops (trip_id, stop_id, sequence_order)
-SELECT 
-    (SELECT id FROM giki_transport.trip WHERE direction = 'INBOUND' LIMIT 1),
-    rms.stop_id,
-    rms.default_sequence_order
-FROM giki_transport.route_master_stops rms
-JOIN giki_transport.routes r ON rms.route_id = r.id
-WHERE r.name = 'Islamabad to GIKI';
+    -- ==============================================================================
+    -- SCENARIO 4: THE "SOLD OUT" TRIP (Status: OPEN but 0 seats)
+    -- Logic: Window is Open, but seats are 0.
+    -- Frontend should show "Sold Out" or "Waitlist".
+    -- ==============================================================================
+    (
+        (SELECT id FROM giki_transport.routes WHERE name = 'GIKI to Islamabad' LIMIT 1),
+        (SELECT id FROM giki_transport.driver LIMIT 1),
+        NOW() + INTERVAL '3 days',
+        120,
+        2,
+        50, 0,                      -- 0 SEATS LEFT!
+        800.00,
+        'OUTBOUND',
+        'EMPLOYEE',
+        'OPEN' -- Technically status is open, but logic will flag it as full
+    ),
+
+    -- ==============================================================================
+    -- SCENARIO 5: THE "RETURN" TRIP (Inbound)
+    -- ==============================================================================
+    (
+        (SELECT id FROM giki_transport.routes WHERE name = 'GIKI to Islamabad' LIMIT 1),
+        (SELECT id FROM giki_transport.driver LIMIT 1),
+        NOW() + INTERVAL '4 days' + INTERVAL '5 hours', -- Sunday Evening
+        120,
+        2,
+        50, 50,
+        850.00,
+        'INBOUND',
+        'STUDENT',
+        'OPEN'
+    );
