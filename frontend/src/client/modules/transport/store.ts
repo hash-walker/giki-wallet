@@ -40,6 +40,7 @@ interface TransportState {
 
     // Booking Flow
     direction: 'Outbound' | 'Inbound';
+    isRoundTrip: boolean; // Feature 2: Round Trip Toggle
     outboundSelection: BookingSelection | null;
     returnSelection: BookingSelection | null;
     passengers: Record<string, Passenger>;
@@ -48,6 +49,7 @@ interface TransportState {
     fetchData: (showLoading?: boolean) => Promise<void>;
     releaseAllHolds: () => Promise<void>;
     setDirection: (d: 'Outbound' | 'Inbound') => void;
+    setRoundTrip: (enabled: boolean) => void;
     updatePassenger: (holdId: string, passenger: Passenger) => void;
     resetBookingFlow: () => void;
     addSelection: (selection: BookingSelection) => Promise<void>;
@@ -70,6 +72,7 @@ export const useTransportStore = create<TransportState>((set, get) => ({
     initialized: false,
     error: null,
     direction: 'Outbound', // Default to Outbound (from GIKI)
+    isRoundTrip: false,
     outboundSelection: null,
     returnSelection: null,
     passengers: {},
@@ -78,12 +81,41 @@ export const useTransportStore = create<TransportState>((set, get) => ({
     // ACTIONS
     // ========================================================================
 
-    setDirection: (direction) => {
+    setRoundTrip: (enabled) => {
         const { activeHolds } = get();
         if (activeHolds.length > 0) {
+            toast.error('Please release active reservations before changing mode');
+            return;
+        }
+        set({ isRoundTrip: enabled });
+    },
+
+    setDirection: (direction) => {
+        const { activeHolds, isRoundTrip } = get();
+
+        // If Round Trip is enabled, we allow direction switching IF we are in the middle of the flow.
+        // However, if manual switch is attempted while holds exist (and it's not the wizard auto-switch), we might want to block.
+        // For simplicity: If holds exist, only allow switch if it aligns with Round Trip logic (e.g. going to next leg).
+        // But the wizard auto-switch will use a direct state update perhaps? No, better to use action.
+
+        // Standard check:
+        if (!isRoundTrip && activeHolds.length > 0) {
             toast.error('Please release active holds before changing direction');
             return;
         }
+
+        // Round Trip check: If we have holds, we can only switch if we haven't completed both legs? 
+        // Or cleaner: `addSelection` handles the switching. Manual switching might be restricted.
+        // Let's keep existing check for manual but relax it if isRoundTrip? 
+        // Actually, if I have Outbound hold, and I click Inbound tab, it should be fine in Round Trip mode.
+        // But if I have Inbound hold (2nd leg) and click Outbound?
+
+        // Let's rely on the UI to guide them. If manual click:
+        if (activeHolds.length > 0 && !isRoundTrip) {
+            toast.error('Please release active holds before changing direction');
+            return;
+        }
+
         set({ direction });
     },
 
@@ -96,6 +128,7 @@ export const useTransportStore = create<TransportState>((set, get) => ({
             outboundSelection: null,
             returnSelection: null,
             passengers: {},
+            // Reset direction to Outbound? Or keep current? Keep current usually better UX.
         });
     },
 
@@ -221,25 +254,41 @@ export const useTransportStore = create<TransportState>((set, get) => ({
                 };
             });
 
-            // Default first seat to SELF if user has no other passengers set (simplistic heuristic)
+            // Default first seat to SELF if user has no other passengers set for THIS trip
             if (resp.holds.length > 0) {
-                newPassengers[resp.holds[0].hold_id] = {
-                    name: user?.name || '',
-                    relation: 'SELF'
-                };
+                const currentData = get();
+                // Check if SELF exists in any holds for THIS trip
+                const currentTripHolds = currentData.activeHolds.filter(h => h.trip_id === selection.tripId);
+                const existingSelfOnTrip = currentTripHolds.some(h =>
+                    currentData.passengers[h.id]?.relation === 'SELF'
+                );
+
+                if (!existingSelfOnTrip) {
+                    newPassengers[resp.holds[0].hold_id] = {
+                        name: user?.name || '',
+                        relation: 'SELF'
+                    };
+                }
             }
 
             // direction is already declared above: const direction = get().direction;
+            const { isRoundTrip } = get();
 
             if (direction === 'Outbound') {
                 set(state => ({
                     outboundSelection: selection,
-                    passengers: { ...state.passengers, ...newPassengers }
+                    passengers: { ...state.passengers, ...newPassengers },
+                    // Wizard Flow: If Round Trip, auto switch to Inbound
+                    direction: isRoundTrip ? 'Inbound' : 'Outbound'
                 }));
+                if (isRoundTrip) {
+                    toast.success('Outbound seat held! Now select Return trip.');
+                }
             } else {
                 set(state => ({
                     returnSelection: selection,
                     passengers: { ...state.passengers, ...newPassengers }
+                    // If Inbound, stay here or maybe just done?
                 }));
             }
         } catch (e) {

@@ -30,6 +30,8 @@ export const TransportPage = () => {
         addSelection,
         outboundSelection,
         returnSelection,
+        isRoundTrip,
+        setRoundTrip,
     } = useTransportStore();
 
     const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -59,11 +61,36 @@ export const TransportPage = () => {
             await addSelection(selection);
             // console.log('✅ addSelection completed');
 
-            if (isStudent) {
-                setShowConfirmModal(true);
+            // Logic for navigation/modal
+            // Note: addSelection in store already handles 'isRoundTrip' direction switching
+
+            // We need to check the updated state (or infer it). 
+            // Since `addSelection` is async and updates store, `outboundSelection` / `returnSelection` 
+            // from the hook might not be updated in this render cycle immediately if we rely on closure.
+            // Using `useTransportStore.getState()` is safer for immediate check.
+            const state = useTransportStore.getState();
+
+            if (state.isRoundTrip) {
+                // If we have both selections, proceed to confirmation
+                if (state.outboundSelection && state.returnSelection) {
+                    if (isStudent) {
+                        setShowConfirmModal(true);
+                    } else {
+                        navigate('/transport/passengers');
+                    }
+                } else {
+                    // Waiting for second leg. Store already switched direction toast.
+                    // Do nothing here.
+                }
             } else {
-                navigate('/transport/passengers');
+                // Single trip flow
+                if (isStudent) {
+                    setShowConfirmModal(true);
+                } else {
+                    navigate('/transport/passengers');
+                }
             }
+
         } catch (error) {
             console.error('❌ handleBook error:', error);
         }
@@ -119,11 +146,11 @@ export const TransportPage = () => {
 
     // Filter holds by direction (using trip direction from activeHolds)
     const outboundHolds = activeHolds
-        .filter(h => h.direction === 'Outbound')
+        .filter(h => h.direction?.toUpperCase() === 'OUTBOUND')
         .map(h => ({ hold_id: h.id, expires_at: h.expires_at }));
 
     const returnHolds = activeHolds
-        .filter(h => h.direction === 'Inbound')
+        .filter(h => h.direction?.toUpperCase() === 'INBOUND')
         .map(h => ({ hold_id: h.id, expires_at: h.expires_at }));
 
     return (
@@ -140,6 +167,8 @@ export const TransportPage = () => {
                 <TransportBookingModeSelector
                     direction={direction}
                     onDirectionChange={setDirection}
+                    isRoundTrip={isRoundTrip}
+                    onRoundTripChange={setRoundTrip}
                 />
 
                 <div className="space-y-4">

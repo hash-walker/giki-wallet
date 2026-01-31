@@ -43,19 +43,28 @@ const TicketSelect = ({
     setTicketCount: (n: number) => void;
     isStudent: boolean;
     maxTickets: number;
-}) => (
-    <select
-        className="border border-gray-300 rounded-lg px-2 py-2.5 bg-white focus:ring-2 focus:ring-primary text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
-        value={ticketCount}
-        onChange={(e) => setTicketCount(Number(e.target.value))}
-        disabled={isStudent || maxTickets <= 0}
-        title={isStudent ? "Students can only book 1 ticket" : undefined}
-    >
-        {[1, 2, 3].map(n => (
-            <option key={n} value={n} disabled={n > maxTickets}>{n}</option>
-        ))}
-    </select>
-);
+}) => {
+    // Feature 1: Dynamic Quota Enforcement
+    // Student: Max 1 seat. Employee: Max 3 seats.
+    const effectiveMax = isStudent ? 1 : maxTickets;
+
+    // Ensure we don't show options > effectiveMax
+    const options = [1, 2, 3].filter(n => n <= effectiveMax);
+
+    return (
+        <select
+            className="border border-gray-300 rounded-lg px-2 py-2.5 bg-white focus:ring-2 focus:ring-primary text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+            value={ticketCount}
+            onChange={(e) => setTicketCount(Number(e.target.value))}
+            disabled={isStudent || maxTickets <= 0 || options.length <= 1} // Disable if only 1 option (locked) or sold out
+            title={isStudent ? "Students can only book 1 ticket" : undefined}
+        >
+            {options.map(n => (
+                <option key={n} value={n}>{n}</option>
+            ))}
+        </select>
+    );
+};
 
 interface TransportBookingCardProps {
     direction: 'Outbound' | 'Inbound';
@@ -72,7 +81,7 @@ export const TransportBookingCard = ({
 }: TransportBookingCardProps) => {
     const navigate = useNavigate();
     const { user } = useAuthStore();
-    const { activeHolds, releaseAllHolds } = useTransportStore();
+    const { activeHolds, releaseAllHolds, isRoundTrip } = useTransportStore();
 
     // Selection state
     const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
@@ -99,7 +108,15 @@ export const TransportBookingCard = ({
         return filtered;
     }, [allTrips, direction]);
 
-    // Auto-set ticket count for students
+    // Reset selection when direction changes
+    useEffect(() => {
+        setSelectedRouteId(null);
+        setSelectedTripId(null);
+        setSelectedStopId(null);
+        setTicketCount(1);
+    }, [direction]);
+
+    // Role-based Auto-set logic can go here if needed
     useEffect(() => {
         if (isStudent) setTicketCount(1);
     }, [isStudent]);
@@ -163,9 +180,31 @@ export const TransportBookingCard = ({
     }, [filteredTrips, selectedTripId]);
 
     // Handlers
+    // Helper to determine if we should auto-release
+    const shouldReleaseOnUpdate = () => {
+        // If no holds, nothing to release
+        if (activeHolds.length === 0) return false;
+
+        // If strictly single trip mode (not round trip), ANY hold is a conflict when changing selection
+        if (!isRoundTrip) return true;
+
+        // If Round Trip mode:
+        // Only release if we have a hold for THIS direction.
+        // If we have a hold for the OTHER direction, we should preserve it.
+        const hasHoldForThisDirection = activeHolds.some(h =>
+            h.direction?.toUpperCase() === direction.toUpperCase()
+        );
+
+        return hasHoldForThisDirection;
+    };
+
     const handleRouteChange = (routeId: string | null) => {
-        if (activeHolds.length > 0 && selectedRouteId !== routeId) {
-            releaseAllHolds();
+        if (shouldReleaseOnUpdate() && selectedRouteId !== routeId) {
+            releaseAllHolds(); // NOTE: limitations of API mean we wipe all. 
+            // Ideally we'd only release THIS direction, but we don't have that action yet. 
+            // User will have to re-book leg 1 if they change leg 2 route while holding leg 2. 
+            // But crucially, if they hold leg 1 (Outbound) and are picking leg 2 (Inbound), 
+            // hasHoldForThisDirection (Inbound) is false, so we won't release!
         }
         setSelectedRouteId(routeId);
         setSelectedTripId(null);
@@ -174,7 +213,7 @@ export const TransportBookingCard = ({
     };
 
     const handleTimeChange = (tripId: string | null) => {
-        if (activeHolds.length > 0 && selectedTripId !== tripId) {
+        if (shouldReleaseOnUpdate() && selectedTripId !== tripId) {
             releaseAllHolds();
         }
         setSelectedTripId(tripId);
@@ -183,7 +222,7 @@ export const TransportBookingCard = ({
     };
 
     const handleStopChange = (stopId: string | null) => {
-        if (activeHolds.length > 0 && selectedStopId !== stopId) {
+        if (shouldReleaseOnUpdate() && selectedStopId !== stopId) {
             releaseAllHolds();
         }
         setSelectedStopId(stopId);
