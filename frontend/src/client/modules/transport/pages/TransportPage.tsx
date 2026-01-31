@@ -1,52 +1,41 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useBlocker } from 'react-router-dom';
 import { useAuthStore } from '@/shared/stores/authStore';
 import { useTransportStore } from '../store';
-import { BookingConfirmationModal } from '../components/BookingConfirmationModal';
+import { useHoldTimer } from '../hooks';
 import { TransportHeader } from '../components/TransportHeader';
 import { TransportBookingModeSelector } from '../components/TransportBookingModeSelector';
 import { PendingReservationBanner } from '../components/PendingReservationBanner';
 import { AbandonBookingModal } from '../components/AbandonBookingModal';
-import { formatDateTime, getStopById } from '../utils';
 import { TransportBookingCard } from '../components/TransportBookingCard';
+import { BookingConfirmationModal, TripSummary } from '../components/BookingConfirmationModal';
+import { formatDate, formatTime } from '../utils';
+import type { BookingSelection } from '../validators';
 
 export const TransportPage = () => {
     const navigate = useNavigate();
     const { user } = useAuthStore();
     const {
-        // Data
         allTrips,
         activeHolds,
+        passengers,
+        updatePassenger,
+        confirmBooking,
         loading: tripsLoading,
         initialized,
         fetchData,
         releaseAllHolds,
-
-        // Flow State
         direction,
-        roundTrip,
-        stage,
+        setDirection,
+        addSelection,
         outboundSelection,
         returnSelection,
-        outboundHolds,
-        returnHolds,
-        passengers,
-        confirmOpen,
-        timeLeft,
-        isWarningModalOpen,
-
-        // Actions
-        setDirection,
-        setRoundTrip,
-        setConfirmOpen,
-        setWarningModalOpen,
-        updatePassenger,
-        reserveOutbound,
-        reserveReturn,
-        confirmCurrentBooking
     } = useTransportStore();
 
-    // Blocker logic
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [confirming, setConfirming] = useState(false);
+    const timeLeft = useHoldTimer(activeHolds);
+
     const blocker = useBlocker(
         ({ currentLocation, nextLocation }) =>
             activeHolds.length > 0 && currentLocation.pathname !== nextLocation.pathname
@@ -56,39 +45,40 @@ export const TransportPage = () => {
         void fetchData(true);
     }, [fetchData]);
 
-    const outboundSummary = useMemo(() => {
-        if (!outboundSelection) return null;
-        const trip = allTrips.find(t => t.trip_id === outboundSelection.tripId);
-        if (!trip) return null;
+    // console.log('👤 User info:', { user, user_type: user?.user_type });
 
-        const pickup = getStopById(trip.stops, outboundSelection.pickupId);
-        const drop = getStopById(trip.stops, outboundSelection.dropoffId);
-        return {
-            route: trip.route_name,
-            when: formatDateTime(trip.departure_time),
-            pickup: pickup?.stop_name || '—',
-            dropoff: drop?.stop_name || '—',
-            seats: outboundSelection.ticketCount,
-            priceEach: trip.price,
-        };
-    }, [outboundSelection, allTrips]);
+    const isStudent = user?.user_type?.toLowerCase() === 'student';
+    // const isEmployee = user?.user_type?.toLowerCase() === 'employee';
 
-    const returnSummary = useMemo(() => {
-        if (!returnSelection) return null;
-        const trip = allTrips.find(t => t.trip_id === returnSelection.tripId);
-        if (!trip) return null;
+    const handleBook = async (selection: BookingSelection) => {
+        // console.log('🎯 Book clicked', { userType: user?.user_type, direction });
 
-        const pickup = getStopById(trip.stops, returnSelection.pickupId);
-        const drop = getStopById(trip.stops, returnSelection.dropoffId);
-        return {
-            route: trip.route_name,
-            when: formatDateTime(trip.departure_time),
-            pickup: pickup?.stop_name || '—',
-            dropoff: drop?.stop_name || '—',
-            seats: returnSelection.ticketCount,
-            priceEach: trip.price,
-        };
-    }, [returnSelection, allTrips]);
+        try {
+            await addSelection(selection);
+            // console.log('✅ addSelection completed');
+            setShowConfirmModal(true);
+        } catch (error) {
+            console.error('❌ handleBook error:', error);
+        }
+    };
+
+    const handleConfirmBooking = async () => {
+        setConfirming(true);
+        try {
+            const confirmations = activeHolds.map(h => ({
+                holdId: h.id,
+                passengerName: passengers[h.id]?.name || user?.name || '',
+                passengerRelation: passengers[h.id]?.relation || 'SELF'
+            }));
+            await confirmBooking(confirmations);
+            setShowConfirmModal(false);
+            navigate('/transport/tickets');
+        } catch (error) {
+            console.error('Failed to confirm booking:', error);
+        } finally {
+            setConfirming(false);
+        }
+    };
 
     if (!initialized) {
         return (
@@ -97,6 +87,37 @@ export const TransportPage = () => {
             </div>
         );
     }
+
+    // Prepare data for BookingConfirmationModal
+    const getTripSummary = (selection: BookingSelection | null): TripSummary | null => {
+        if (!selection) return null;
+        const trip = allTrips.find(t => t.id === selection.tripId);
+        if (!trip) return null;
+
+        const pickup = trip.stops.find(s => s.stop_id === selection.pickupId)?.stop_name || 'Unknown';
+        const dropoff = trip.stops.find(s => s.stop_id === selection.dropoffId)?.stop_name || 'Unknown';
+
+        return {
+            route: trip.route_name,
+            when: `${formatDate(trip.departure_time)} • ${formatTime(trip.departure_time)}`,
+            pickup,
+            dropoff,
+            seats: selection.ticketCount,
+            priceEach: trip.base_price,
+        };
+    };
+
+    const outboundSummary = getTripSummary(outboundSelection);
+    const returnSummary = getTripSummary(returnSelection);
+
+    // Filter holds by direction (using trip direction from activeHolds)
+    const outboundHolds = activeHolds
+        .filter(h => h.direction === 'Outbound')
+        .map(h => ({ hold_id: h.id, expires_at: h.expires_at }));
+
+    const returnHolds = activeHolds
+        .filter(h => h.direction === 'Inbound')
+        .map(h => ({ hold_id: h.id, expires_at: h.expires_at }));
 
     return (
         <div className="space-y-6">
@@ -110,89 +131,50 @@ export const TransportPage = () => {
 
             <div className="grid gap-6">
                 <TransportBookingModeSelector
-                    roundTrip={roundTrip}
-                    onToggle={setRoundTrip}
                     direction={direction}
                     onDirectionChange={setDirection}
                 />
 
-                <div className="mt-2">
-                    {stage === 'select_outbound' ? (
-                        <div className="space-y-4">
-                            <h2 className="text-xl font-bold text-gray-900 px-2">Select Outbound Trip</h2>
-                            <TransportBookingCard
-                                direction={direction}
-                                allTrips={allTrips}
-                                onBook={async (s) => {
-                                    await reserveOutbound(s, user?.name);
-                                    if (!roundTrip && user?.user_type === 'employee') {
-                                        navigate('/transport/confirm');
-                                    }
-                                }}
-                                loading={tripsLoading}
-                            />
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between px-2">
-                                <h2 className="text-xl font-bold text-gray-900">Select Return Trip</h2>
-                                <button
-                                    onClick={() => releaseAllHolds()}
-                                    className="text-sm text-primary font-medium hover:underline"
-                                >
-                                    Cancel & Restart
-                                </button>
-                            </div>
-                            <TransportBookingCard
-                                direction={direction === 'from-giki' ? 'to-giki' : 'from-giki'}
-                                allTrips={allTrips}
-                                onBook={async (s) => {
-                                    await reserveReturn(s, user?.name);
-                                    if (user?.user_type === 'employee') {
-                                        navigate('/transport/confirm');
-                                    }
-                                }}
-                                loading={tripsLoading}
-                            />
-                        </div>
-                    )}
+                <div className="space-y-4">
+                    <h2 className="text-xl font-bold text-gray-900 px-2">
+                        {direction === 'Outbound' ? 'Select Outbound Trip' : 'Select Inbound Trip'}
+                    </h2>
+                    <TransportBookingCard
+                        direction={direction}
+                        allTrips={allTrips}
+                        onBook={handleBook}
+                        loading={tripsLoading}
+                    />
                 </div>
-
-                <BookingConfirmationModal
-                    isOpen={confirmOpen && user?.user_type === 'student'}
-                    onClose={() => {
-                        setConfirmOpen(false);
-                        releaseAllHolds();
-                    }}
-                    confirming={tripsLoading}
-                    onConfirm={confirmCurrentBooking}
-                    outboundSummary={outboundSummary}
-                    returnSummary={returnSummary}
-                    outboundHolds={outboundHolds}
-                    returnHolds={returnHolds}
-                    passengers={passengers}
-                    onUpdatePassenger={updatePassenger}
-                    isStudent={user?.user_type === 'student'}
-                />
-
-                <AbandonBookingModal
-                    isOpen={blocker.state === 'blocked' || isWarningModalOpen}
-                    onClose={() => {
-                        if (blocker.state === 'blocked') blocker.reset?.();
-                        setWarningModalOpen(false);
-                    }}
-                    timeLeft={timeLeft}
-                    onAbandon={async () => {
-                        await releaseAllHolds();
-                        if (blocker.state === 'blocked') blocker.proceed?.();
-                        setWarningModalOpen(false);
-                    }}
-                    onStay={() => {
-                        if (blocker.state === 'blocked') blocker.reset?.();
-                        setWarningModalOpen(false);
-                    }}
-                />
             </div>
+
+            <BookingConfirmationModal
+                isOpen={showConfirmModal}
+                onClose={() => setShowConfirmModal(false)}
+                confirming={confirming}
+                onConfirm={handleConfirmBooking}
+                outboundSummary={outboundSummary}
+                returnSummary={returnSummary}
+                outboundHolds={outboundHolds}
+                returnHolds={returnHolds}
+                passengers={passengers}
+                onUpdatePassenger={(holdId, data) => updatePassenger(holdId, data)}
+                isStudent={isStudent}
+            />
+
+            {blocker.state === 'blocked' && (
+                <AbandonBookingModal
+                    isOpen={true}
+                    timeLeft={timeLeft}
+                    onClose={() => blocker.reset?.()}
+                    onAbandon={() => {
+                        releaseAllHolds().then(() => blocker.proceed?.());
+                    }}
+                    onStay={() => blocker.reset?.()}
+                />
+            )}
         </div>
     );
 };
+
+export default TransportPage;

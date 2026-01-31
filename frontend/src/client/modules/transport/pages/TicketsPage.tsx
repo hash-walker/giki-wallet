@@ -1,69 +1,87 @@
 import { useEffect } from 'react';
 import { useTransportStore } from '../store';
-// import { PageHeader } from '@/shared/components/PageHeader';
 import { formatDateTime } from '../utils';
-
-// Reuse TicketCard style or create simple list for now
-// Since I deleted Booking module, I lost TicketCard.tsx 
-// I will create a simple placeholder UI or inline card.
+import { TicketCard } from '../components/TicketCard';
+import { Loader2 } from 'lucide-react';
 
 export const TicketsPage = () => {
-    // Ideally we should have a `myTickets` in store.
-    // For now, I'll just show a placeholder or use activeHolds as "My Tickets" if that was the intent?
-    // But "Tickets" usually means confirmed bookings.
-    // The previous implementation used a mock endpoint.
-    // I will display a message that this feature is coming soon or use active reservations.
-
-    // Actually, let's look at `transport/api.ts` -> `confirmBatch` returns tickets.
-    // But we don't store them persistently in client store across reloads unless we fetch them.
-    // Backend `payment/service_test.go` implies transaction history.
-
-    const { activeHolds, releaseAllHolds, initialized, fetchData } = useTransportStore();
+    const {
+        activeHolds,
+        releaseAllHolds,
+        fetchUserTickets,
+        myTickets,
+        loading
+    } = useTransportStore();
 
     useEffect(() => {
-        void fetchData(true);
-    }, [fetchData]);
+        // Fetch tickets on mount
+        void fetchUserTickets();
+    }, [fetchUserTickets]);
+
+    // Separate confirmed and cancelled tickets, or just show all sorted by date
+    const sortedTickets = [...myTickets].sort((a, b) =>
+        new Date(b.departure_time).getTime() - new Date(a.departure_time).getTime()
+    );
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-8 max-w-5xl mx-auto pb-20 px-4 md:px-0">
             {/* Header */}
-            <div className="flex flex-col gap-2">
-                <h1 className="text-2xl font-bold tracking-tight text-gray-900">My Tickets</h1>
-                <p className="text-sm text-gray-500">View your active reservations and booked tickets.</p>
+            <div className="flex flex-col gap-2 mb-8">
+                <h1 className="text-3xl font-black tracking-tight text-slate-900 uppercase">My Tickets</h1>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Manage active reservations & history</p>
             </div>
 
             {/* Active Holds Section */}
-            <div>
-                <h2 className="text-lg font-bold text-gray-900 mb-4">Active Reservations (Not Confirmed)</h2>
-                {activeHolds.length === 0 ? (
-                    <p className="text-gray-500">No active reservations.</p>
-                ) : (
-                    <div className="space-y-4">
+            {activeHolds.length > 0 && (
+                <div className="space-y-4">
+                    <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                        Active Reservations
+                    </h2>
+                    <div className="grid gap-4">
                         {activeHolds.map(hold => (
-                            <div key={hold.id} className="bg-white p-4 rounded-xl border border-yellow-200 bg-yellow-50">
-                                <div className="flex justify-between">
-                                    <div>
-                                        <p className="font-bold text-yellow-900">{hold.route_name}</p>
-                                        <p className="text-sm text-yellow-800">Expires: {formatDateTime(hold.expires_at)}</p>
-                                        <p className="text-xs text-yellow-700 uppercase mt-1">{hold.direction}</p>
+                            <div key={hold.id} className="bg-orange-50 p-5 rounded-xl border border-orange-100 flex items-center justify-between">
+                                <div>
+                                    <p className="font-bold text-orange-900 text-lg">{hold.route_name}</p>
+                                    <p className="text-sm text-orange-800/80 mt-1">
+                                        Expires at {formatDateTime(hold.expires_at)}
+                                    </p>
+                                    <div className="flex gap-2 mt-2">
+                                        <span className="px-2 py-0.5 bg-white/50 rounded text-xs text-orange-800 font-medium">
+                                            {hold.direction}
+                                        </span>
                                     </div>
-                                    <button
-                                        onClick={() => releaseAllHolds()} // Simplifying to release all for now
-                                        className="text-sm font-semibold text-red-600 hover:text-red-700"
-                                    >
-                                        Cancel
-                                    </button>
                                 </div>
+                                <button
+                                    onClick={() => releaseAllHolds()}
+                                    className="px-4 py-2 bg-white text-orange-700 text-sm font-semibold rounded-lg shadow-sm hover:bg-orange-100 border border-orange-200 transition"
+                                >
+                                    Release
+                                </button>
                             </div>
                         ))}
                     </div>
-                )}
-            </div>
+                </div>
+            )}
 
             {/* Confirmed Tickets Section */}
-            <div className="pt-8 border-t border-gray-100">
-                <h2 className="text-lg font-bold text-gray-900 mb-4">Confirmed Tickets</h2>
-                <p className="text-gray-500 italic">Ticket history feature is currently being updated to real-time data.</p>
+            <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-bold text-gray-900">Booking History</h2>
+                    {loading && <Loader2 className="animate-spin text-gray-400" size={16} />}
+                </div>
+
+                {sortedTickets.length === 0 ? (
+                    <div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                        <p className="text-gray-500">No confirmed tickets found.</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {sortedTickets.map(ticket => (
+                            <TicketCard key={ticket.ticket_id} ticket={ticket} />
+                        ))}
+                    </div>
+                )}
             </div>
         </div>
     );

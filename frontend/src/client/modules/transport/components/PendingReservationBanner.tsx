@@ -14,7 +14,6 @@ export function PendingReservationBanner({ count, timeLeft, onReleaseAll }: Pend
         return `${m}:${s.toString().padStart(2, '0')}`;
     };
 
-    if (count === 0) return null;
 
     return (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center justify-between animate-in slide-in-from-top duration-500 ring-1 ring-amber-100/50">

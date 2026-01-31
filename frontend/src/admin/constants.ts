@@ -1,3 +1,6 @@
+// Temporary static data for admin routes page
+// TODO: Replace with API calls to backend
+
 export interface City {
     id: string;
     name: string;

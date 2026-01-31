@@ -5,7 +5,7 @@ import { RoutesTable } from '../components/RoutesTable';
 import { RouteFormModal } from '../components/RouteFormModal';
 import { Route } from '../types';
 import { TimeSlot } from '../../time-slots/types';
-import { CITIES, STOPS } from '@/client/modules/transport/data';
+import { CITIES, STOPS } from '../../../constants';
 import { toast } from '@/lib/toast';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';

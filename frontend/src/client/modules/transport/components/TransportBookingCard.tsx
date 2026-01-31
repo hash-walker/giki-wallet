@@ -6,18 +6,10 @@ import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/shared/stores/authStore';
 import { useTransportStore } from '../store';
-import {
-    getUniqueRoutes,
-    getAvailableTimesForRoute,
-    getStopsForTrip,
-    getTripById,
-    isFromGIKI,
-    isToGIKI,
-    getGikiStop
-} from '../utils';
-import { Trip } from '../api';
+import { getGIKIStopObject, formatTime, formatDate } from '../utils';
+import type { Trip } from '../validators';
 import { toast } from 'sonner';
-import { BookingSelection as TransportBookingSelection } from '../validators';
+import type { BookingSelection } from '../validators';
 
 // Badge component
 const Badge = ({ type, children }: { type: 'employee' | 'student' | 'full'; children: React.ReactNode }) => {
@@ -46,23 +38,16 @@ const TicketSelect = ({
     setTicketCount,
     isStudent,
     maxTickets,
-    mode,
-    onSelectionReset
 }: {
     ticketCount: number;
     setTicketCount: (n: number) => void;
     isStudent: boolean;
     maxTickets: number;
-    mode: 'immediate' | 'collect';
-    onSelectionReset?: () => void;
 }) => (
     <select
         className="border border-gray-300 rounded-lg px-2 py-2.5 bg-white focus:ring-2 focus:ring-primary text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
         value={ticketCount}
-        onChange={(e) => {
-            if (mode === 'collect') onSelectionReset?.();
-            setTicketCount(Number(e.target.value));
-        }}
+        onChange={(e) => setTicketCount(Number(e.target.value))}
         disabled={isStudent || maxTickets <= 0}
         title={isStudent ? "Students can only book 1 ticket" : undefined}
     >
@@ -73,13 +58,9 @@ const TicketSelect = ({
 );
 
 interface TransportBookingCardProps {
-    direction: 'from-giki' | 'to-giki';
+    direction: 'Outbound' | 'Inbound';
     allTrips: Trip[];
-    onBook?: (selection: TransportBookingSelection) => void;
-    mode?: 'immediate' | 'collect';
-    onSaveSelection?: (selection: TransportBookingSelection) => void;
-    onSelectionReset?: () => void;
-    sharedCityName?: string | null;  // For round trip linkage if needed
+    onBook?: (selection: BookingSelection) => void;
     loading?: boolean;
 }
 
@@ -87,18 +68,14 @@ export const TransportBookingCard = ({
     direction,
     allTrips,
     onBook,
-    mode = 'immediate',
-    onSaveSelection,
-    onSelectionReset,
-    sharedCityName,
     loading = false
 }: TransportBookingCardProps) => {
     const navigate = useNavigate();
     const { user } = useAuthStore();
-    const { heldCity, stage, activeHolds, releaseAllHolds } = useTransportStore();
+    const { activeHolds, releaseAllHolds } = useTransportStore();
 
     // Selection state
-    const [selectedRouteName, setSelectedRouteName] = useState<string | null>(null);
+    const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
     const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
     const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
     const [ticketCount, setTicketCount] = useState(1);
@@ -106,135 +83,151 @@ export const TransportBookingCard = ({
     // Derived flags
     const isStudent = user?.user_type === 'student';
 
-    // Effect to sync shared city or held city (for return leg)
-    useEffect(() => {
-        if (stage === 'select_return' && heldCity) {
-            setSelectedRouteName(heldCity);
-        } else if (sharedCityName !== undefined && sharedCityName !== selectedRouteName) {
-            setSelectedRouteName(sharedCityName);
-            setSelectedTripId(null);
-            setSelectedStopId(null);
-            setTicketCount(1);
+    // Filter trips by direction
+    const filteredTrips = useMemo(() => {
+        if (!allTrips.length) return [];
+        const filtered = allTrips.filter(trip => {
+            const isOutbound = trip.direction.toUpperCase() === 'OUTBOUND';
+            if (direction === 'Outbound') return isOutbound;
+            return !isOutbound;
+        });
+
+        if (filtered.length > 0) {
+            console.log('🚌 Filtered trips:', filtered.length);
         }
-    }, [sharedCityName, heldCity, stage]);
+
+        return filtered;
+    }, [allTrips, direction]);
 
     // Auto-set ticket count for students
     useEffect(() => {
         if (isStudent) setTicketCount(1);
     }, [isStudent]);
 
-    // Derived Options
-    const routeOptions = useMemo(() => getUniqueRoutes(allTrips, direction), [allTrips, direction]);
+    // Route options
+    const routeOptions = useMemo(() => {
+        const uniqueRoutes = new Map<string, string>();
+        filteredTrips.forEach(trip => {
+            uniqueRoutes.set(trip.route_id, trip.route_name);
+        });
+        return Array.from(uniqueRoutes).map(([id, name]) => ({
+            value: id,
+            label: name
+        }));
+    }, [filteredTrips]);
 
+    // Time options
     const timeOptions = useMemo(() => {
-        if (!selectedRouteName) return [];
-        return getAvailableTimesForRoute(allTrips, selectedRouteName, direction);
-    }, [allTrips, selectedRouteName, direction]);
+        if (!selectedRouteId) return [];
+        const routeTrips = filteredTrips.filter(t => t.route_id === selectedRouteId);
+        return routeTrips.map(trip => {
+            const date = formatDate(trip.departure_time);
+            const time = formatTime(trip.departure_time);
+            return {
+                value: trip.id,
+                label: `${date} - ${time}`
+            };
+        });
+    }, [filteredTrips, selectedRouteId]);
 
+    // Stop options
     const stopOptions = useMemo(() => {
         if (!selectedTripId) return [];
-        return getStopsForTrip(allTrips, selectedTripId, direction);
-    }, [allTrips, selectedTripId, direction]);
+        const trip = filteredTrips.find(t => t.id === selectedTripId);
+
+        if (!trip || !trip.stops || trip.stops.length === 0) return [];
+
+        const sortedStops = [...trip.stops].sort((a, b) => a.sequence - b.sequence);
+        const gikiIndex = sortedStops.findIndex(s => s.stop_name.toUpperCase().includes('GIKI'));
+
+        let validStops = [];
+
+        if (gikiIndex !== -1) {
+            // GIKI explicitly in list
+            if (direction === 'Outbound') {
+                validStops = sortedStops.slice(gikiIndex + 1);
+            } else {
+                validStops = sortedStops.slice(0, gikiIndex);
+            }
+        } else {
+            // GIKI implied
+            validStops = sortedStops;
+        }
+
+        return validStops.map(s => ({ value: s.stop_id, label: s.stop_name }));
+    }, [filteredTrips, selectedTripId, direction]);
 
     const currentTrip = useMemo(() => {
         if (!selectedTripId) return null;
-        return getTripById(allTrips, selectedTripId);
-    }, [allTrips, selectedTripId]);
+        return filteredTrips.find(t => t.id === selectedTripId);
+    }, [filteredTrips, selectedTripId]);
 
     // Handlers
-    const handleRouteChange = (routeName: string | null) => {
-        if (mode === 'collect') onSelectionReset?.();
-        if (stage === 'select_return' && heldCity) return;
-
-        if (activeHolds.length > 0 && selectedRouteName !== routeName) {
+    const handleRouteChange = (routeId: string | null) => {
+        if (activeHolds.length > 0 && selectedRouteId !== routeId) {
             releaseAllHolds();
         }
-
-        setSelectedRouteName(routeName);
+        setSelectedRouteId(routeId);
         setSelectedTripId(null);
         setSelectedStopId(null);
         setTicketCount(1);
     };
 
     const handleTimeChange = (tripId: string | null) => {
-        if (mode === 'collect') onSelectionReset?.();
-
         if (activeHolds.length > 0 && selectedTripId !== tripId) {
             releaseAllHolds();
         }
-
         setSelectedTripId(tripId);
         setSelectedStopId(null);
         setTicketCount(1);
     };
 
     const handleStopChange = (stopId: string | null) => {
-        if (mode === 'collect') onSelectionReset?.();
-
         if (activeHolds.length > 0 && selectedStopId !== stopId) {
             releaseAllHolds();
         }
-
         setSelectedStopId(stopId);
     };
 
     const handleBook = () => {
         if (!currentTrip || !selectedTripId || !selectedStopId) return;
 
-        const isFullStatus = currentTrip.available_seats <= 0 || currentTrip.booking_status === 'FULL';
+        const isFullStatus = currentTrip.available_seats <= 0 || currentTrip.status === 'FULL';
         if (isFullStatus) {
             toast.error('This trip is full');
             return;
         }
 
-        const gikiStopId = getGikiStop(currentTrip.stops);
-        if (!gikiStopId) {
+        const gikiStop = getGIKIStopObject(currentTrip.stops);
+        if (!gikiStop) {
             toast.error('GIKI Stop not found');
             return;
         }
 
-        const payload: TransportBookingSelection = {
+        const payload: BookingSelection = {
             tripId: selectedTripId,
-            pickupId: direction === 'from-giki' ? gikiStopId : selectedStopId,
-            dropoffId: direction === 'from-giki' ? selectedStopId : gikiStopId,
+            pickupId: direction === 'Outbound' ? gikiStop.stop_id : selectedStopId,
+            dropoffId: direction === 'Outbound' ? selectedStopId : gikiStop.stop_id,
             ticketCount,
-            isFull: isFullStatus
         };
 
-        if (mode === 'collect') {
-            onSaveSelection?.(payload);
-        } else {
-            onBook?.(payload);
-        }
+        onBook?.(payload);
     };
 
-    // Auto-selection of stop if only one is available
+    // Auto-selection of stop if only one available
     useEffect(() => {
         if (stopOptions.length === 1 && !selectedStopId) {
             setSelectedStopId(stopOptions[0].value);
         }
     }, [stopOptions, selectedStopId]);
 
-    // Auto-Hold Logic: Trigger handleBook when valid selection is complete
-    useEffect(() => {
-        const canAutoHold = selectedRouteName && selectedTripId && selectedStopId && currentTrip && activeHolds.length === 0;
-        if (canAutoHold) {
-            // Check if it's already full before holding
-            const isFullStatus = currentTrip.available_seats <= 0 || currentTrip.booking_status === 'FULL';
-            const isScheduled = currentTrip.booking_status === 'SCHEDULED';
-            if (!isFullStatus && !isScheduled) {
-                handleBook();
-            }
-        }
-    }, [selectedRouteName, selectedTripId, selectedStopId, currentTrip, activeHolds.length]);
-
-    const isFull = currentTrip ? (currentTrip.available_seats <= 0 || currentTrip.booking_status === 'FULL') : false;
-    const isScheduled = currentTrip?.booking_status === 'SCHEDULED';
+    const isFull = currentTrip ? (currentTrip.available_seats <= 0 || currentTrip.status === 'FULL') : false;
+    const isScheduled = currentTrip?.status === 'SCHEDULED';
     const maxTickets = Math.min(3, currentTrip?.available_seats || 0);
-    const hasCompleteSelection = !!(selectedRouteName && selectedTripId && selectedStopId && currentTrip);
+    const hasCompleteSelection = !!(selectedRouteId && selectedTripId && selectedStopId && currentTrip);
 
     // Labels
-    const stopLabel = direction === 'from-giki' ? "Drop Location" : "Pickup Point";
+    const stopLabel = direction === 'Outbound' ? "Drop Location" : "Pickup Point";
     const routeLabel = "Route";
 
     if (loading) return <div className="p-8 text-center text-gray-400">Loading schedules...</div>;
@@ -243,16 +236,13 @@ export const TransportBookingCard = ({
         <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300">
             {/* Mobile View */}
             <div className="block md:hidden p-4 space-y-3">
-                {sharedCityName === undefined && (
-                    <Select
-                        options={routeOptions}
-                        value={selectedRouteName}
-                        onChange={handleRouteChange}
-                        placeholder="Select Route"
-                        label={routeLabel}
-                        disabled={stage === 'select_return' && !!heldCity}
-                    />
-                )}
+                <Select
+                    options={routeOptions}
+                    value={selectedRouteId}
+                    onChange={handleRouteChange}
+                    placeholder="Select Route"
+                    label={routeLabel}
+                />
                 <Select
                     options={timeOptions}
                     value={selectedTripId}
@@ -260,7 +250,7 @@ export const TransportBookingCard = ({
                     placeholder="Select Time"
                     disabledPlaceholder="Select route first"
                     label="Date & Time"
-                    disabled={!selectedRouteName}
+                    disabled={!selectedRouteId}
                 />
                 <Select
                     options={stopOptions}
@@ -292,8 +282,6 @@ export const TransportBookingCard = ({
                                 setTicketCount={setTicketCount}
                                 isStudent={isStudent}
                                 maxTickets={maxTickets}
-                                mode={mode}
-                                onSelectionReset={onSelectionReset}
                             />
                             <Button
                                 className="flex-1 font-semibold"
@@ -301,9 +289,7 @@ export const TransportBookingCard = ({
                                 variant={isFull ? "secondary" : "default"}
                                 onClick={handleBook}
                             >
-                                {mode === 'collect'
-                                    ? isFull ? "Sold Out" : "Save Selection"
-                                    : isFull ? "Full" : (isScheduled ? "Scheduled" : "Book")}
+                                {isFull ? "Full" : (isScheduled ? "Scheduled" : "Book")}
                             </Button>
                         </div>
                     </div>
@@ -312,32 +298,29 @@ export const TransportBookingCard = ({
 
             {/* Desktop View */}
             <div className="hidden md:flex py-6 px-5 items-center gap-4">
-                {sharedCityName === undefined && (
-                    <div className="w-[18%]">
-                        <Select
-                            options={routeOptions}
-                            value={selectedRouteName}
-                            onChange={handleRouteChange}
-                            placeholder="Select Route"
-                            showLabel={false}
-                            disabled={stage === 'select_return' && !!heldCity}
-                        />
-                    </div>
-                )}
+                <div className="w-[18%]">
+                    <Select
+                        options={routeOptions}
+                        value={selectedRouteId}
+                        onChange={handleRouteChange}
+                        placeholder="Select Route"
+                        showLabel={false}
+                    />
+                </div>
 
-                <div className={sharedCityName === undefined ? "w-[18%]" : "w-[24%]"}>
+                <div className="w-[18%]">
                     <Select
                         options={timeOptions}
                         value={selectedTripId}
                         onChange={handleTimeChange}
                         placeholder="Select Time"
-                        disabledPlaceholder={sharedCityName ? "Select time" : "Select route first"}
-                        disabled={!selectedRouteName}
+                        disabledPlaceholder="Select route first"
+                        disabled={!selectedRouteId}
                         showLabel={false}
                     />
                 </div>
 
-                <div className={sharedCityName === undefined ? "w-[18%]" : "w-[24%]"}>
+                <div className="w-[18%]">
                     <Select
                         options={stopOptions}
                         value={selectedStopId}
@@ -349,7 +332,7 @@ export const TransportBookingCard = ({
                     />
                 </div>
 
-                <div className={cn(sharedCityName === undefined ? "w-[12%]" : "w-[13%]", "flex justify-center")}>
+                <div className="w-[12%] flex justify-center">
                     {hasCompleteSelection && currentTrip ? (
                         <div className="flex items-center gap-1.5 flex-wrap justify-center">
                             {currentTrip.bus_type && (
@@ -365,7 +348,7 @@ export const TransportBookingCard = ({
                     )}
                 </div>
 
-                <div className={cn(sharedCityName === undefined ? "w-[10%]" : "w-[11%]", "text-center")}>
+                <div className="w-[10%] text-center">
                     {hasCompleteSelection && currentTrip ? (
                         <Availability isFull={isFull} tickets={currentTrip.available_seats} />
                     ) : (
@@ -373,31 +356,27 @@ export const TransportBookingCard = ({
                     )}
                 </div>
 
-                <div className={cn(sharedCityName === undefined ? "w-[8%]" : "w-[9%]", "flex justify-center")}>
+                <div className="w-[8%] flex justify-center">
                     {hasCompleteSelection ? (
                         <TicketSelect
                             ticketCount={ticketCount}
                             setTicketCount={setTicketCount}
                             isStudent={isStudent}
                             maxTickets={maxTickets}
-                            mode={mode}
-                            onSelectionReset={onSelectionReset}
                         />
                     ) : (
                         <span className="text-xs text-gray-400">--</span>
                     )}
                 </div>
 
-                <div className={sharedCityName === undefined ? "w-[16%]" : "w-[19%]"}>
+                <div className="w-[16%]">
                     <Button
                         className="w-full font-semibold shadow-sm"
                         disabled={!hasCompleteSelection || isFull || isScheduled}
                         variant={!hasCompleteSelection || isFull ? "secondary" : "default"}
                         onClick={handleBook}
                     >
-                        {mode === 'collect'
-                            ? isFull ? "Sold Out" : "Save Selection"
-                            : isFull ? "Waitlist" : (isScheduled ? "Scheduled" : "Book Now")}
+                        {isFull ? "Waitlist" : (isScheduled ? "Scheduled" : "Book Now")}
                     </Button>
                 </div>
             </div>

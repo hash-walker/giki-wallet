@@ -5,12 +5,13 @@ import { z } from 'zod';
 import { cn } from '@/lib/utils';
 import { Modal } from '@/shared/components/ui/Modal';
 import { getWeeklySummary } from '@/client/modules/transport/api';
-
-import type { WeeklyTrip } from '@/client/modules/transport/validators';
+import { Trip } from '@/client/modules/transport/validators';
+import { formatDateTime } from '@/client/modules/transport/utils';
+import { useAuthStore } from '@/shared/stores/authStore';
 
 export const TripSummaryTile = () => {
     const navigate = useNavigate();
-    const [trips, setTrips] = useState<WeeklyTrip[]>([]);
+    const [trips, setTrips] = useState<Trip[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -29,9 +30,6 @@ export const TripSummaryTile = () => {
 
     useEffect(() => {
         fetchSummary(true);
-        // Polling every 30 seconds
-        const interval = setInterval(() => fetchSummary(false), 30000);
-        return () => clearInterval(interval);
     }, [fetchSummary]);
 
     // Efficiently calculate stats on the client side
@@ -74,7 +72,7 @@ export const TripSummaryTile = () => {
         { label: 'Closed', value: stats.closed, icon: Lock, color: 'text-slate-400' }
     ];
 
-    const TripItem = ({ trip, className }: { trip: WeeklyTrip, className?: string }) => (
+    const TripItem = ({ trip, className }: { trip: Trip, className?: string }) => (
         <div className={cn("flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-100 hover:border-primary/20 hover:bg-slate-50/50 transition-all duration-300", className)}>
             <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500">

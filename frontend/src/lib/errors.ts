@@ -219,14 +219,15 @@ export function extractAPIError(error: unknown): AppError {
         const responseData = axiosError.response?.data;
         const statusCode = axiosError.response?.status || 500;
 
-        if (responseData && 'error' in responseData && responseData.error) {
-            const apiError = responseData.error as APIError;
+        // Ensure responseData is an object before checking for properties with 'in'
+        if (responseData && typeof responseData === 'object' && 'error' in responseData && (responseData as any).error) {
+            const apiError = (responseData as any).error as APIError;
             return new AppError(
                 apiError.code || 'UNKNOWN_ERROR',
                 ERROR_MESSAGES[apiError.code] ? ERROR_MESSAGES[apiError.code] : (apiError.message || fallbackError.message),
                 statusCode,
                 apiError.details,
-                responseData.meta?.request_id
+                (responseData as any).meta?.request_id
             );
         }
 

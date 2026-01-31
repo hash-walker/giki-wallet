@@ -1,85 +1,76 @@
 import { apiClient } from '@/lib/axios';
-import {
-    type TransportRoute,
-    type RouteTemplate,
-    type Trip,
-    type TripStop,
-    type WeeklyTrip,
-    type APIResponse,
-    type HoldSeatsRequest,
-    type HoldSeatsResponse,
-    type ConfirmBatchRequest,
-    type ConfirmBatchResponse,
-    type QuotaResponse,
-    type ActiveHold
-} from './validators';
-
-export type {
-    TransportRoute,
-    RouteTemplate,
+import type {
     Trip,
-    TripStop,
-    WeeklyTrip,
     HoldSeatsRequest,
     HoldSeatsResponse,
     ConfirmBatchRequest,
     ConfirmBatchResponse,
     QuotaResponse,
-    ActiveHold
-};
+    ActiveHold,
+    MyTicket
+} from './validators';
 
-export async function listRoutes() {
-    const res = await apiClient.get<TransportRoute[]>('/transport/routes');
+
+/**
+ * Get weekly summary of all trips
+ */
+export async function getWeeklySummary() {
+    const res = await apiClient.get<Trip[]>('/transport/weekly-summary');
     return res.data;
 }
 
-export async function getRouteTemplate(routeId: string) {
-    const res = await apiClient.get<RouteTemplate>(`/transport/routes/${routeId}/template`);
-    return res.data;
-}
-
-export async function getUpcomingTrips(routeId: string) {
-    const res = await apiClient.get<Trip[]>(`/transport/routes/${routeId}/trips/upcoming`);
-    return res.data;
-}
-
+/**
+ * Get current user's quota
+ */
 export async function getQuota() {
     const res = await apiClient.get<QuotaResponse>('/transport/quota');
     return res.data;
 }
 
+/**
+ * Get user's active holds
+ */
 export async function getActiveHolds() {
     const res = await apiClient.get<ActiveHold[]>('/transport/holds/active');
     return res.data;
 }
 
+/**
+ * Release all active holds for current user
+ */
 export async function releaseAllActiveHolds() {
     await apiClient.delete('/transport/holds/active');
 }
 
+/**
+ * Hold seats for a trip
+ */
 export async function holdSeats(payload: HoldSeatsRequest) {
     const res = await apiClient.post<HoldSeatsResponse>('/transport/holds', payload);
     return res.data;
 }
 
+/**
+ * Confirm batch of holds with passenger details
+ */
 export async function confirmBatch(payload: ConfirmBatchRequest) {
     const res = await apiClient.post<ConfirmBatchResponse>('/transport/confirm', payload);
     return res.data;
 }
 
-export async function releaseHold(holdId: string) {
-    await apiClient.delete(`/transport/holds/${holdId}`);
-}
-
-
-export async function getWeeklySummary() {
-    // axios interceptor now automatically unwraps APIResponse.data
-    const res = await apiClient.get<WeeklyTrip[]>('/transport/weekly-summary');
+/**
+ * Get user's tickets
+ */
+export async function getUserTickets() {
+    const res = await apiClient.get<MyTicket[]>('/transport/tickets');
     return res.data;
 }
 
-export async function getAllUpcomingTrips() {
-    const res = await apiClient.get<Trip[]>('/transport/weekly-summary');
+/**
+ * Cancel a ticket
+ */
+export async function cancelTicket(ticketId: string) {
+    const res = await apiClient.delete(`/transport/tickets/${ticketId}`);
     return res.data;
 }
 

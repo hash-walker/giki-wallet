@@ -1,11 +1,8 @@
 import { z } from 'zod';
 
-export interface APIResponse<T> {
-    success: boolean;
-    data: T;
-    error?: any;
-    meta?: any;
-}
+// ============================================================================
+// RESPONSE TYPES 
+// ============================================================================
 
 export const tripStopSchema = z.object({
     stop_id: z.string().uuid(),
@@ -14,17 +11,22 @@ export const tripStopSchema = z.object({
 });
 
 export const tripSchema = z.object({
-    trip_id: z.string().uuid(),
+    id: z.string().uuid(),
+    route_id: z.string().uuid(),
     route_name: z.string(),
-    departure_time: z.string(), // ISO String
-    booking_status: z.enum(['OPEN', 'SCHEDULED', 'FULL', 'CLOSED', 'CANCELLED']),
-    opens_at: z.string(),
+    direction: z.string(),
+    bus_type: z.string(),
+    departure_time: z.string(),
+    booking_opens_at: z.string(),
+    booking_closes_at: z.string(),
+    status: z.string(),
     available_seats: z.number(),
-    price: z.number(),
+    total_capacity: z.number(),
+    base_price: z.number(),
     stops: z.array(tripStopSchema),
-    bus_type: z.string().optional(),
-    direction: z.string().optional(),
 });
+
+
 
 export const quotaUsageSchema = z.object({
     limit: z.number(),
@@ -45,6 +47,10 @@ export const activeHoldSchema = z.object({
     route_name: z.string(),
 });
 
+// ============================================================================
+// REQUEST SCHEMAS (for validation)
+// ============================================================================
+
 export const holdSeatsRequestSchema = z.object({
     trip_id: z.string().uuid(),
     count: z.number().min(1).max(5),
@@ -62,45 +68,9 @@ export const confirmBatchRequestSchema = z.object({
     confirmations: z.array(confirmItemSchema),
 });
 
-export const transportRouteSchema = z.object({
-    route_id: z.string().uuid(),
-    route_name: z.string(),
-});
-
-export const routeTemplateSchema = z.object({
-    route_id: z.string().uuid(),
-    route_name: z.string(),
-    rules: z.object({
-        open_hours_before: z.number(),
-        close_hours_before: z.number(),
-    }),
-    stops: z.array(z.object({
-        stop_id: z.string().uuid(),
-        name: z.string(),
-        sequence: z.number(),
-        is_active: z.boolean(),
-    })),
-    quick_slots: z.array(z.object({
-        slot_id: z.string().uuid(),
-        day_of_week: z.string(),
-        departure_time: z.object({ time: z.string() }),
-    })),
-});
-
-// Zod Schema matching the new Go struct
-// Zod Schema matching the new Go struct
-export const weeklyTripSchema = z.object({
-    id: z.string().uuid(),
-    route_name: z.string(),
-    direction: z.string(),
-    bus_type: z.string(),
-    departure_time: z.string(), // ISO String from Go time.Time
-    booking_opens_at: z.string(),
-    booking_closes_at: z.string(),
-    status: z.string(), // Backend returns generic string for now, or enum
-    available_seats: z.number(),
-    total_capacity: z.number(),
-});
+// ============================================================================
+// RESPONSE SCHEMAS (for API responses)
+// ============================================================================
 
 export const holdSeatsResponseSchema = z.object({
     holds: z.array(z.object({
@@ -116,21 +86,27 @@ export const confirmBatchResponseSchema = z.object({
     })),
 });
 
-export type TransportRoute = z.infer<typeof transportRouteSchema>;
-export type RouteTemplate = z.infer<typeof routeTemplateSchema>;
-export type WeeklyTrip = z.infer<typeof weeklyTripSchema>;
-export type HoldSeatsResponse = z.infer<typeof holdSeatsResponseSchema>;
-export type ConfirmBatchResponse = z.infer<typeof confirmBatchResponseSchema>;
+// ============================================================================
+// TYPESCRIPT TYPES (exported for use in components)
+// ============================================================================
 
 export type TripStop = z.infer<typeof tripStopSchema>;
 export type Trip = z.infer<typeof tripSchema>;
 export type QuotaResponse = z.infer<typeof quotaResponseSchema>;
 export type ActiveHold = z.infer<typeof activeHoldSchema>;
 export type HoldSeatsRequest = z.infer<typeof holdSeatsRequestSchema>;
-export type ConfirmBatchRequest = z.infer<typeof confirmBatchRequestSchema>;
+export type HoldSeatsResponse = z.infer<typeof holdSeatsResponseSchema>;
 export type ConfirmItem = z.infer<typeof confirmItemSchema>;
+export type ConfirmBatchRequest = z.infer<typeof confirmBatchRequestSchema>;
+export type ConfirmBatchResponse = z.infer<typeof confirmBatchResponseSchema>;
 
-// Booking Flow Schemas
+// Alias for backward compatibility
+export type WeeklyTrip = Trip;
+
+// ============================================================================
+// BOOKING FLOW TYPES (frontend-specific)
+// ============================================================================
+
 export const passengerSchema = z.object({
     name: z.string().min(1, "Name is required"),
     relation: z.enum(['SELF', 'SPOUSE', 'CHILD']),
@@ -141,7 +117,6 @@ export const bookingSelectionSchema = z.object({
     pickupId: z.string().uuid(),
     dropoffId: z.string().uuid(),
     ticketCount: z.number().min(1).max(3),
-    isFull: z.boolean(),
 }).refine(
     (data) => data.pickupId !== data.dropoffId,
     {
@@ -153,3 +128,31 @@ export const bookingSelectionSchema = z.object({
 export type Passenger = z.infer<typeof passengerSchema>;
 export type BookingSelection = z.infer<typeof bookingSelectionSchema>;
 
+// ============================================================================
+// TICKET TYPES
+// ============================================================================
+
+export const myTicketSchema = z.object({
+    ticket_id: z.string().uuid(),
+    ticket_code: z.string(),
+    serial_no: z.number(),
+    status: z.string(),
+
+    passenger_name: z.string(),
+    passenger_relation: z.string(),
+    is_self: z.boolean(),
+
+    route_name: z.string(),
+    direction: z.string(),
+
+    relevant_location: z.string(),
+    pickup_location: z.string(),
+    dropoff_location: z.string(),
+
+    departure_time: z.string(), // ISO date string
+    bus_type: z.string(),
+    price: z.number(),
+    is_cancellable: z.boolean(),
+});
+
+export type MyTicket = z.infer<typeof myTicketSchema>;
