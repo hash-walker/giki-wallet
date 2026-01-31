@@ -17,7 +17,10 @@ import {
     type BookingSelection,
     type Passenger,
     type HoldSeatsResponse,
+    bookingSelectionSchema,
 } from './validators';
+import { getGIKIStopObject, isFromGIKI } from './utils';
+import { getErrorMessage, logError, AppError } from '@/lib/errors';
 import { toast } from 'sonner';
 
 type SessionHold = HoldSeatsResponse['holds'][number];
@@ -72,19 +75,7 @@ interface TransportState {
     confirmCurrentBooking: () => Promise<void>;
 }
 
-function getApiErrorMessage(err: unknown): string {
-    if (typeof err !== 'object' || err === null) return 'Something went wrong';
-    const maybeAxios = err as {
-        response?: { data?: { error?: string; message?: string } };
-        message?: string;
-    };
-    return (
-        maybeAxios.response?.data?.message ||
-        maybeAxios.response?.data?.error ||
-        maybeAxios.message ||
-        'Something went wrong'
-    );
-}
+// Removed getApiErrorMessage - now using getErrorMessage from lib/errors
 
 let timerInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -219,9 +210,14 @@ export const useTransportStore = create<TransportState>((set, get) => ({
                 get().stopTimer();
             }
         } catch (e) {
-            const msg = getApiErrorMessage(e);
+            const msg = getErrorMessage(e);
             set({ error: msg });
             toast.error(msg);
+
+            // Log the error for debugging
+            if (e instanceof AppError) {
+                logError(e, { action: 'fetchData' });
+            }
         } finally {
             if (showLoading) set({ loading: false });
         }
@@ -236,15 +232,38 @@ export const useTransportStore = create<TransportState>((set, get) => ({
             get().resetBookingFlow();
             toast.success('Reservations released');
         } catch (e) {
-            toast.error(getApiErrorMessage(e));
+            const msg = getErrorMessage(e);
+            toast.error(msg);
+
+            if (e instanceof AppError) {
+                logError(e, { action: 'releaseAllHolds' });
+            }
         } finally {
             set({ loading: false });
         }
     },
 
     reserveOutbound: async (selection, userName) => {
+        // Validate selection with Zod schema
+        const parseResult = bookingSelectionSchema.safeParse(selection);
+        if (!parseResult.success) {
+            toast.error('Invalid booking selection: ' + parseResult.error.issues[0]?.message);
+            return;
+        }
+
         set({ loading: true });
         try {
+            // Additional validation: For OUTBOUND (from-giki), pickup must be GIKI
+            const trip = get().allTrips.find(t => t.trip_id === selection.tripId);
+            if (trip && get().direction === 'from-giki') {
+                const gikiStop = getGIKIStopObject(trip.stops || []);
+                if (gikiStop && selection.pickupId !== gikiStop.stop_id) {
+                    toast.error('Outbound trips must pick up from GIKI');
+                    set({ loading: false });
+                    return;
+                }
+            }
+
             const resp = await holdSeats({
                 trip_id: selection.tripId,
                 count: selection.ticketCount,
@@ -262,7 +281,6 @@ export const useTransportStore = create<TransportState>((set, get) => ({
             });
 
             // Find the trip to lock the city
-            const trip = get().allTrips.find(t => t.trip_id === selection.tripId);
             const cityName = trip?.route_name.split(' - ').find(c => !c.toUpperCase().includes('GIKI')) || null;
 
             set(state => ({
@@ -284,16 +302,42 @@ export const useTransportStore = create<TransportState>((set, get) => ({
                 set({ confirmOpen: true });
             }
         } catch (e) {
-            const msg = getApiErrorMessage(e);
+            const msg = getErrorMessage(e);
             toast.error(msg);
+
+            if (e instanceof AppError) {
+                logError(e, {
+                    action: 'reserveOutbound',
+                    tripId: selection.tripId,
+                    ticketCount: selection.ticketCount
+                });
+            }
         } finally {
             set({ loading: false });
         }
     },
 
     reserveReturn: async (selection, userName) => {
+        // Validate selection with Zod schema
+        const parseResult = bookingSelectionSchema.safeParse(selection);
+        if (!parseResult.success) {
+            toast.error('Invalid booking selection: ' + parseResult.error.issues[0]?.message);
+            return;
+        }
+
         set({ loading: true });
         try {
+            // Additional validation: For INBOUND (to-giki), dropoff must be GIKI
+            const trip = get().allTrips.find(t => t.trip_id === selection.tripId);
+            if (trip && get().direction === 'to-giki') {
+                const gikiStop = getGIKIStopObject(trip.stops || []);
+                if (gikiStop && selection.dropoffId !== gikiStop.stop_id) {
+                    toast.error('Inbound trips must drop off at GIKI');
+                    set({ loading: false });
+                    return;
+                }
+            }
+
             const resp = await holdSeats({
                 trip_id: selection.tripId,
                 count: selection.ticketCount,
@@ -323,8 +367,16 @@ export const useTransportStore = create<TransportState>((set, get) => ({
             }
 
         } catch (e) {
-            const msg = getApiErrorMessage(e);
+            const msg = getErrorMessage(e);
             toast.error(msg);
+
+            if (e instanceof AppError) {
+                logError(e, {
+                    action: 'reserveReturn',
+                    tripId: selection.tripId,
+                    ticketCount: selection.ticketCount
+                });
+            }
         } finally {
             set({ loading: false });
         }
@@ -353,8 +405,15 @@ export const useTransportStore = create<TransportState>((set, get) => ({
 
             // Note: We don't navigate here, component can react to change or we can add a 'bookingSuccessful' flag
         } catch (e) {
-            const msg = getApiErrorMessage(e);
+            const msg = getErrorMessage(e);
             toast.error(msg);
+
+            if (e instanceof AppError) {
+                logError(e, {
+                    action: 'confirmCurrentBooking',
+                    holdCount: allHolds.length
+                });
+            }
             throw e; // Component might want to know to close modal
         } finally {
             set({ loading: false });

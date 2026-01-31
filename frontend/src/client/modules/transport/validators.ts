@@ -142,7 +142,14 @@ export const bookingSelectionSchema = z.object({
     dropoffId: z.string().uuid(),
     ticketCount: z.number().min(1).max(3),
     isFull: z.boolean(),
-});
+}).refine(
+    (data) => data.pickupId !== data.dropoffId,
+    {
+        message: "Pickup and dropoff stops cannot be the same",
+        path: ['dropoffId']
+    }
+);
 
 export type Passenger = z.infer<typeof passengerSchema>;
 export type BookingSelection = z.infer<typeof bookingSelectionSchema>;
+

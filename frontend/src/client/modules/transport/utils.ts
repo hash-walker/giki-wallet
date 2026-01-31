@@ -206,3 +206,100 @@ export function getStopsForTrip(trips: Trip[], tripId: string, direction: 'from-
 export function getTripById(trips: Trip[], id: string) {
     return trips.find(t => t.trip_id === id);
 }
+
+// ==========================================
+// BOOKING SELECTION HELPERS (with GIKI defaults)
+// ==========================================
+
+/**
+ * Get GIKI stop from trip stops
+ * @returns The TripStop object for GIKI, or null if not found
+ */
+export function getGIKIStopObject(stops: TripStop[]): TripStop | null {
+    return stops.find(s => s.stop_name.toUpperCase().includes('GIKI')) || null;
+}
+
+/**
+ * Create booking selection for INBOUND trips (TO GIKI)
+ * - User selects pickup stop
+ * - Dropoff is automatically set to GIKI
+ * 
+ * @param tripId - The trip UUID
+ * @param pickupStopId - User-selected pickup stop
+ * @param stops - All stops for this trip
+ * @param ticketCount - Number of tickets (1-3)
+ * @returns BookingSelection or null if GIKI stop not found
+ */
+export function createInboundSelection(
+    tripId: string,
+    pickupStopId: string,
+    stops: TripStop[],
+    ticketCount: number
+): { tripId: string; pickupId: string; dropoffId: string; ticketCount: number; isFull: boolean } | null {
+    const gikiStop = getGIKIStopObject(stops);
+    if (!gikiStop) {
+        console.error('GIKI stop not found in trip stops');
+        return null;
+    }
+
+    return {
+        tripId,
+        pickupId: pickupStopId,
+        dropoffId: gikiStop.stop_id,
+        ticketCount,
+        isFull: false
+    };
+}
+
+/**
+ * Create booking selection for OUTBOUND trips (FROM GIKI)
+ * - Pickup is automatically set to GIKI
+ * - User selects dropoff stop
+ * 
+ * @param tripId - The trip UUID
+ * @param dropoffStopId - User-selected dropoff stop
+ * @param stops - All stops for this trip
+ * @param ticketCount - Number of tickets (1-3)
+ * @returns BookingSelection or null if GIKI stop not found
+ */
+export function createOutboundSelection(
+    tripId: string,
+    dropoffStopId: string,
+    stops: TripStop[],
+    ticketCount: number
+): { tripId: string; pickupId: string; dropoffId: string; ticketCount: number; isFull: boolean } | null {
+    const gikiStop = getGIKIStopObject(stops);
+    if (!gikiStop) {
+        console.error('GIKI stop not found in trip stops');
+        return null;
+    }
+
+    return {
+        tripId,
+        pickupId: gikiStop.stop_id,
+        dropoffId: dropoffStopId,
+        ticketCount,
+        isFull: false
+    };
+}
+
+/**
+ * Validate that an inbound selection has GIKI as dropoff
+ */
+export function validateInboundSelection(
+    selection: { pickupId: string; dropoffId: string },
+    gikiStopId: string
+): boolean {
+    return selection.dropoffId === gikiStopId;
+}
+
+/**
+ * Validate that an outbound selection has GIKI as pickup
+ */
+export function validateOutboundSelection(
+    selection: { pickupId: string; dropoffId: string },
+    gikiStopId: string
+): boolean {
+    return selection.pickupId === gikiStopId;
+}
+

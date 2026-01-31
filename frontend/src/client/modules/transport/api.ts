@@ -73,12 +73,14 @@ export async function releaseHold(holdId: string) {
 
 
 export async function getWeeklySummary() {
-    const res = await apiClient.get<APIResponse<WeeklyTrip[]>>('/transport/weekly-summary');
-    return res.data.data;
+    // axios interceptor now automatically unwraps APIResponse.data
+    const res = await apiClient.get<WeeklyTrip[]>('/transport/weekly-summary');
+    return res.data;
 }
 
 export async function getAllUpcomingTrips() {
-    const res = await apiClient.get<Trip[]>('/transport/trips/upcoming');
+    const res = await apiClient.get<Trip[]>('/transport/weekly-summary');
     return res.data;
 }
+
 
