@@ -11,9 +11,15 @@ export interface TripSummary {
     priceEach: number;
 }
 
-export interface Passenger {
-    name: string;
-    relation: 'SELF' | 'SPOUSE' | 'CHILD';
+import { Passenger } from '../validators';
+
+export interface TripSummary {
+    route: string | null;
+    when: string;
+    pickup: string;
+    dropoff: string;
+    seats: number;
+    priceEach: number;
 }
 
 export type HeldSeat = {
@@ -137,9 +143,11 @@ export function BookingConfirmationModal({
                                         {!isStudent && (
                                             <Select
                                                 options={[
-                                                    { value: 'SELF', label: 'Self' },
+                                                    { value: 'SELF', label: 'Myself' },
                                                     { value: 'SPOUSE', label: 'Spouse' },
                                                     { value: 'CHILD', label: 'Child' },
+                                                    { value: 'PARENT', label: 'Parent' },
+                                                    { value: 'GUEST', label: 'Guest' },
                                                 ]}
                                                 value={p.relation}
                                                 onChange={(v) => onUpdatePassenger(h.hold_id, { ...p, relation: v as Passenger['relation'] })}

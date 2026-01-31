@@ -61,7 +61,7 @@ export const holdSeatsRequestSchema = z.object({
 export const confirmItemSchema = z.object({
     hold_id: z.string().uuid(),
     passenger_name: z.string().min(1, 'Passenger name is required'),
-    passenger_relation: z.enum(['SELF', 'SPOUSE', 'CHILD']),
+    passenger_relation: z.enum(['SELF', 'SPOUSE', 'CHILD', 'PARENT', 'GUEST']),
 });
 
 export const confirmBatchRequestSchema = z.object({
@@ -109,7 +109,7 @@ export type WeeklyTrip = Trip;
 
 export const passengerSchema = z.object({
     name: z.string().min(1, "Name is required"),
-    relation: z.enum(['SELF', 'SPOUSE', 'CHILD']),
+    relation: z.enum(['SELF', 'SPOUSE', 'CHILD', 'PARENT', 'GUEST']),
 });
 
 export const bookingSelectionSchema = z.object({

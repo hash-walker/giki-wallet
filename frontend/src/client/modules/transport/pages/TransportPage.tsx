@@ -38,7 +38,9 @@ export const TransportPage = () => {
 
     const blocker = useBlocker(
         ({ currentLocation, nextLocation }) =>
-            activeHolds.length > 0 && currentLocation.pathname !== nextLocation.pathname
+            activeHolds.length > 0 &&
+            currentLocation.pathname !== nextLocation.pathname &&
+            nextLocation.pathname !== '/transport/passengers'
     );
 
     useEffect(() => {
@@ -56,7 +58,12 @@ export const TransportPage = () => {
         try {
             await addSelection(selection);
             // console.log('✅ addSelection completed');
-            setShowConfirmModal(true);
+
+            if (isStudent) {
+                setShowConfirmModal(true);
+            } else {
+                navigate('/transport/passengers');
+            }
         } catch (error) {
             console.error('❌ handleBook error:', error);
         }

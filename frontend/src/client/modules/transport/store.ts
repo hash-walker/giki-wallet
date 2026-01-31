@@ -216,10 +216,18 @@ export const useTransportStore = create<TransportState>((set, get) => ({
             const newPassengers: Record<string, Passenger> = {};
             resp.holds.forEach(h => {
                 newPassengers[h.hold_id] = {
+                    name: '',
+                    relation: 'GUEST' as const
+                };
+            });
+
+            // Default first seat to SELF if user has no other passengers set (simplistic heuristic)
+            if (resp.holds.length > 0) {
+                newPassengers[resp.holds[0].hold_id] = {
                     name: user?.name || '',
                     relation: 'SELF'
                 };
-            });
+            }
 
             // direction is already declared above: const direction = get().direction;
 
@@ -253,7 +261,7 @@ export const useTransportStore = create<TransportState>((set, get) => ({
             const apiConfirmations = confirmations.map(h => ({
                 hold_id: h.holdId,
                 passenger_name: h.passengerName,
-                passenger_relation: h.passengerRelation as 'SELF' | 'SPOUSE' | 'CHILD'
+                passenger_relation: h.passengerRelation as 'SELF' | 'SPOUSE' | 'CHILD' | 'PARENT' | 'GUEST'
             }));
 
             await confirmBatch({ confirmations: apiConfirmations });
