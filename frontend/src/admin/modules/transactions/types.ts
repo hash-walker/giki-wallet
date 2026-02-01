@@ -51,3 +51,11 @@ export interface TicketTransaction extends BaseTransaction {
 
 export type Transaction = WalletTransaction | TicketTransaction;
 
+export interface TransactionsPaginationResponse {
+    data: Transaction[];
+    total_count: number;
+    page: number;
+    page_size: number;
+}
+
+

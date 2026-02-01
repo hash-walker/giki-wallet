@@ -1,10 +1,12 @@
-import { useState, useMemo } from 'react';
-import { PageHeader, TableWrapper, WeekSelector, getWeekStart, getWeekEnd, formatWeekRange, isDateInWeek } from '../../../shared';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { PageHeader, TableWrapper, WeekSelector, getWeekStart, getWeekEnd, formatWeekRange, PaginationControl } from '../../../shared';
 import { TicketsTable } from '../components/TicketsTable';
 import { TicketFilters } from '../components/TicketFilters';
 import { AdminTicket } from '../types';
+import { getAdminTickets } from '../service';
 import { Ticket, Download } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
+import { toast } from 'sonner';
 
 export const TicketsPage = () => {
     const [currentWeek, setCurrentWeek] = useState<Date>(new Date());
@@ -13,163 +15,79 @@ export const TicketsPage = () => {
     const [category, setCategory] = useState<string>('all');
     const [busType, setBusType] = useState<string>('all');
 
-    // Mock data - replace with API calls
-    const [tickets] = useState<AdminTicket[]>(() => {
-        const now = Date.now();
-        return [
-            {
-                id: '1',
-                serialNumber: 1,
-                ticketNumber: '1234',
-                userId: 1,
-                userName: 'John Doe',
-                userEmail: 'john@example.com',
-                routeId: 1,
-                routeName: 'GIKI to Peshawar',
-                direction: 'to-giki',
-                cityId: 'peshawar',
-                cityName: 'Peshawar',
-                stopId: 'pes_stop1',
-                stopName: 'University Stop',
-                travelDate: new Date(now).toISOString().split('T')[0],
-                time: '9:00 AM',
-                status: 'confirmed',
-                busType: 'Employee',
-                ticketCategory: 'employee',
-                isSelf: true,
-                passengerName: 'John Doe',
-                passengerCNIC: '12345-1234567-1',
-                price: 200,
-                bookedAt: new Date(now - 86400000).toISOString(),
-            },
-            {
-                id: '2',
-                serialNumber: 2,
-                ticketNumber: '5678',
-                userId: 1,
-                userName: 'John Doe',
-                userEmail: 'john@example.com',
-                routeId: 2,
-                routeName: 'GIKI to Islamabad',
-                direction: 'to-giki',
-                cityId: 'islamabad',
-                cityName: 'Islamabad',
-                stopId: 'isl_stop1',
-                stopName: 'F-6 Markaz',
-                travelDate: new Date(now + 86400000).toISOString().split('T')[0],
-                time: '2:00 PM',
-                status: 'confirmed',
-                busType: 'Employee',
-                ticketCategory: 'family',
-                isSelf: false,
-                passengerName: 'Jane Doe',
-                passengerCNIC: '12345-7654321-1',
-                relation: 'Spouse',
-                price: 200,
-                bookedAt: new Date(now - 3600000).toISOString(),
-            },
-            {
-                id: '3',
-                serialNumber: 3,
-                ticketNumber: '9012',
-                userId: 2,
-                userName: 'Alice Smith',
-                userEmail: 'alice@example.com',
-                routeId: 3,
-                routeName: 'GIKI to Lahore',
-                direction: 'from-giki',
-                cityId: 'lahore',
-                cityName: 'Lahore',
-                stopId: 'lah_stop1',
-                stopName: 'Model Town',
-                travelDate: new Date(now + 172800000).toISOString().split('T')[0],
-                time: '5:00 PM',
-                status: 'pending',
-                busType: 'Student',
-                ticketCategory: 'student',
-                isSelf: true,
-                passengerName: 'Alice Smith',
-                price: 200,
-                bookedAt: new Date(now - 7200000).toISOString(),
-            },
-            {
-                id: '4',
-                serialNumber: 4,
-                ticketNumber: '3456',
-                userId: 3,
-                userName: 'Bob Johnson',
-                userEmail: 'bob@example.com',
-                routeId: 1,
-                routeName: 'GIKI to Peshawar',
-                direction: 'to-giki',
-                cityId: 'peshawar',
-                cityName: 'Peshawar',
-                stopId: 'pes_stop2',
-                stopName: 'Hayatabad',
-                travelDate: new Date(now - 86400000).toISOString().split('T')[0],
-                time: '8:00 AM',
-                status: 'cancelled',
-                busType: 'Student',
-                ticketCategory: 'student',
-                isSelf: true,
-                passengerName: 'Bob Johnson',
-                price: 200,
-                refundAmount: 150,
-                bookedAt: new Date(now - 172800000).toISOString(),
-                cancelledAt: new Date(now - 43200000).toISOString(),
-            },
-        ];
-    });
+    const [tickets, setTickets] = useState<AdminTicket[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
 
-    const weekStart = getWeekStart(currentWeek);
-    const weekEnd = getWeekEnd(currentWeek);
-    const weekRange = formatWeekRange(currentWeek);
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize] = useState(100);
+    const [totalCount, setTotalCount] = useState(0);
+
+    const weekStart = useMemo(() => getWeekStart(currentWeek), [currentWeek]);
+    const weekEnd = useMemo(() => getWeekEnd(currentWeek), [currentWeek]);
+    const weekRange = useMemo(() => formatWeekRange(currentWeek), [currentWeek]);
+
+    const fetchTickets = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const response = await getAdminTickets(
+                weekStart.toISOString(),
+                weekEnd.toISOString(),
+                busType,
+                currentPage,
+                pageSize
+            );
+            setTickets(response.data);
+            setTotalCount(response.total_count);
+        } catch (error) {
+            console.error('Failed to fetch tickets:', error);
+            toast.error('Failed to load tickets');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [weekStart, weekEnd, busType, currentPage, pageSize]);
+
+    useEffect(() => {
+        fetchTickets();
+    }, [fetchTickets]);
+
+    // Reset to page 1 when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [currentWeek, busType]);
 
     const filteredTickets = useMemo(() => {
+        if (!searchTerm) return tickets;
+
         return tickets.filter((ticket) => {
-            // Week filter - only show tickets for the selected week
-            const travelDate = new Date(ticket.travelDate);
-            if (!isDateInWeek(travelDate, weekStart, weekEnd)) {
-                return false;
-            }
-
-            // Search filter
             const matchesSearch =
-                ticket.ticketNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                ticket.passengerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                ticket.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                ticket.userEmail.toLowerCase().includes(searchTerm.toLowerCase());
+                ticket.ticket_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                ticket.passenger_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                ticket.user_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                ticket.user_email.toLowerCase().includes(searchTerm.toLowerCase());
 
-            // Status filter
-            const matchesStatus = status === 'all' || ticket.status === status;
-
-            // Category filter
-            const matchesCategory = category === 'all' || ticket.ticketCategory === category;
-
-            // Bus type filter
-            const matchesBusType = busType === 'all' || ticket.busType === busType;
-
-            return matchesSearch && matchesStatus && matchesCategory && matchesBusType;
+            return matchesSearch;
         });
-    }, [tickets, weekStart, weekEnd, searchTerm, status, category, busType]);
+    }, [tickets, searchTerm]);
 
     const handleExport = () => {
-        // TODO: Implement export functionality
+        // TODO: Implement export functionality using the same filters
         console.log('Export tickets');
+        toast.info('Export functionality coming soon');
     };
 
-    // Statistics
+    // Statistics (Note: These are for the current page only in this implementation)
     const stats = useMemo(() => {
         return {
-            total: filteredTickets.length,
-            confirmed: filteredTickets.filter(t => t.status === 'confirmed').length,
-            pending: filteredTickets.filter(t => t.status === 'pending').length,
-            cancelled: filteredTickets.filter(t => t.status === 'cancelled').length,
-            revenue: filteredTickets
-                .filter(t => t.status === 'confirmed')
+            total: totalCount,
+            confirmed: tickets.filter(t => t.status === 'CONFIRMED').length, // This is misleading if only current page
+            pending: tickets.filter(t => t.status === 'PENDING').length,
+            cancelled: tickets.filter(t => t.status === 'CANCELLED').length,
+            revenue: tickets
+                .filter(t => t.status === 'CONFIRMED')
                 .reduce((sum, t) => sum + t.price, 0),
         };
-    }, [filteredTickets]);
+    }, [tickets, totalCount]);
 
     return (
         <div className="space-y-6">
@@ -194,31 +112,31 @@ export const TicketsPage = () => {
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <SummaryCard
-                    title="Total Tickets"
-                    value={stats.total}
+                    title="Total Tickets (Week)"
+                    value={totalCount}
                     icon={<Ticket className="w-5 h-5" />}
                 />
                 <SummaryCard
-                    title="Confirmed"
+                    title="Confirmed (Page)"
                     value={stats.confirmed}
                     icon={<Ticket className="w-5 h-5" />}
                     variant="success"
                 />
                 <SummaryCard
-                    title="Pending"
+                    title="Pending (Page)"
                     value={stats.pending}
                     icon={<Ticket className="w-5 h-5" />}
                     variant="warning"
                 />
                 <SummaryCard
-                    title="Cancelled"
+                    title="Cancelled (Page)"
                     value={stats.cancelled}
                     icon={<Ticket className="w-5 h-5" />}
                     variant="danger"
                 />
                 <SummaryCard
-                    title="Revenue"
-                    value={`RS ${stats.revenue.toLocaleString()}`}
+                    title="Revenue (Page)"
+                    value={`RS ${(stats.revenue).toLocaleString()}`}
                     icon={<Ticket className="w-5 h-5" />}
                     variant="info"
                 />
@@ -237,21 +155,28 @@ export const TicketsPage = () => {
             />
 
             {/* Tickets Table */}
-            <TableWrapper count={filteredTickets.length} itemName="ticket">
+            <TableWrapper count={totalCount} itemName="ticket" isLoading={isLoading}>
+                <div className="mb-4">
+                    <PaginationControl
+                        currentPage={currentPage}
+                        totalPages={Math.ceil(totalCount / pageSize)}
+                        onPageChange={setCurrentPage}
+                    />
+                </div>
                 <TicketsTable tickets={filteredTickets} />
             </TableWrapper>
         </div>
     );
 };
 
-const SummaryCard = ({ 
-    title, 
-    value, 
+const SummaryCard = ({
+    title,
+    value,
     icon,
     variant = 'default'
-}: { 
-    title: string; 
-    value: string | number; 
+}: {
+    title: string;
+    value: string | number;
     icon: React.ReactNode;
     variant?: 'default' | 'success' | 'warning' | 'danger' | 'info';
 }) => {

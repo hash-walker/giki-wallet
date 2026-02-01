@@ -15,22 +15,6 @@ export const TripService = {
     },
 
     createTrip: async (payload: CreateTripRequest): Promise<CreateTripResponse> => {
-        // Backend: r.Get("/trips/upcoming"...) is under /transport
-        // Wait, where is POST /trip? 
-        // Checking server.go, I see r.Get("/trips/upcoming"...) but I don't see POST /trip explicitly in the snippet 
-        // provided in step 298.
-        // However, I previously assumed it was /transport/trip. 
-        // Let's assume for now it's /admin/trip or /transport/trip.
-        // Looking at server.go snippet again...
-        // Line 212 of handler.go is CreateTrip.
-        // But in Server.MountRoutes, I see:
-        // r.Route("/admin"... 
-        // r.Get("/routes"...
-        // I DO NOT SEE CreateTrip registered!
-        // This suggests it might be missing or I need to register it.
-        // The user previously said "and we should use real data".
-
-        // Let's use /admin/trip for now and I will register it if missing.
         const { data } = await apiClient.post<CreateTripResponse>('/admin/trips', payload);
         return data;
     },
@@ -54,7 +38,7 @@ export const TripService = {
         return data;
     },
 
-    getDeletedTripsHistory: async (page: number = 1, pageSize: number = 20): Promise<TripHistoryPaginationResponse> => {
+    getDeletedTripsHistory: async (page: number = 1, pageSize: number = 100): Promise<TripHistoryPaginationResponse> => {
         const { data } = await apiClient.get<TripHistoryPaginationResponse>('/admin/trips/history', {
             params: { page, page_size: pageSize }
         });

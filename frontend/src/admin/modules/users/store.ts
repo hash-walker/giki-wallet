@@ -25,7 +25,7 @@ export const useUserStore = create<UserState>((set, get) => ({
     isUpdating: false,
     pagination: {
         page: 1,
-        pageSize: 20,
+        pageSize: 100,
         totalCount: 0,
     },
 

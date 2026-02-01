@@ -40,7 +40,7 @@ export const useTripCreateStore = create<TripCreateState>((set, get) => ({
     deletedTrips: [],
     deletedTripsPagination: {
         page: 1,
-        pageSize: 20,
+        pageSize: 100,
         totalCount: 0,
     },
 

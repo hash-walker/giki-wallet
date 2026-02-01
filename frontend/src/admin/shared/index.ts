@@ -4,4 +4,5 @@ export { TableWrapper } from './TableWrapper';
 export { Table } from './Table';
 export { ActionButtons } from './ActionButtons';
 export { WeekSelector } from './components/WeekSelector';
+export { PaginationControl } from './components/PaginationControl';
 export * from './utils/weekHelpers';

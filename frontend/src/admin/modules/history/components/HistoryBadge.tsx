@@ -33,13 +33,18 @@ export const Badge = ({ type, value, category }: BadgeProps) => {
 
     if (type === 'ticketStatus') {
         const styles = {
+            CONFIRMED: 'bg-accent/10 text-accent',
+            PENDING: 'bg-yellow-100 text-yellow-800',
+            CANCELLED: 'bg-destructive/10 text-destructive',
+            DELETED: 'bg-gray-200 text-gray-800',
             confirmed: 'bg-accent/10 text-accent',
             pending: 'bg-yellow-100 text-yellow-800',
             cancelled: 'bg-destructive/10 text-destructive',
         };
+        const label = value.toLowerCase();
         return (
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[value as keyof typeof styles] || 'bg-gray-100 text-gray-800'}`}>
-                {value.charAt(0).toUpperCase() + value.slice(1)}
+                {label.charAt(0).toUpperCase() + label.slice(1)}
             </span>
         );
     }
@@ -49,10 +54,13 @@ export const Badge = ({ type, value, category }: BadgeProps) => {
             employee: 'bg-primary/10 text-primary',
             family: 'bg-purple-100 text-purple-800',
             student: 'bg-accent/10 text-accent',
+            Employee: 'bg-primary/10 text-primary',
+            Student: 'bg-accent/10 text-accent',
         };
+        const label = value.toLowerCase();
         return (
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[value as keyof typeof styles] || 'bg-gray-100 text-gray-800'}`}>
-                {value.charAt(0).toUpperCase() + value.slice(1)}
+                {label.charAt(0).toUpperCase() + label.slice(1)}
             </span>
         );
     }
@@ -132,4 +140,3 @@ export const Badge = ({ type, value, category }: BadgeProps) => {
 
     return null;
 };
-

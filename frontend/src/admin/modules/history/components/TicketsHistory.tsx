@@ -16,82 +16,63 @@ const getMockTicketsData = (): AdminTicket[] => {
     const twoWeeksAgo = now - 604800000 * 2;
     const oneWeekAgo = now - 604800000;
     const threeWeeksAgo = now - 604800000 * 3;
-    
+
     return [
         {
-            id: '1',
-            serialNumber: 1,
-            ticketNumber: '1234',
-            userId: 1,
-            userName: 'John Doe',
-            userEmail: 'john@example.com',
-            routeId: 1,
-            routeName: 'GIKI to Peshawar',
+            ticket_id: '1',
+            serial_no: 1,
+            ticket_code: '1234',
+            user_name: 'John Doe',
+            user_email: 'john@example.com',
+            route_name: 'GIKI to Peshawar',
             direction: 'to-giki',
-            cityId: 'peshawar',
-            cityName: 'Peshawar',
-            stopId: 'pes_stop1',
-            stopName: 'University Stop',
-            travelDate: new Date(twoWeeksAgo).toISOString().split('T')[0],
-            time: '9:00 AM',
-            status: 'confirmed',
-            busType: 'Employee',
-            ticketCategory: 'employee',
-            isSelf: true,
-            passengerName: 'John Doe',
+            pickup_location: 'University Stop',
+            dropoff_location: 'Peshawar',
+            departure_time: new Date(twoWeeksAgo).toISOString(),
+            status: 'CONFIRMED',
+            bus_type: 'Employee',
+            passenger_name: 'John Doe',
+            passenger_relation: 'Self',
             price: 200,
-            bookedAt: new Date(twoWeeksAgo - 86400000).toISOString(),
+            booking_time: new Date(twoWeeksAgo - 86400000).toISOString(),
         },
         {
-            id: '2',
-            serialNumber: 2,
-            ticketNumber: '5678',
-            userId: 2,
-            userName: 'Alice Smith',
-            userEmail: 'alice@example.com',
-            routeId: 2,
-            routeName: 'GIKI to Islamabad',
+            ticket_id: '2',
+            serial_no: 2,
+            ticket_code: '5678',
+            user_name: 'Alice Smith',
+            user_email: 'alice@example.com',
+            route_name: 'GIKI to Islamabad',
             direction: 'from-giki',
-            cityId: 'islamabad',
-            cityName: 'Islamabad',
-            stopId: 'isl_stop1',
-            stopName: 'F-6 Markaz',
-            travelDate: new Date(oneWeekAgo).toISOString().split('T')[0],
-            time: '2:00 PM',
-            status: 'confirmed',
-            busType: 'Student',
-            ticketCategory: 'student',
-            isSelf: true,
-            passengerName: 'Alice Smith',
+            pickup_location: 'F-6 Markaz',
+            dropoff_location: 'Islamabad',
+            departure_time: new Date(oneWeekAgo).toISOString(),
+            status: 'CONFIRMED',
+            bus_type: 'Student',
+            passenger_name: 'Alice Smith',
+            passenger_relation: 'Self',
             price: 200,
-            bookedAt: new Date(oneWeekAgo - 86400000).toISOString(),
+            booking_time: new Date(oneWeekAgo - 86400000).toISOString(),
         },
         {
-            id: '3',
-            serialNumber: 3,
-            ticketNumber: '9012',
-            userId: 1,
-            userName: 'John Doe',
-            userEmail: 'john@example.com',
-            routeId: 3,
-            routeName: 'GIKI to Lahore',
+            ticket_id: '3',
+            serial_no: 3,
+            ticket_code: '9012',
+            user_name: 'John Doe',
+            user_email: 'john@example.com',
+            route_name: 'GIKI to Lahore',
             direction: 'to-giki',
-            cityId: 'lahore',
-            cityName: 'Lahore',
-            stopId: 'lah_stop1',
-            stopName: 'Model Town',
-            travelDate: new Date(threeWeeksAgo).toISOString().split('T')[0],
-            time: '5:00 PM',
-            status: 'cancelled',
-            busType: 'Employee',
-            ticketCategory: 'family',
-            isSelf: false,
-            passengerName: 'Jane Doe',
-            relation: 'Spouse',
+            pickup_location: 'Model Town',
+            dropoff_location: 'Lahore',
+            departure_time: new Date(threeWeeksAgo).toISOString(),
+            status: 'CANCELLED',
+            bus_type: 'Employee',
+            passenger_name: 'Jane Doe',
+            passenger_relation: 'Spouse',
             price: 200,
-            refundAmount: 150,
-            bookedAt: new Date(threeWeeksAgo - 86400000).toISOString(),
-            cancelledAt: new Date(threeWeeksAgo + 86400000).toISOString(),
+            refund_amount: 150,
+            booking_time: new Date(threeWeeksAgo - 86400000).toISOString(),
+            status_updated_at: new Date(threeWeeksAgo + 86400000).toISOString(),
         },
     ];
 };
@@ -102,7 +83,6 @@ export const TicketsHistory = ({ selectedWeek }: TicketsHistoryProps) => {
 
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState<string>('all');
-    const [filterCategory, setFilterCategory] = useState<string>('all');
     const [filterBusType, setFilterBusType] = useState<string>('all');
 
     const weekStart = getWeekStart(selectedWeek);
@@ -110,25 +90,24 @@ export const TicketsHistory = ({ selectedWeek }: TicketsHistoryProps) => {
 
     const filteredTickets = useMemo(() => {
         return tickets.filter((ticket) => {
-            // Filter by selected week based on travel date
-            const travelDate = new Date(ticket.travelDate);
-            if (!isDateInWeek(travelDate, weekStart, weekEnd)) {
+            // Filter by selected week based on departure time
+            const departureDate = new Date(ticket.departure_time);
+            if (!isDateInWeek(departureDate, weekStart, weekEnd)) {
                 return false;
             }
 
             const matchesSearch =
-                ticket.ticketNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                ticket.passengerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                ticket.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                ticket.userEmail.toLowerCase().includes(searchTerm.toLowerCase());
+                ticket.ticket_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                ticket.passenger_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                ticket.user_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                ticket.user_email.toLowerCase().includes(searchTerm.toLowerCase());
 
             const matchesStatus = filterStatus === 'all' || ticket.status === filterStatus;
-            const matchesCategory = filterCategory === 'all' || ticket.ticketCategory === filterCategory;
-            const matchesBusType = filterBusType === 'all' || ticket.busType === filterBusType;
+            const matchesBusType = filterBusType === 'all' || ticket.bus_type === filterBusType;
 
-            return matchesSearch && matchesStatus && matchesCategory && matchesBusType;
+            return matchesSearch && matchesStatus && matchesBusType;
         });
-    }, [tickets, weekStart, weekEnd, searchTerm, filterStatus, filterCategory, filterBusType]);
+    }, [tickets, weekStart, weekEnd, searchTerm, filterStatus, filterBusType]);
 
     const headers = [
         { content: 'Travel Date', align: 'left' as const },
@@ -136,43 +115,45 @@ export const TicketsHistory = ({ selectedWeek }: TicketsHistoryProps) => {
         { content: 'Passenger', align: 'left' as const },
         { content: 'Route', align: 'left' as const },
         { content: 'Status', align: 'left' as const },
-        { content: 'Category', align: 'left' as const },
+        { content: 'Bus Type', align: 'left' as const },
         { content: 'Price', align: 'right' as const },
         { content: 'Booked At', align: 'left' as const },
     ];
 
     const rows = filteredTickets.map((ticket) => ({
-        key: ticket.id,
+        key: ticket.ticket_id,
         cells: [
-            <div key="travelDate">
-                <div className="text-sm font-medium text-gray-900">{formatDate(ticket.travelDate)}</div>
-                <div className="text-xs text-gray-500">{ticket.time}</div>
+            <div key="departureDate">
+                <div className="text-sm font-medium text-gray-900">{formatDate(ticket.departure_time)}</div>
+                <div className="text-xs text-gray-500">
+                    {new Date(ticket.departure_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
             </div>,
-            <div key="ticketNumber">
-                <div className="text-sm font-medium text-gray-900">#{ticket.ticketNumber}</div>
-                <div className="text-xs text-gray-500">Serial: {ticket.serialNumber}</div>
+            <div key="ticketCode">
+                <div className="text-sm font-medium text-gray-900">#{ticket.ticket_code}</div>
+                <div className="text-xs text-gray-500">Serial: {ticket.serial_no}</div>
             </div>,
             <div key="passenger">
-                <div className="text-sm font-medium text-gray-900">{ticket.passengerName}</div>
+                <div className="text-sm font-medium text-gray-900">{ticket.passenger_name}</div>
                 <div className="text-xs text-gray-500">
-                    {ticket.userName} {!ticket.isSelf && ticket.relation && `(${ticket.relation})`}
+                    {ticket.user_name} ({ticket.passenger_relation})
                 </div>
             </div>,
             <div key="route">
                 <div className="text-sm font-medium text-gray-900">
-                    {ticket.direction === 'from-giki' ? 'From GIKI' : 'To GIKI'} → {ticket.cityName}
+                    {ticket.direction === 'from-giki' ? 'From GIKI' : 'To GIKI'} → {ticket.route_name}
                 </div>
-                <div className="text-xs text-gray-500">{ticket.stopName}</div>
+                <div className="text-xs text-gray-500">{ticket.pickup_location}</div>
             </div>,
             <Badge key="status" type="ticketStatus" value={ticket.status} />,
-            <Badge key="category" type="ticketCategory" value={ticket.ticketCategory} />,
+            <Badge key="bus_type" type="busType" value={ticket.bus_type} />,
             <div key="price" className="text-right">
                 <div className="text-sm font-semibold text-gray-900">{formatCurrency(ticket.price)}</div>
-                {ticket.refundAmount && (
-                    <div className="text-xs text-red-600">Refund: {formatCurrency(ticket.refundAmount)}</div>
+                {ticket.refund_amount && (
+                    <div className="text-xs text-red-600">Refund: {formatCurrency(ticket.refund_amount)}</div>
                 )}
             </div>,
-            <div key="bookedAt" className="text-sm text-gray-600">{formatDate(ticket.bookedAt)}</div>,
+            <div key="bookedAt" className="text-sm text-gray-600">{formatDate(ticket.booking_time)}</div>,
         ],
     }));
 
@@ -182,39 +163,26 @@ export const TicketsHistory = ({ selectedWeek }: TicketsHistoryProps) => {
             <div className="flex flex-col md:flex-row gap-4">
                 <div className="flex-1">
                     <Input
-                        placeholder="Search by ticket number, passenger name, user email..."
+                        placeholder="Search by ticket code, passenger, user..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full"
                     />
                 </div>
-                <div className="w-full md:w-48">
+                <div className="w-full md:w-64">
                     <Select
                         value={filterStatus}
                         onChange={(value) => setFilterStatus(value)}
                         options={[
                             { value: 'all', label: 'All Statuses' },
-                            { value: 'confirmed', label: 'Confirmed' },
-                            { value: 'pending', label: 'Pending' },
-                            { value: 'cancelled', label: 'Cancelled' },
+                            { value: 'CONFIRMED', label: 'Confirmed' },
+                            { value: 'PENDING', label: 'Pending' },
+                            { value: 'CANCELLED', label: 'Cancelled' },
                         ]}
                         placeholder="Status"
                     />
                 </div>
-                <div className="w-full md:w-48">
-                    <Select
-                        value={filterCategory}
-                        onChange={(value) => setFilterCategory(value)}
-                        options={[
-                            { value: 'all', label: 'All Categories' },
-                            { value: 'employee', label: 'Employee' },
-                            { value: 'family', label: 'Family' },
-                            { value: 'student', label: 'Student' },
-                        ]}
-                        placeholder="Category"
-                    />
-                </div>
-                <div className="w-full md:w-48">
+                <div className="w-full md:w-64">
                     <Select
                         value={filterBusType}
                         onChange={(value) => setFilterBusType(value)}
@@ -235,4 +203,3 @@ export const TicketsHistory = ({ selectedWeek }: TicketsHistoryProps) => {
         </div>
     );
 };
-

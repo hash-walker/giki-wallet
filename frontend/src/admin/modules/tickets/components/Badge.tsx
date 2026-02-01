@@ -1,57 +1,34 @@
 interface BadgeProps {
-    status?: 'confirmed' | 'pending' | 'cancelled';
-    category?: 'employee' | 'family' | 'student';
+    status?: 'CONFIRMED' | 'PENDING' | 'CANCELLED' | 'DELETED' | 'Student' | 'Employee';
 }
 
-export const Badge = ({ status, category }: BadgeProps) => {
-    if (status) {
-        return <StatusBadge status={status} />;
-    }
+export const Badge = ({ status }: BadgeProps) => {
+    if (!status) return null;
 
-    if (category) {
-        return <CategoryBadge category={category} />;
-    }
-
-    return null;
-};
-
-const StatusBadge = ({ status }: { status: 'confirmed' | 'pending' | 'cancelled' }) => {
-    const styles = {
-        confirmed: 'bg-accent/10 text-accent',
-        pending: 'bg-yellow-100 text-yellow-800',
-        cancelled: 'bg-destructive/10 text-destructive',
+    const styles: Record<string, string> = {
+        CONFIRMED: 'bg-green-100 text-green-800',
+        PENDING: 'bg-yellow-100 text-yellow-800',
+        CANCELLED: 'bg-red-100 text-red-800',
+        DELETED: 'bg-gray-100 text-gray-800',
+        Student: 'bg-blue-100 text-blue-800',
+        Employee: 'bg-purple-100 text-purple-800',
     };
 
-    const labels = {
-        confirmed: 'Confirmed',
-        pending: 'Pending',
-        cancelled: 'Cancelled',
+    const labels: Record<string, string> = {
+        CONFIRMED: 'Confirmed',
+        PENDING: 'Pending',
+        CANCELLED: 'Cancelled',
+        DELETED: 'Deleted',
+        Student: 'Student',
+        Employee: 'Employee',
     };
+
+    const style = styles[status] || 'bg-gray-100 text-gray-800';
+    const label = labels[status] || status;
 
     return (
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status]}`}>
-            {labels[status]}
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${style}`}>
+            {label}
         </span>
     );
 };
-
-const CategoryBadge = ({ category }: { category: 'employee' | 'family' | 'student' }) => {
-    const styles = {
-        employee: 'bg-primary/10 text-primary',
-        family: 'bg-purple-100 text-purple-800',
-        student: 'bg-accent/10 text-accent',
-    };
-
-    const labels = {
-        employee: 'Employee',
-        family: 'Family',
-        student: 'Student',
-    };
-
-    return (
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[category]}`}>
-            {labels[category]}
-        </span>
-    );
-};
-

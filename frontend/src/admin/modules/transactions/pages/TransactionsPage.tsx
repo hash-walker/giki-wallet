@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { PageHeader, TableWrapper } from '../../../shared';
 import { TransactionsTable } from '../components/TransactionsTable';
 import { TransactionFilters } from '../components/TransactionFilters';
@@ -8,52 +8,59 @@ import { Button } from '@/shared/components/ui/button';
 import { useAuthStore } from '@/shared/stores/authStore';
 import { getTransportTransactions } from '../service';
 import { toast } from 'sonner';
+import { PaginationControl } from '../../../shared/components/PaginationControl';
 
 export const TransactionsPage = () => {
-    // Mock data - replace with API calls
     const { user } = useAuthStore();
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [page, setPage] = useState(1);
+    const [pageSize] = useState(100);
+    const [totalCount, setTotalCount] = useState(0);
+
+    const loadTransactions = useCallback(async (pageNum: number) => {
+        if (user?.user_type === 'TRANSPORT_ADMIN') {
+            setIsLoading(true);
+            try {
+                const response = await getTransportTransactions(pageNum, pageSize);
+                setTransactions(response.data);
+                setTotalCount(response.total_count);
+                setPage(response.page);
+            } catch (error) {
+                console.error("Failed to fetch transactions", error);
+                toast.error("Failed to load transactions");
+            } finally {
+                setIsLoading(false);
+            }
+        } else {
+            // Mock data for others
+            const now = Date.now();
+            setTransactions([
+                {
+                    id: '1',
+                    category: 'wallet',
+                    type: 'topup',
+                    userId: 1,
+                    userName: 'John Doe',
+                    userEmail: 'john@example.com',
+                    amount: 500,
+                    timestamp: new Date(now).toISOString(),
+                    status: 'completed',
+                    paymentMethod: 'jazzcash',
+                },
+            ]);
+            setTotalCount(1);
+            setPage(1);
+        }
+    }, [user, pageSize]);
 
     useEffect(() => {
-        const loadTransactions = async () => {
-            // For Transport Admin, fetch real data
-            if (user?.user_type === 'TRANSPORT_ADMIN') {
-                setIsLoading(true);
-                try {
-                    const data = await getTransportTransactions();
-                    setTransactions(data);
-                } catch (error) {
-                    console.error("Failed to fetch transactions", error);
-                    toast.error("Failed to load transactions");
-                } finally {
-                    setIsLoading(false);
-                }
-            } else {
-                // Mock data for others (or implement super admin fetch later)
-                const now = Date.now();
-                setTransactions([
-                    // ... existing mock data ...
-                    // (I'll keep the mock data here for dev/other roles if needed, 
-                    // but for brevity I will just set the existing mock data in the else block)
-                    {
-                        id: '1',
-                        category: 'wallet',
-                        type: 'topup',
-                        userId: 1,
-                        userName: 'John Doe',
-                        userEmail: 'john@example.com',
-                        amount: 500,
-                        timestamp: new Date(now).toISOString(),
-                        status: 'completed',
-                        paymentMethod: 'jazzcash',
-                    },
-                    // ... include a few more samples if desired
-                ]);
-            }
-        };
-        loadTransactions();
-    }, [user]);
+        loadTransactions(1);
+    }, [loadTransactions]);
+
+    const handlePageChange = (newPage: number) => {
+        loadTransactions(newPage);
+    };
 
     const [searchTerm, setSearchTerm] = useState('');
     const [category, setCategory] = useState<TransactionCategory | 'all'>('all');
@@ -61,21 +68,15 @@ export const TransactionsPage = () => {
     const [status, setStatus] = useState<string>('all');
 
     const filteredTransactions = useMemo(() => {
+        // Important: this filtering is currently local to the fetched page
         return transactions.filter((transaction) => {
-            // Search filter
             const matchesSearch =
                 transaction.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                transaction.userEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (transaction.category === 'ticket' &&
                     transaction.ticketNumber?.toLowerCase().includes(searchTerm.toLowerCase()));
 
-            // Category filter
             const matchesCategory = category === 'all' || transaction.category === category;
-
-            // Type filter
             const matchesType = type === 'all' || transaction.type === type;
-
-            // Status filter
             const matchesStatus = status === 'all' || transaction.status === status;
 
             return matchesSearch && matchesCategory && matchesType && matchesStatus;
@@ -83,11 +84,9 @@ export const TransactionsPage = () => {
     }, [transactions, searchTerm, category, type, status]);
 
     const handleExport = () => {
-        // TODO: Implement export functionality
         console.log('Export transactions');
     };
 
-    // Determine which category to show in table
     const tableCategory = category !== 'all' ? category : undefined;
 
     return (
@@ -110,7 +109,7 @@ export const TransactionsPage = () => {
                 category={category}
                 onCategoryChange={(value) => {
                     setCategory(value as TransactionCategory | 'all');
-                    setType('all'); // Reset type when category changes
+                    setType('all');
                 }}
                 type={type}
                 onTypeChange={setType}
@@ -122,36 +121,51 @@ export const TransactionsPage = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <SummaryCard
                     title="Total Transactions"
+                    value={totalCount}
+                    icon={<FileText className="w-5 h-5" />}
+                />
+                <SummaryCard
+                    title="Page Transactions"
                     value={filteredTransactions.length}
                     icon={<FileText className="w-5 h-5" />}
                 />
                 <SummaryCard
-                    title="Wallet Transactions"
-                    value={filteredTransactions.filter(t => t.category === 'wallet').length}
-                    icon={<FileText className="w-5 h-5" />}
-                />
-                <SummaryCard
-                    title="Ticket Transactions"
+                    title="Ticket (Page)"
                     value={filteredTransactions.filter(t => t.category === 'ticket').length}
                     icon={<FileText className="w-5 h-5" />}
                 />
                 <SummaryCard
-                    title="Total Amount"
+                    title="Page Amount"
                     value={`RS ${filteredTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0).toLocaleString()}`}
                     icon={<FileText className="w-5 h-5" />}
                 />
             </div>
 
             {/* Transactions Table */}
-            <TableWrapper count={filteredTransactions.length} itemName="transaction">
-                <TransactionsTable
-                    transactions={filteredTransactions}
-                    category={tableCategory}
-                />
+            <TableWrapper
+                count={totalCount}
+                itemName="transaction"
+                isLoading={isLoading}
+            >
+                <div className="space-y-4">
+                    <div className="flex justify-end">
+                        <PaginationControl
+                            currentPage={page}
+                            totalPages={Math.ceil(totalCount / pageSize)}
+                            onPageChange={handlePageChange}
+                        />
+                    </div>
+
+                    <TransactionsTable
+                        transactions={filteredTransactions}
+                        category={tableCategory}
+                    />
+                </div>
             </TableWrapper>
         </div>
     );
 };
+
 
 const SummaryCard = ({ title, value, icon }: { title: string; value: string | number; icon: React.ReactNode }) => {
     return (
