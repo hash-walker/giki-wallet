@@ -35,6 +35,10 @@ export const TripService = {
         return data;
     },
 
+    deleteTrip: async (tripId: string): Promise<void> => {
+        await apiClient.delete(`/admin/trips/${tripId}`);
+    },
+
     getAllUpcomingTrips: async (): Promise<TripResponse[]> => {
         // Backend: r.Get("/trips/upcoming", s.Transport.GetAllUpcomingTrips) under /transport
         const { data } = await apiClient.get<TripResponse[]>('/transport/trips/upcoming');

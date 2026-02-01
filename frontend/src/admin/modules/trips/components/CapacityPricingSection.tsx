@@ -41,35 +41,6 @@ export const CapacityPricingSection = () => {
                     )}
                 />
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-                <Controller
-                    control={control}
-                    name="bookingOpenOffset"
-                    render={({ field }) => (
-                        <Input
-                            label="Opens Before (Hours) *"
-                            type="number"
-                            {...field}
-                            onChange={e => field.onChange(parseInt(e.target.value))}
-                            error={errors.bookingOpenOffset?.message}
-                        />
-                    )}
-                />
-                <Controller
-                    control={control}
-                    name="bookingCloseOffset"
-                    render={({ field }) => (
-                        <Input
-                            label="Closes Before (Hours) *"
-                            type="number"
-                            {...field}
-                            onChange={e => field.onChange(parseInt(e.target.value))}
-                            error={errors.bookingCloseOffset?.message}
-                        />
-                    )}
-                />
-            </div>
         </div>
     );
 };

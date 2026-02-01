@@ -70,7 +70,7 @@ export const useAuthStore = create<AuthState>()(
         error: null,
 
         signOut: () => {
-            void apiSignOut().catch(() => {});
+            void apiSignOut().catch(() => { });
             localStorage.removeItem('auth_token');
             set({ token: null, user: null, error: null, isLoading: false, initialized: true });
         },

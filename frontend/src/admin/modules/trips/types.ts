@@ -35,8 +35,8 @@ export interface TripStopRequest {
 export interface CreateTripRequest {
     route_id: string;
     departure_time: string; // ISO String
-    booking_opens_at: string; // ISO String
-    booking_closes_at: string; // ISO String
+    booking_open_offset_hours: number;
+    booking_close_offset_hours: number;
     total_capacity: number;
     base_price: number;
     bus_type: string;
@@ -49,13 +49,14 @@ export interface CreateTripResponse {
 }
 
 export interface TripResponse {
-    trip_id: string;
+    id: string; // Changed from trip_id to match backend
     route_name: string;
     departure_time: string; // ISO String
-    booking_status: string; // OPEN, FULL, LOCKED, CLOSED, CANCELLED
+    status: string; // Changed from booking_status - OPEN, FULL, LOCKED, CLOSED, CANCELLED
     opens_at: string;
     available_seats: number;
-    price: number;
+    total_capacity: number;
+    base_price: number; // Changed from price to match backend
     bus_type: string;
     direction: string;
     stops: TripStopItem[];

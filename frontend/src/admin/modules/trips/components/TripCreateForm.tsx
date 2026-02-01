@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useForm, FormProvider, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { addHours, parse } from 'date-fns';
+import { addHours, parse, format, differenceInHours } from 'date-fns';
 import { useTripCreateStore } from '../store';
 import { createTripSchema, CreateTripFormValues } from '../schema';
 import { Button } from '@/shared/components/ui/button';
@@ -9,6 +9,7 @@ import { Select } from '@/shared/components/ui/Select';
 import { RouteScheduleSection } from './RouteScheduleSection';
 import { CapacityPricingSection } from './CapacityPricingSection';
 import { StopsSelectionSection } from './StopsSelectionSection';
+import { BookingWindowSection } from './BookingWindowSection';
 
 export const TripCreateForm = () => {
     const {
@@ -24,13 +25,15 @@ export const TripCreateForm = () => {
     const methods = useForm<CreateTripFormValues>({
         resolver: zodResolver(createTripSchema),
         defaultValues: {
-            bookingOpenOffset: 48,
-            bookingCloseOffset: 5,
             totalCapacity: 0,
             basePrice: 0,
             selectedStopIds: [],
             date: new Date(),
             time: "08:00",
+            bookingOpenDate: new Date(),
+            bookingOpenTime: "08:00",
+            bookingCloseDate: new Date(),
+            bookingCloseTime: "08:00",
             busType: "STUDENT"
         },
     });
@@ -49,7 +52,21 @@ export const TripCreateForm = () => {
     // When route template loads, update form defaults
     useEffect(() => {
         if (template) {
-            setValue('bookingOpenOffset', template.rules.open_hours_before);
+            // Calculate default booking times from offset hours
+            const currentDate = methods.getValues('date') || new Date();
+            const currentTime = methods.getValues('time') || '08:00';
+            const departureDateTime = parse(currentTime, 'HH:mm', currentDate);
+
+            // Booking opens X hours before departure
+            const bookingOpenDateTime = addHours(departureDateTime, -template.rules.open_hours_before);
+            setValue('bookingOpenDate', bookingOpenDateTime);
+            setValue('bookingOpenTime', format(bookingOpenDateTime, 'HH:mm'));
+
+            // Booking closes X hours before departure
+            const bookingCloseDateTime = addHours(departureDateTime, -template.rules.close_hours_before);
+            setValue('bookingCloseDate', bookingCloseDateTime);
+            setValue('bookingCloseTime', format(bookingCloseDateTime, 'HH:mm'));
+
             // Auto-detect direction
             const stops = template.stops;
             if (stops.length >= 2) {
@@ -79,7 +96,7 @@ export const TripCreateForm = () => {
                 .map(s => s.stop_id);
             setValue('selectedStopIds', activeStopIds);
         }
-    }, [template, setValue]);
+    }, [template, setValue, methods]);
 
     const handleRouteChange = (routeId: string) => {
         selectRoute(routeId);
@@ -87,17 +104,22 @@ export const TripCreateForm = () => {
     };
 
     const onSubmit = async (values: CreateTripFormValues) => {
-        // Combine Date + Time
+        // Combine Date + Time for departure
         const departureDateTime = parse(values.time, 'HH:mm', values.date);
 
-        const opensAt = addHours(departureDateTime, -values.bookingOpenOffset);
-        const closesAt = addHours(departureDateTime, -values.bookingCloseOffset);
+        // Combine Date + Time for booking window
+        const bookingOpenDateTime = parse(values.bookingOpenTime, 'HH:mm', values.bookingOpenDate);
+        const bookingCloseDateTime = parse(values.bookingCloseTime, 'HH:mm', values.bookingCloseDate);
+
+        // Calculate offset hours (hours before departure)
+        const openOffsetHours = Math.round(differenceInHours(departureDateTime, bookingOpenDateTime));
+        const closeOffsetHours = Math.round(differenceInHours(departureDateTime, bookingCloseDateTime));
 
         const payload = {
             route_id: values.routeId,
             departure_time: departureDateTime.toISOString(),
-            booking_opens_at: opensAt.toISOString(),
-            booking_closes_at: closesAt.toISOString(),
+            booking_open_offset_hours: openOffsetHours,
+            booking_close_offset_hours: closeOffsetHours,
             total_capacity: values.totalCapacity,
             base_price: values.basePrice,
             bus_type: values.busType,
@@ -108,7 +130,6 @@ export const TripCreateForm = () => {
         const success = await createTrip(payload);
         if (success) {
             reset();
-            // In real app, maybe navigate away or show success modal
         }
     };
 
@@ -127,10 +148,11 @@ export const TripCreateForm = () => {
                         />
                     </div>
 
-                    {/* --- RIGHT COLUMN: Capacity & Stops --- */}
+                    {/* --- RIGHT COLUMN: Booking Window, Capacity & Stops --- */}
                     <div className="space-y-6">
                         {template && (
                             <>
+                                <BookingWindowSection />
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-gray-700">Bus Type</label>
                                     <Controller

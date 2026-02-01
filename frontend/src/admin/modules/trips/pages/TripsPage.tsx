@@ -1,16 +1,21 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
-import { Plus, Search, Filter } from 'lucide-react';
+import { format, startOfWeek, endOfWeek, addDays } from 'date-fns';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
-import { Input } from '@/shared/components/ui/Input';
+import { WeekSelector } from '@/admin/shared/components/WeekSelector';
 import { useTripCreateStore } from '../store';
 import { cn } from '@/lib/utils';
 import { TripResponse } from '../types';
+import { DeleteTripModal } from '../components/DeleteTripModal';
 
 export const TripsPage = () => {
     const navigate = useNavigate();
-    const { trips, isLoadingTrips, fetchTrips } = useTripCreateStore();
+    const { trips, isLoadingTrips, fetchTrips, deleteTrip, isDeletingTrip } = useTripCreateStore();
+
+    const [currentWeek, setCurrentWeek] = useState(new Date());
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [tripToDelete, setTripToDelete] = useState<TripResponse | null>(null);
 
     useEffect(() => {
         fetchTrips();
@@ -25,6 +30,29 @@ export const TripsPage = () => {
             case 'CANCELLED': return 'bg-red-100 text-red-800';
             default: return 'bg-gray-100 text-gray-800';
         }
+    };
+
+    const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 });
+    const weekEnd = endOfWeek(currentWeek, { weekStartsOn: 1 });
+    const weekRange = `${format(weekStart, 'MMM d')} - ${format(weekEnd, 'MMM d, yyyy')}`;
+
+    const handleDeleteClick = (trip: TripResponse) => {
+        setTripToDelete(trip);
+        setDeleteModalOpen(true);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (tripToDelete) {
+            const success = await deleteTrip(tripToDelete.id);
+            if (success) {
+                setDeleteModalOpen(false);
+                setTripToDelete(null);
+            }
+        }
+    };
+
+    const handleEditClick = (tripId: string) => {
+        navigate(`/admin/trips/${tripId}/edit`);
     };
 
     return (
@@ -42,20 +70,12 @@ export const TripsPage = () => {
                 </Button>
             </div>
 
-            {/* Filter Bar (Placeholder for now) */}
-            <div className="flex items-center gap-3 p-4 bg-white border rounded-lg shadow-sm">
-                <div className="relative flex-1 max-w-sm">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                        placeholder="Search trips..."
-                        className="pl-9 h-10"
-                    />
-                </div>
-                <Button variant="outline" size="sm" className="hidden sm:flex">
-                    <Filter className="w-4 h-4 mr-2" />
-                    Filters
-                </Button>
-            </div>
+            {/* Week Filter */}
+            <WeekSelector
+                currentWeek={currentWeek}
+                onWeekChange={setCurrentWeek}
+                weekRange={weekRange}
+            />
 
             {/* Trips List */}
             <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
@@ -89,34 +109,28 @@ export const TripsPage = () => {
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {trips.map((trip) => (
-                                    <tr key={trip.trip_id} className="hover:bg-gray-50 transition-colors">
+                                    <tr key={trip.id} className="hover:bg-gray-50 transition-colors">
                                         <td className="px-6 py-4">
                                             <span className={cn(
                                                 "px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide",
-                                                getStatusColor(trip.booking_status)
+                                                getStatusColor(trip.status)
                                             )}>
-                                                {trip.booking_status}
+                                                {trip.status}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 font-medium text-gray-900">
                                             {trip.route_name}
                                         </td>
                                         <td className="px-6 py-4 text-gray-600">
-                                            {format(new Date(trip.departure_time), 'EEE, MMM d • HH:mm')}
+                                            {format(new Date(trip.departure_time), 'EEE, MMM d • h:mm a')}
                                         </td>
                                         <td className="px-6 py-4 text-gray-600">
                                             <span className="font-semibold">{trip.available_seats}</span>
                                             <span className="text-gray-400 mx-1">/</span>
-                                            <span className="text-gray-400">
-                                                {/* Total capacity logic isn't directly exposed in this DTO, 
-                                                    but Available + Sold would be Total. 
-                                                    Or we can just show available for now. 
-                                                */}
-                                                -
-                                            </span>
+                                            <span className="text-gray-500">{trip.total_capacity}</span>
                                         </td>
                                         <td className="px-6 py-4 text-gray-600">
-                                            ${trip.price.toFixed(2)}
+                                            {trip.base_price.toFixed(2)}
                                         </td>
                                         <td className="px-6 py-4 text-gray-600">
                                             {trip.bus_type}
@@ -124,10 +138,28 @@ export const TripsPage = () => {
                                         <td className="px-6 py-4 text-gray-600">
                                             {trip.direction}
                                         </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <Button variant="ghost" size="sm">
-                                                Edit
-                                            </Button>
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center justify-end gap-2">
+                                                {/* Edit button - to be implemented
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleEditClick(trip.id)}
+                                                >
+                                                    <Pencil className="w-4 h-4 mr-1" />
+                                                    Edit
+                                                </Button>
+                                                */}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleDeleteClick(trip)}
+                                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                                >
+                                                    <Trash2 className="w-4 h-4 mr-1" />
+                                                    Delete
+                                                </Button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -136,6 +168,21 @@ export const TripsPage = () => {
                     </div>
                 )}
             </div>
+
+            {/* Delete Confirmation Modal */}
+            {tripToDelete && (
+                <DeleteTripModal
+                    isOpen={deleteModalOpen}
+                    tripName={tripToDelete.route_name}
+                    departureTime={format(new Date(tripToDelete.departure_time), 'EEE, MMM d • h:mm a')}
+                    onClose={() => {
+                        setDeleteModalOpen(false);
+                        setTripToDelete(null);
+                    }}
+                    onConfirm={handleDeleteConfirm}
+                    isDeleting={isDeletingTrip}
+                />
+            )}
         </div>
     );
 };

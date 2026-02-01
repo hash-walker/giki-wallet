@@ -14,6 +14,7 @@ interface TripCreateState {
     isLoadingTemplate: boolean;
     isLoadingTrips: boolean;
     isSubmitting: boolean;
+    isDeletingTrip: boolean;
 
     // Actions
     fetchRoutes: () => Promise<void>;
@@ -21,6 +22,7 @@ interface TripCreateState {
     selectRoute: (routeId: string) => Promise<void>;
     resetTemplate: () => void;
     createTrip: (payload: any) => Promise<boolean>;
+    deleteTrip: (tripId: string) => Promise<boolean>;
 }
 
 export const useTripCreateStore = create<TripCreateState>((set, get) => ({
@@ -32,6 +34,7 @@ export const useTripCreateStore = create<TripCreateState>((set, get) => ({
     isLoadingTemplate: false,
     isLoadingTrips: false,
     isSubmitting: false,
+    isDeletingTrip: false,
 
     fetchRoutes: async () => {
         set({ isLoadingRoutes: true });
@@ -89,6 +92,22 @@ export const useTripCreateStore = create<TripCreateState>((set, get) => ({
             return false;
         } finally {
             set({ isSubmitting: false });
+        }
+    },
+
+    deleteTrip: async (tripId: string) => {
+        set({ isDeletingTrip: true });
+        try {
+            await TripService.deleteTrip(tripId);
+            toast.success("Trip deleted successfully!");
+            get().fetchTrips(); // Refresh list after deletion
+            return true;
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to delete trip");
+            return false;
+        } finally {
+            set({ isDeletingTrip: false });
         }
     }
 }));

@@ -6,9 +6,11 @@ export const createTripSchema = z.object({
     date: z.date(),
     time: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "Invalid time format (HH:mm)" }),
 
-    // Rules
-    bookingOpenOffset: z.number().min(1, "Must be at least 1 hour"),
-    bookingCloseOffset: z.number().min(1, "Must be at least 1 hour"),
+    // Booking window times (admin selects actual date/time)
+    bookingOpenDate: z.date(),
+    bookingOpenTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "Invalid time format (HH:mm)" }),
+    bookingCloseDate: z.date(),
+    bookingCloseTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "Invalid time format (HH:mm)" }),
 
     // Capacity & Price
     totalCapacity: z.number().min(1, "Capacity must be greater than 0"),
