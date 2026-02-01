@@ -8,9 +8,16 @@ import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
 import { PageHeader, TableWrapper } from '../../../shared';
 import { useUserStore } from '../store';
+import { PaginationControl } from '@/admin/shared/components/PaginationControl';
 
 export const UsersPage = () => {
-    const { users, isLoading, fetchUsers, toggleUserStatus } = useUserStore();
+    const { users, isLoading, fetchUsers, toggleUserStatus, pagination } = useUserStore();
+
+    const totalPages = Math.ceil(pagination.totalCount / pagination.pageSize);
+
+    const handlePageChange = (page: number) => {
+        fetchUsers(page);
+    };
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | undefined>();
@@ -19,7 +26,7 @@ export const UsersPage = () => {
     const [filterStatus, setFilterStatus] = useState<string>('all');
 
     useEffect(() => {
-        fetchUsers();
+        fetchUsers(1);
     }, [fetchUsers]);
 
     const handleAddUser = () => {
@@ -119,13 +126,22 @@ export const UsersPage = () => {
             </div>
 
             {/* Users Table */}
-            <TableWrapper count={filteredUsers.length} itemName="user" isLoading={isLoading}>
-                <UsersTable
-                    users={filteredUsers}
-                    onEdit={handleEditUser}
-                    onDelete={handleDeleteUser}
-                    onToggleActive={handleToggleActive}
-                />
+            <TableWrapper count={pagination.totalCount} itemName="user" isLoading={isLoading}>
+                <div className="flex flex-col">
+                    <div className="p-4 border-b">
+                        <PaginationControl
+                            currentPage={pagination.page}
+                            totalPages={totalPages}
+                            onPageChange={handlePageChange}
+                        />
+                    </div>
+                    <UsersTable
+                        users={filteredUsers}
+                        onEdit={handleEditUser}
+                        onDelete={handleDeleteUser}
+                        onToggleActive={handleToggleActive}
+                    />
+                </div>
             </TableWrapper>
 
             {/* User Form Modal */}

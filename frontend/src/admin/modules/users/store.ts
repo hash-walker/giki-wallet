@@ -8,22 +8,39 @@ interface UserState {
     users: User[];
     isLoading: boolean;
     isUpdating: boolean;
+    pagination: {
+        page: number;
+        pageSize: number;
+        totalCount: number;
+    };
 
     // Actions
-    fetchUsers: () => Promise<void>;
+    fetchUsers: (page?: number) => Promise<void>;
     toggleUserStatus: (userId: string, currentStatus: boolean) => Promise<void>;
 }
 
-export const useUserStore = create<UserState>((set) => ({
+export const useUserStore = create<UserState>((set, get) => ({
     users: [],
     isLoading: false,
     isUpdating: false,
+    pagination: {
+        page: 1,
+        pageSize: 20,
+        totalCount: 0,
+    },
 
-    fetchUsers: async () => {
+    fetchUsers: async (page = 1) => {
         set({ isLoading: true });
         try {
-            const users = await UserService.listUsers();
-            set({ users });
+            const response = await UserService.listUsers(page, get().pagination.pageSize);
+            set({
+                users: response.data,
+                pagination: {
+                    ...get().pagination,
+                    page: response.page,
+                    totalCount: response.total_count,
+                }
+            });
         } catch (error) {
             console.error(error);
             toast.error('Failed to fetch users');

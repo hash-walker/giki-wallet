@@ -23,7 +23,7 @@ const adminNavItems = [
     { path: '/admin/transactions', label: 'Transactions', icon: Receipt },
     { path: '/admin/gateway-transactions', label: 'Gateway Txns', icon: Receipt },
     // History
-    { path: '/admin/history', label: 'History', icon: History },
+    { path: '/admin/trips/history', label: 'Trip History', icon: History },
     // Settings
     { path: '/admin/settings', label: 'Settings', icon: Settings },
 ];
@@ -48,6 +48,7 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
                 '/admin/trips',
                 '/admin/users',
                 '/admin/transactions',
+                '/admin/trips/history',
             ];
             return allowedPaths.includes(item.path);
         }

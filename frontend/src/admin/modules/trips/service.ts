@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/axios';
-import { CreateTripRequest, CreateTripResponse, Route, RouteTemplateResponse, TripResponse } from './types';
+import { CreateTripRequest, CreateTripResponse, Route, RouteTemplateResponse, TripResponse, TripHistoryPaginationResponse } from './types';
 
 export const TripService = {
     getAllRoutes: async (): Promise<Route[]> => {
@@ -45,9 +45,32 @@ export const TripService = {
         return data;
     },
 
-    getAllTrips: async (): Promise<TripResponse[]> => {
-        // Admin: r.Get("/trips", s.Transport.AdminListTrips) under /admin
-        const { data } = await apiClient.get<TripResponse[]>('/admin/trips');
+    getAllTrips: async (startDate?: Date, endDate?: Date): Promise<TripResponse[]> => {
+        const params = new URLSearchParams();
+        if (startDate) params.append('start_date', startDate.toISOString());
+        if (endDate) params.append('end_date', endDate.toISOString());
+
+        const { data } = await apiClient.get<TripResponse[]>('/admin/trips', { params });
+        return data;
+    },
+
+    getDeletedTripsHistory: async (page: number = 1, pageSize: number = 20): Promise<TripHistoryPaginationResponse> => {
+        const { data } = await apiClient.get<TripHistoryPaginationResponse>('/admin/trips/history', {
+            params: { page, page_size: pageSize }
+        });
+        return data;
+    },
+
+    exportTrips: async (startDate?: Date, endDate?: Date, routeIds?: string[]): Promise<Blob> => {
+        const params = new URLSearchParams();
+        if (startDate) params.append('start_date', startDate.toISOString());
+        if (endDate) params.append('end_date', endDate.toISOString());
+        if (routeIds && routeIds.length > 0) params.append('route_ids', routeIds.join(','));
+
+        const { data } = await apiClient.get('/admin/transport/trips/export', {
+            params,
+            responseType: 'blob',
+        });
         return data;
     },
 };

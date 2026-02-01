@@ -1,9 +1,11 @@
 import { apiClient } from '@/lib/axios';
-import { User } from './schema';
+import { User, UsersPaginationResponse } from './schema';
 
 export const UserService = {
-    listUsers: async (): Promise<User[]> => {
-        const { data } = await apiClient.get<User[]>('/admin/users');
+    listUsers: async (page = 1, pageSize = 20): Promise<UsersPaginationResponse> => {
+        const { data } = await apiClient.get<UsersPaginationResponse>('/admin/users', {
+            params: { page, page_size: pageSize },
+        });
         return data;
     },
 

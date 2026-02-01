@@ -8,17 +8,25 @@ interface TripCreateState {
     routes: Route[];
     template: RouteTemplateResponse | null;
     trips: TripResponse[];
+    deletedTrips: TripResponse[];
+    deletedTripsPagination: {
+        page: number;
+        pageSize: number;
+        totalCount: number;
+    };
 
     // UI State
     isLoadingRoutes: boolean;
     isLoadingTemplate: boolean;
     isLoadingTrips: boolean;
+    isLoadingDeletedTrips: boolean;
     isSubmitting: boolean;
     isDeletingTrip: boolean;
 
     // Actions
     fetchRoutes: () => Promise<void>;
-    fetchTrips: () => Promise<void>;
+    fetchTrips: (startDate?: Date, endDate?: Date) => Promise<void>;
+    fetchDeletedTripsHistory: (page?: number) => Promise<void>;
     selectRoute: (routeId: string) => Promise<void>;
     resetTemplate: () => void;
     createTrip: (payload: any) => Promise<boolean>;
@@ -29,10 +37,17 @@ export const useTripCreateStore = create<TripCreateState>((set, get) => ({
     routes: [],
     template: null,
     trips: [],
+    deletedTrips: [],
+    deletedTripsPagination: {
+        page: 1,
+        pageSize: 20,
+        totalCount: 0,
+    },
 
     isLoadingRoutes: false,
     isLoadingTemplate: false,
     isLoadingTrips: false,
+    isLoadingDeletedTrips: false,
     isSubmitting: false,
     isDeletingTrip: false,
 
@@ -49,16 +64,36 @@ export const useTripCreateStore = create<TripCreateState>((set, get) => ({
         }
     },
 
-    fetchTrips: async () => {
+    fetchTrips: async (startDate?: Date, endDate?: Date) => {
         set({ isLoadingTrips: true });
         try {
-            const trips = await TripService.getAllTrips();
+            const trips = await TripService.getAllTrips(startDate, endDate);
             set({ trips });
         } catch (error) {
             console.error(error);
             toast.error('Failed to load trips');
         } finally {
             set({ isLoadingTrips: false });
+        }
+    },
+
+    fetchDeletedTripsHistory: async (page = 1) => {
+        set({ isLoadingDeletedTrips: true });
+        try {
+            const response = await TripService.getDeletedTripsHistory(page);
+            set({
+                deletedTrips: response.data,
+                deletedTripsPagination: {
+                    page: response.page,
+                    pageSize: response.page_size,
+                    totalCount: response.total_count,
+                }
+            });
+        } catch (error) {
+            console.error(error);
+            toast.error('Failed to load deleted trips history');
+        } finally {
+            set({ isLoadingDeletedTrips: false });
         }
     },
 

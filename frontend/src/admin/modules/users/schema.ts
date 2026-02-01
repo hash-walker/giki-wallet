@@ -21,3 +21,11 @@ export const updateUserStatusSchema = z.object({
 export type User = z.infer<typeof userSchema>;
 export type UserRole = z.infer<typeof userRoleSchema>;
 export type UpdateUserStatus = z.infer<typeof updateUserStatusSchema>;
+
+export interface UsersPaginationResponse {
+    data: User[];
+    total_count: number;
+    page: number;
+    page_size: number;
+}
+

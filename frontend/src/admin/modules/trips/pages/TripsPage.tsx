@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, startOfWeek, endOfWeek, addDays } from 'date-fns';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Download } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { WeekSelector } from '@/admin/shared/components/WeekSelector';
 import { useTripCreateStore } from '../store';
 import { cn } from '@/lib/utils';
 import { TripResponse } from '../types';
 import { DeleteTripModal } from '../components/DeleteTripModal';
+import { ExportTripsModal } from '../components/ExportTripsModal';
 
 export const TripsPage = () => {
     const navigate = useNavigate();
@@ -15,11 +16,14 @@ export const TripsPage = () => {
 
     const [currentWeek, setCurrentWeek] = useState(new Date());
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [exportModalOpen, setExportModalOpen] = useState(false);
     const [tripToDelete, setTripToDelete] = useState<TripResponse | null>(null);
 
     useEffect(() => {
-        fetchTrips();
-    }, [fetchTrips]);
+        const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 });
+        const weekEnd = endOfWeek(currentWeek, { weekStartsOn: 1 });
+        fetchTrips(weekStart, weekEnd);
+    }, [currentWeek, fetchTrips]);
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -64,10 +68,19 @@ export const TripsPage = () => {
                         View and manage upcoming transport trips.
                     </p>
                 </div>
-                <Button onClick={() => navigate('/admin/trips/new')}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    New Trip
-                </Button>
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => navigate('/admin/trips/history')}>
+                        History
+                    </Button>
+                    <Button variant="outline" onClick={() => setExportModalOpen(true)}>
+                        <Download className="w-4 h-4 mr-2" />
+                        Export Data
+                    </Button>
+                    <Button onClick={() => navigate('/admin/trips/new')}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        New Trip
+                    </Button>
+                </div>
             </div>
 
             {/* Week Filter */}
@@ -183,6 +196,11 @@ export const TripsPage = () => {
                     isDeleting={isDeletingTrip}
                 />
             )}
+
+            <ExportTripsModal
+                isOpen={exportModalOpen}
+                onClose={() => setExportModalOpen(false)}
+            />
         </div>
     );
 };
