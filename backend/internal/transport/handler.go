@@ -145,7 +145,19 @@ func (h *Handler) DeleteTrip(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) AdminGetRevenueTransactions(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
 
-	txns, err := h.service.GetRevenueTransactions(r.Context())
+	pageStr := r.URL.Query().Get("page")
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	pageSizeStr := r.URL.Query().Get("page_size")
+	pageSize, err := strconv.Atoi(pageSizeStr)
+	if err != nil || pageSize < 1 {
+		pageSize = 20
+	}
+
+	txns, err := h.service.GetRevenueTransactions(r.Context(), page, pageSize)
 	if err != nil {
 		middleware.HandleError(w, err, requestID)
 		return
@@ -409,4 +421,59 @@ func getUserRoleForTransport(r *http.Request) string {
 	default:
 		return strings.ToUpper(role)
 	}
+}
+
+func (h *Handler) parsePaginationParams(r *http.Request) (int, int) {
+	pageStr := r.URL.Query().Get("page")
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	pageSizeStr := r.URL.Query().Get("page_size")
+	pageSize, err := strconv.Atoi(pageSizeStr)
+	if err != nil || pageSize < 1 {
+		pageSize = 20
+	}
+	return page, pageSize
+}
+
+func (h *Handler) HandleAdminTickets(w http.ResponseWriter, r *http.Request) {
+
+	requestID := middleware.GetRequestID(r.Context())
+
+	startDate, endDate, err := h.parseDateRangeParams(r)
+	if err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err), requestID)
+		return
+	}
+
+	busType := r.URL.Query().Get("bus_type")
+	if busType == "all" {
+		busType = ""
+	}
+
+	page, pageSize := h.parsePaginationParams(r)
+
+	response, err := h.service.AdminGetTickets(r.Context(), startDate, endDate, busType, page, pageSize)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, response, requestID)
+}
+
+func (h *Handler) HandleAdminTicketHistory(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	page, pageSize := h.parsePaginationParams(r)
+
+	response, err := h.service.AdminGetTicketHistory(r.Context(), page, pageSize)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, response, requestID)
 }

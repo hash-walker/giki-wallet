@@ -445,3 +445,69 @@ WHERE t.departure_time >= $1
       OR t.route_id = ANY($3::uuid[])
   )
 ORDER BY r.name, t.departure_time, ti.serial_no;
+-- name: GetTicketsForAdmin :many
+-- Admin query: Get confirmed tickets for a specific week and specific trip filters
+SELECT
+    t.id as ticket_id,
+    t.serial_no,
+    t.ticket_code,
+    t.passenger_name,
+    t.passenger_relation,
+    t.status as ticket_status,
+    t.booking_time,
+    u.name as user_name,
+    u.email as user_email,
+    tr.id as trip_id,
+    tr.departure_time,
+    tr.bus_type,
+    tr.direction,
+    r.name as route_name,
+    s_pickup.address as pickup_location,
+    s_dropoff.address as dropoff_location,
+    tr.base_price as price,
+    COUNT(*) OVER() as total_count
+FROM giki_transport.tickets t
+JOIN giki_transport.trip tr ON t.trip_id = tr.id
+JOIN giki_transport.routes r ON tr.route_id = r.id
+JOIN giki_wallet.users u ON t.user_id = u.id
+JOIN giki_transport.stops s_pickup ON t.pickup_stop_id = s_pickup.id
+JOIN giki_transport.stops s_dropoff ON t.dropoff_stop_id = s_dropoff.id
+WHERE 
+    tr.departure_time >= sqlc.arg('start_date')
+    AND tr.departure_time < sqlc.arg('end_date')
+    AND (sqlc.arg('bus_type')::text = '' OR tr.bus_type = sqlc.arg('bus_type')::text) -- bus_type filter
+    AND t.status = 'CONFIRMED'
+ORDER BY tr.departure_time ASC, t.serial_no ASC
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
+
+-- name: GetTicketHistoryForAdmin :many
+-- Admin query: Get tickets with status other than CONFIRMED (CANCELLED, etc.)
+SELECT
+    t.id as ticket_id,
+    t.serial_no,
+    t.ticket_code,
+    t.passenger_name,
+    t.passenger_relation,
+    t.status as ticket_status,
+    t.booking_time,
+    t.updated_at as status_updated_at,
+    u.name as user_name,
+    u.email as user_email,
+    tr.id as trip_id,
+    tr.departure_time,
+    tr.bus_type,
+    tr.direction,
+    r.name as route_name,
+    s_pickup.address as pickup_location,
+    s_dropoff.address as dropoff_location,
+    COUNT(*) OVER() as total_count
+FROM giki_transport.tickets t
+JOIN giki_transport.trip tr ON t.trip_id = tr.id
+JOIN giki_transport.routes r ON tr.route_id = r.id
+JOIN giki_wallet.users u ON t.user_id = u.id
+JOIN giki_transport.stops s_pickup ON t.pickup_stop_id = s_pickup.id
+JOIN giki_transport.stops s_dropoff ON t.dropoff_stop_id = s_dropoff.id
+WHERE 
+    t.status != 'CONFIRMED'
+ORDER BY t.updated_at DESC
+LIMIT $1 OFFSET $2;

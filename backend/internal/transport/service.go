@@ -506,13 +506,13 @@ func GenerateRandomCode() string {
 // 5. REVENUE & TRANSACTIONS
 // ═══════════════════════════════════════════════════════════════════════════
 
-func (s *Service) GetRevenueTransactions(ctx context.Context) ([]wallet.TransactionHistoryItem, error) {
+func (s *Service) GetRevenueTransactions(ctx context.Context, page, pageSize int) (*wallet.LedgerHistoryWithPagination, error) {
 	revenueWalletID, err := s.wallet.GetSystemWalletByName(ctx, wallet.TransportSystemWallet, wallet.SystemWalletRevenue)
 	if err != nil {
 		return nil, commonerrors.Wrap(commonerrors.ErrInternal, err)
 	}
 
-	return s.wallet.GetWalletHistory(ctx, revenueWalletID)
+	return s.wallet.GetWalletHistory(ctx, revenueWalletID, page, pageSize)
 }
 func (s *Service) ExportTripData(ctx context.Context, startDate, endDate time.Time, routeIDs []uuid.UUID) ([]byte, error) {
 	rows, err := s.q.GetTripsForExport(ctx, transport_db.GetTripsForExportParams{
@@ -625,4 +625,109 @@ func (s *Service) ExportTripData(ctx context.Context, startDate, endDate time.Ti
 	}
 
 	return buf.Bytes(), nil
+}
+func (s *Service) AdminGetTickets(ctx context.Context, startDate, endDate time.Time, busType string, page, pageSize int) (*AdminTicketPaginationResponse, error) {
+	limit := int32(pageSize)
+	offset := int32((page - 1) * pageSize)
+
+	rows, err := s.q.GetTicketsForAdmin(ctx, transport_db.GetTicketsForAdminParams{
+		StartDate: startDate,
+		EndDate:   endDate,
+		BusType:   busType,
+		Limit:     limit,
+		Offset:    offset,
+	})
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	var totalCount int64
+	if len(rows) > 0 {
+		totalCount = rows[0].TotalCount
+	}
+
+	return &AdminTicketPaginationResponse{
+		Data:       mapAdminTicketsToItem(rows),
+		TotalCount: totalCount,
+		Page:       page,
+		PageSize:   pageSize,
+	}, nil
+}
+
+func (s *Service) AdminGetTicketHistory(ctx context.Context, page, pageSize int) (*AdminTicketPaginationResponse, error) {
+	limit := int32(pageSize)
+	offset := int32((page - 1) * pageSize)
+
+	rows, err := s.q.GetTicketHistoryForAdmin(ctx, transport_db.GetTicketHistoryForAdminParams{
+		Limit:  limit,
+		Offset: offset,
+	})
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	var totalCount int64
+	if len(rows) > 0 {
+		totalCount = rows[0].TotalCount
+	}
+
+	return &AdminTicketPaginationResponse{
+		Data:       mapAdminTicketHistoryToItem(rows),
+		TotalCount: totalCount,
+		Page:       page,
+		PageSize:   pageSize,
+	}, nil
+}
+
+func mapAdminTicketsToItem(rows []transport_db.GetTicketsForAdminRow) []AdminTicketItem {
+	items := make([]AdminTicketItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, AdminTicketItem{
+			TicketID:          row.TicketID,
+			SerialNo:          row.SerialNo,
+			TicketCode:        row.TicketCode,
+			PassengerName:     row.PassengerName,
+			PassengerRelation: row.PassengerRelation,
+			Status:            row.TicketStatus,
+			BookingTime:       row.BookingTime,
+			UserName:          row.UserName,
+			UserEmail:         row.UserEmail,
+			TripID:            row.TripID,
+			DepartureTime:     row.DepartureTime,
+			BusType:           row.BusType,
+			Direction:         row.Direction,
+			RouteName:         row.RouteName,
+			PickupLocation:    row.PickupLocation,
+			DropoffLocation:   row.DropoffLocation,
+			Price:             200, // Hardcoded for now
+		})
+	}
+	return items
+}
+
+func mapAdminTicketHistoryToItem(rows []transport_db.GetTicketHistoryForAdminRow) []AdminTicketItem {
+	items := make([]AdminTicketItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, AdminTicketItem{
+			TicketID:          row.TicketID,
+			SerialNo:          row.SerialNo,
+			TicketCode:        row.TicketCode,
+			PassengerName:     row.PassengerName,
+			PassengerRelation: row.PassengerRelation,
+			Status:            row.TicketStatus,
+			BookingTime:       row.BookingTime,
+			StatusUpdatedAt:   row.StatusUpdatedAt,
+			UserName:          row.UserName,
+			UserEmail:         row.UserEmail,
+			TripID:            row.TripID,
+			DepartureTime:     row.DepartureTime,
+			BusType:           row.BusType,
+			Direction:         row.Direction,
+			RouteName:         row.RouteName,
+			PickupLocation:    row.PickupLocation,
+			DropoffLocation:   row.DropoffLocation,
+			Price:             200, // Hardcoded for now
+		})
+	}
+	return items
 }

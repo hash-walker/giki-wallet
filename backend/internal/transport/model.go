@@ -122,6 +122,34 @@ type TripHistoryWithPagination struct {
 	PageSize   int                   `json:"page_size"`
 }
 
+type AdminTicketItem struct {
+	TicketID          uuid.UUID `json:"ticket_id"`
+	SerialNo          int32     `json:"serial_no"`
+	TicketCode        string    `json:"ticket_code"`
+	PassengerName     string    `json:"passenger_name"`
+	PassengerRelation string    `json:"passenger_relation"`
+	Status            string    `json:"status"`
+	BookingTime       time.Time `json:"booking_time"`
+	StatusUpdatedAt   time.Time `json:"status_updated_at,omitempty"`
+	UserName          string    `json:"user_name"`
+	UserEmail         string    `json:"user_email"`
+	TripID            uuid.UUID `json:"trip_id"`
+	DepartureTime     time.Time `json:"departure_time"`
+	BusType           string    `json:"bus_type"`
+	Direction         string    `json:"direction"`
+	RouteName         string    `json:"route_name"`
+	PickupLocation    string    `json:"pickup_location"`
+	DropoffLocation   string    `json:"dropoff_location"`
+	Price             int32     `json:"price"`
+}
+
+type AdminTicketPaginationResponse struct {
+	Data       []AdminTicketItem `json:"data"`
+	TotalCount int64             `json:"total_count"`
+	Page       int               `json:"page"`
+	PageSize   int               `json:"page_size"`
+}
+
 // --- Requests ---
 
 // Legacy single hold (kept for backward compatibility)
