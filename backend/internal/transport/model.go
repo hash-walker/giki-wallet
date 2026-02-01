@@ -42,15 +42,15 @@ type QuickSlotItem struct {
 }
 
 type CreateTripRequest struct {
-	RouteID         uuid.UUID         `json:"route_id"`
-	DepartureTime   time.Time         `json:"departure_time"`
-	BookingOpensAt  string            `json:"booking_opens_at"`
-	BookingClosesAt string            `json:"booking_closes_at"`
-	TotalCapacity   int               `json:"total_capacity"`
-	BasePrice       float64           `json:"base_price"`
-	BusType         string            `json:"bus_type"`
-	Direction       string            `json:"direction"`
-	Stops           []TripStopRequest `json:"stops"`
+	RouteID                 uuid.UUID         `json:"route_id"`
+	DepartureTime           time.Time         `json:"departure_time"`
+	BookingOpenOffsetHours  int32             `json:"booking_open_offset_hours"`
+	BookingCloseOffsetHours int32             `json:"booking_close_offset_hours"`
+	TotalCapacity           int               `json:"total_capacity"`
+	BasePrice               float64           `json:"base_price"`
+	BusType                 string            `json:"bus_type"`
+	Direction               string            `json:"direction"`
+	Stops                   []TripStopRequest `json:"stops"`
 }
 
 type TripStopRequest struct {
@@ -178,10 +178,8 @@ type MyTicketResponse struct {
 	RouteName string `json:"route_name"`
 	Direction string `json:"direction"`
 
-	// NEW: The single most important location for the List View
 	RelevantLocation string `json:"relevant_location"`
 
-	// Detailed locations
 	PickupLocation  string `json:"pickup_location"`
 	DropoffLocation string `json:"dropoff_location"`
 

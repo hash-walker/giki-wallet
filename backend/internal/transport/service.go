@@ -53,26 +53,13 @@ func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.U
 	defer tx.Rollback(ctx)
 	qtx := s.q.WithTx(tx)
 
-	// Parse absolute booking window times
-	opensAt, err := time.Parse(time.RFC3339, req.BookingOpensAt)
-	if err != nil {
-		return uuid.Nil, commonerrors.New("INVALID_INPUT", 400, "Invalid booking_opens_at format")
-	}
-	closesAt, err := time.Parse(time.RFC3339, req.BookingClosesAt)
-	if err != nil {
-		return uuid.Nil, commonerrors.New("INVALID_INPUT", 400, "Invalid booking_closes_at format")
-	}
-
-	openOffset := int32(req.DepartureTime.Sub(opensAt).Hours())
-	closeOffset := int32(req.DepartureTime.Sub(closesAt).Hours())
-
 	basePrice := common.AmountToLowestUnit(req.BasePrice)
 
 	tripID, err := qtx.CreateTrip(ctx, transport_db.CreateTripParams{
 		RouteID:                 req.RouteID,
 		DepartureTime:           req.DepartureTime,
-		BookingOpenOffsetHours:  openOffset,
-		BookingCloseOffsetHours: closeOffset,
+		BookingOpenOffsetHours:  req.BookingOpenOffsetHours,
+		BookingCloseOffsetHours: req.BookingCloseOffsetHours,
 		TotalCapacity:           int32(req.TotalCapacity),
 		AvailableSeats:          int32(req.TotalCapacity),
 		BasePrice:               basePrice,
@@ -99,6 +86,14 @@ func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.U
 	}
 
 	return tripID, nil
+}
+
+func (s *Service) DeleteTrip(ctx context.Context, tripID uuid.UUID) error {
+	err := s.q.SoftDeleteTrip(ctx, tripID)
+	if err != nil {
+		return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+	return nil
 }
 
 // =============================================================================

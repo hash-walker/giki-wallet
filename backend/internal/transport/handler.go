@@ -89,6 +89,25 @@ func (h *Handler) GetRouteTemplate(w http.ResponseWriter, r *http.Request) {
 	common.ResponseWithJSON(w, http.StatusOK, template, requestID)
 }
 
+func (h *Handler) DeleteTrip(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	tripIDParam := chi.URLParam(r, "trip_id")
+	tripID, err := uuid.Parse(tripIDParam)
+	if err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err), requestID)
+		return
+	}
+
+	err = h.service.DeleteTrip(r.Context(), tripID)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"status": "deleted"}, requestID)
+}
+
 // =============================================================================
 // BOOKING & QUOTA ENDPOINTS
 // =============================================================================

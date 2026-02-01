@@ -101,6 +101,7 @@ WHERE
     t.departure_time > NOW()
   AND t.departure_time < (NOW() + INTERVAL '7 days')
   AND t.status != 'CLOSED'
+  AND t.status != 'DELETED'
 
 ORDER BY t.departure_time ASC;
 
