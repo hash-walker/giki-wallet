@@ -1,15 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Eye, EyeOff, Plus, Wallet, RotateCcw } from 'lucide-react';
+import { Eye, EyeOff, History, Wallet, RotateCcw } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { useWalletModuleStore } from '../store';
+import { TransactionHistory } from './TransactionHistory';
 
-interface WalletCardProps {
-    onTopUp: () => void;
-}
-
-export const WalletCard = ({ onTopUp }: WalletCardProps) => {
+export const WalletCard = () => {
     const { balance, currency, isDataLoading, fetchBalance } = useWalletModuleStore();
     const [showBalance, setShowBalance] = useState(true);
+    const [showHistory, setShowHistory] = useState(false);
 
     useEffect(() => {
         fetchBalance();
@@ -50,11 +48,11 @@ export const WalletCard = ({ onTopUp }: WalletCardProps) => {
 
                 <div className="flex gap-3">
                     <Button
-                        onClick={onTopUp}
+                        onClick={() => setShowHistory(true)}
                         className="flex-1 bg-white text-gray-900 hover:bg-gray-100 font-bold border-0 h-12 rounded-xl"
                     >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Top Up
+                        <History className="w-4 h-4 mr-2" />
+                        Transaction History
                     </Button>
                     <Button
                         variant="outline"
@@ -72,6 +70,12 @@ export const WalletCard = ({ onTopUp }: WalletCardProps) => {
                     </Button>
                 </div>
             </div>
+
+            {/* Transaction History Modal */}
+            <TransactionHistory
+                isOpen={showHistory}
+                onClose={() => setShowHistory(false)}
+            />
         </div>
     );
 };
