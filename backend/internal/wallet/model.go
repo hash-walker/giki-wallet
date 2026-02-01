@@ -58,3 +58,10 @@ type TransactionHistoryItem struct {
 	Description  string    `json:"description"`
 	CreatedAt    time.Time `json:"created_at"`
 }
+
+type LedgerHistoryWithPagination struct {
+	Data       []TransactionHistoryItem `json:"data"`
+	TotalCount int64                    `json:"total_count"`
+	Page       int                      `json:"page"`
+	PageSize   int                      `json:"page_size"`
+}

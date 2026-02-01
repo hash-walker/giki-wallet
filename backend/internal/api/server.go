@@ -119,6 +119,10 @@ func (s *Server) MountRoutes() {
 		r.Get("/transport/transactions", s.Transport.AdminGetRevenueTransactions)
 		r.Get("/transport/trips/export", s.Transport.HandleExportTrips)
 
+		// Tickets Management
+		r.Get("/tickets", s.Transport.HandleAdminTickets)
+		r.Get("/tickets/history", s.Transport.HandleAdminTicketHistory)
+
 		r.Route("/users", func(r chi.Router) {
 			r.Get("/", s.User.ListUsers)
 			r.Patch("/{user_id}/status", s.User.UpdateUserStatus)

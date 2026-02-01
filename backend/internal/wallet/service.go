@@ -89,7 +89,7 @@ func (s *Service) executeDoubleEntryTransaction(
 	senderBalance, _ := s.getWalletBalance(ctx, walletQ, senderWalletID)
 	receiverBalance, _ := s.getWalletBalance(ctx, walletQ, receiverWalletID)
 
-	debitHash := calculateRowHash(
+	debitHash := s.CalculateRowHash(
 		senderWalletID,
 		-amount,
 		txnHeader.ID,
@@ -110,7 +110,7 @@ func (s *Service) executeDoubleEntryTransaction(
 		return commonerrors.Wrap(ErrDatabase, err)
 	}
 
-	creditHash := calculateRowHash(
+	creditHash := s.CalculateRowHash(
 		receiverWalletID,
 		amount,
 		txnHeader.ID,
@@ -219,13 +219,27 @@ func (s *Service) GetUserHistory(ctx context.Context, userID uuid.UUID) ([]Trans
 		return nil, err
 	}
 
-	return s.GetWalletHistory(ctx, w.ID)
+	history, err := s.GetWalletHistory(ctx, w.ID, 1, 100)
+	if err != nil {
+		return nil, err
+	}
+	return history.Data, nil
 }
 
-func (s *Service) GetWalletHistory(ctx context.Context, walletID uuid.UUID) ([]TransactionHistoryItem, error) {
-	entries, err := s.q.GetLedgerEntriesByWallet(ctx, walletID)
+func (s *Service) GetWalletHistory(ctx context.Context, walletID uuid.UUID, page, pageSize int) (*LedgerHistoryWithPagination, error) {
+	offset := (page - 1) * pageSize
+	entries, err := s.q.GetLedgerEntriesByWallet(ctx, wallet.GetLedgerEntriesByWalletParams{
+		WalletID: walletID,
+		Limit:    int32(pageSize),
+		Offset:   int32(offset),
+	})
 	if err != nil {
 		return nil, commonerrors.Wrap(ErrDatabase, err)
+	}
+
+	var totalCount int64 = 0
+	if len(entries) > 0 {
+		totalCount = entries[0].TotalCount
 	}
 
 	items := make([]TransactionHistoryItem, 0, len(entries))
@@ -241,7 +255,12 @@ func (s *Service) GetWalletHistory(ctx context.Context, walletID uuid.UUID) ([]T
 		})
 	}
 
-	return items, nil
+	return &LedgerHistoryWithPagination{
+		Data:       items,
+		TotalCount: totalCount,
+		Page:       page,
+		PageSize:   pageSize,
+	}, nil
 }
 
 func (s *Service) GetSystemWalletByName(ctx context.Context, walletName SystemWalletName, walletType SystemWalletType) (uuid.UUID, error) {
@@ -255,9 +274,8 @@ func (s *Service) GetSystemWalletByName(ctx context.Context, walletName SystemWa
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			// Lazily create the system wallet if it doesn't exist
 			sysWallet, createErr := walletQ.CreateWallet(ctx, wallet.CreateWalletParams{
-				UserID:  pgtype.UUID{Valid: false}, // System wallet has no user
+				UserID:  pgtype.UUID{Valid: false},
 				Column2: common.StringToText(string(walletName)),
 				Type:    common.StringToText(string(walletType)),
 				Status:  "ACTIVE",
@@ -294,7 +312,7 @@ func checkBalance(balance int64, amount int64) bool {
 	return true
 }
 
-func calculateRowHash(
+func (s *Service) CalculateRowHash(
 	walletID uuid.UUID,
 	amount int64,
 	transactionID uuid.UUID,
