@@ -466,3 +466,16 @@ func GenerateRandomCode() string {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	return fmt.Sprintf("%04d", rng.Intn(10000))
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 5. REVENUE & TRANSACTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+func (s *Service) GetRevenueTransactions(ctx context.Context) ([]wallet.TransactionHistoryItem, error) {
+	revenueWalletID, err := s.wallet.GetSystemWalletByName(ctx, wallet.TransportSystemWallet, wallet.SystemWalletRevenue)
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrInternal, err)
+	}
+
+	return s.wallet.GetWalletHistory(ctx, revenueWalletID)
+}

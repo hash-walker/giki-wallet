@@ -34,12 +34,6 @@ CREATE TABLE giki_wallet.employee_profiles(
     department VARCHAR(100)
 );
 
-CREATE TABLE giki_wallet.admins(
-    user_id uuid PRIMARY KEY REFERENCES giki_wallet.employee_profiles(user_id) ON DELETE CASCADE,
-    role VARCHAR(50) NOT NULL DEFAULT 'moderator',
-    permissions text[]
-);
-
 CREATE TABLE giki_wallet.access_tokens (
     token_hash VARCHAR(64) PRIMARY KEY, -- We store SHA256 of the token for security
     user_id uuid NOT NULL REFERENCES giki_wallet.users(id) ON DELETE CASCADE,
@@ -54,7 +48,6 @@ CREATE TABLE giki_wallet.access_tokens (
 
 -- +goose down
 DROP TABLE giki_wallet.access_tokens;
-DROP TABLE giki_wallet.admins;
 DROP TABLE giki_wallet.student_profiles;
 DROP TABLE giki_wallet.employee_profiles;
 DROP TABLE giki_wallet.users;

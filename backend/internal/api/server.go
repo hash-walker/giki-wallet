@@ -55,7 +55,7 @@ func (s *Server) MountRoutes() {
 		}
 	})
 
-	// r.Post("/auth/register", s.User.Register)
+	r.Post("/auth/register", s.User.Register)
 	r.Post("/auth/signin", s.Auth.Login)
 	r.Post("/auth/signout", s.Auth.Logout)
 	r.Get("/auth/verify", s.Auth.VerifyEmail)
@@ -113,6 +113,9 @@ func (s *Server) MountRoutes() {
 		r.Get("/trips", s.Transport.HandleWeeklyTrips)
 		r.Post("/trips", s.Transport.CreateTrip)
 		r.Delete("/trips/{trip_id}", s.Transport.DeleteTrip)
+
+		// Transport Revenue
+		r.Get("/transport/transactions", s.Transport.AdminGetRevenueTransactions)
 
 		r.Route("/users", func(r chi.Router) {
 			r.Get("/", s.User.ListUsers)

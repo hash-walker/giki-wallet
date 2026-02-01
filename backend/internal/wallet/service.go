@@ -18,6 +18,7 @@ import (
 	wallet "github.com/hash-walker/giki-wallet/internal/wallet/wallet_db"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -218,7 +219,11 @@ func (s *Service) GetUserHistory(ctx context.Context, userID uuid.UUID) ([]Trans
 		return nil, err
 	}
 
-	entries, err := s.q.GetLedgerEntriesByWallet(ctx, w.ID)
+	return s.GetWalletHistory(ctx, w.ID)
+}
+
+func (s *Service) GetWalletHistory(ctx context.Context, walletID uuid.UUID) ([]TransactionHistoryItem, error) {
+	entries, err := s.q.GetLedgerEntriesByWallet(ctx, walletID)
 	if err != nil {
 		return nil, commonerrors.Wrap(ErrDatabase, err)
 	}
@@ -249,6 +254,19 @@ func (s *Service) GetSystemWalletByName(ctx context.Context, walletName SystemWa
 	})
 
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Lazily create the system wallet if it doesn't exist
+			sysWallet, createErr := walletQ.CreateWallet(ctx, wallet.CreateWalletParams{
+				UserID:  pgtype.UUID{Valid: false}, // System wallet has no user
+				Column2: common.StringToText(string(walletName)),
+				Type:    common.StringToText(string(walletType)),
+				Status:  "ACTIVE",
+			})
+			if createErr != nil {
+				return uuid.Nil, commonerrors.Wrap(ErrDatabase, createErr)
+			}
+			return sysWallet.ID, nil
+		}
 		return uuid.Nil, commonerrors.Wrap(ErrSystemWalletNotFound, err)
 	}
 

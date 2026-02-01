@@ -125,8 +125,7 @@ CREATE TABLE giki_transport.tickets (
      status VARCHAR(20) NOT NULL DEFAULT 'CONFIRMED',
      booking_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    
-     UNIQUE(trip_id, user_id),
+
      UNIQUE(trip_id, serial_no),
      UNIQUE(trip_id, ticket_code)
 );

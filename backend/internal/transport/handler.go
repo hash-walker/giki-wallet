@@ -108,6 +108,18 @@ func (h *Handler) DeleteTrip(w http.ResponseWriter, r *http.Request) {
 	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"status": "deleted"}, requestID)
 }
 
+func (h *Handler) AdminGetRevenueTransactions(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	txns, err := h.service.GetRevenueTransactions(r.Context())
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, txns, requestID)
+}
+
 // =============================================================================
 // BOOKING & QUOTA ENDPOINTS
 // =============================================================================

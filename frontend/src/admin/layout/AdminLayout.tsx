@@ -30,7 +30,7 @@ const adminNavItems = [
 
 export const AdminLayout = ({ children }: AdminLayoutProps) => {
     const navigate = useNavigate();
-    const { signOut } = useAuthStore();
+    const { user, signOut } = useAuthStore();
 
     const handleLogout = () => {
         signOut();
@@ -38,10 +38,27 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
         navigate('/auth/sign-in?redirect=/admin', { replace: true });
     };
 
+    // Filter nav items based on user role
+    const filteredNavItems = adminNavItems.filter(item => {
+        if (!user) return true;
+
+        if (user.user_type === 'TRANSPORT_ADMIN') {
+            const allowedPaths = [
+                '/admin',
+                '/admin/trips',
+                '/admin/users',
+                '/admin/transactions',
+            ];
+            return allowedPaths.includes(item.path);
+        }
+
+        return true;
+    });
+
     return (
         <div className="min-h-screen bg-gray-50">
             <AdminNavbar
-                navItems={adminNavItems}
+                navItems={filteredNavItems}
                 onLogout={handleLogout}
             />
             <main className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
