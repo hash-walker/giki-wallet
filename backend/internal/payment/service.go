@@ -158,7 +158,7 @@ func (s *Service) InitiatePayment(ctx context.Context, payload TopUpRequest) (*T
 		TxnRefNo:       txnRefNo,
 		PaymentMethod:  string(payload.Method),
 		Status:         payment.CurrentStatus(PaymentStatusPending),
-		Amount:         amountPaisa,
+		Amount:         int64(amountPaisa),
 	})
 
 	if err != nil {

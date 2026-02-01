@@ -47,11 +47,11 @@ VALUES (
            $1, $2, $3, $4, $5, $6, $7, $8, $9,
            CASE
                -- If creation happens AFTER the closing window (e.g. last minute admin entry)
-               WHEN NOW() >= ($2 - ($4 * INTERVAL '1 hour')) THEN 'CLOSED'
+               WHEN NOW() >= ($2::TIMESTAMPTZ - ($4::INTEGER * INTERVAL '1 hour')) THEN 'CLOSED'
 
                -- If creation happens BEFORE the window opens
                -- (Departure - Open Offset)
-               WHEN NOW() < ($2 - ($3 * INTERVAL '1 hour')) THEN 'SCHEDULED'
+               WHEN NOW() < ($2::TIMESTAMPTZ - ($3::INTEGER * INTERVAL '1 hour')) THEN 'SCHEDULED'
 
                -- Logic 3: Otherwise, it is currently active
                ELSE 'OPEN'
@@ -129,7 +129,32 @@ FROM giki_transport.trip t
          JOIN giki_transport.routes r ON t.route_id = r.id
          JOIN giki_transport.trip_stops ts ON t.id = ts.trip_id
          JOIN giki_transport.stops s ON ts.stop_id = s.id
+WHERE t.status != 'DELETED'
 ORDER BY t.departure_time DESC, ts.sequence_order ASC;
+
+-- name: UpdateTrip :exec
+UPDATE giki_transport.trip
+SET
+    departure_time = $2,
+    booking_open_offset_hours = $3,
+    booking_close_offset_hours = $4,
+    total_capacity = $5,
+    -- Adjust available seats by the difference in capacity (if any), ensuring it doesn't go below 0
+    available_seats = GREATEST(0, available_seats + ($5 - total_capacity)),
+    base_price = $6,
+    bus_type = $7,
+    status = CASE
+        -- Re-evaluate status logic based on new times
+        WHEN NOW() >= ($2::TIMESTAMPTZ - ($4::INTEGER * INTERVAL '1 hour')) THEN 'CLOSED'
+        WHEN NOW() < ($2::TIMESTAMPTZ - ($3::INTEGER * INTERVAL '1 hour')) THEN 'SCHEDULED'
+        ELSE 'OPEN'
+    END
+WHERE id = $1;
+
+-- name: SoftDeleteTrip :exec
+UPDATE giki_transport.trip
+SET status = 'DELETED'
+WHERE id = $1;
 
 
 -- name: GetTrip :one
@@ -305,7 +330,6 @@ SELECT
 
     t.departure_time,
 
-    -- CALCULATED FIELDS: Convert offsets back to real timestamps for the UI
     (t.departure_time - (t.booking_open_offset_hours * INTERVAL '1 hour'))::TIMESTAMPTZ as booking_opens_at,
     (t.departure_time - (t.booking_close_offset_hours * INTERVAL '1 hour'))::TIMESTAMPTZ as booking_closes_at,
 

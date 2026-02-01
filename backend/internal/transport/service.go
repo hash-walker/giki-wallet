@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hash-walker/giki-wallet/internal/common"
 	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
 	"github.com/hash-walker/giki-wallet/internal/transport/transport_db"
 	"github.com/hash-walker/giki-wallet/internal/wallet"
@@ -44,6 +45,7 @@ func (s *Service) GetWeeklyTrips(ctx context.Context) ([]TripResponse, error) {
 }
 
 func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.UUID, error) {
+
 	tx, err := s.dbPool.Begin(ctx)
 	if err != nil {
 		return uuid.Nil, commonerrors.Wrap(ErrTripCreationFailed, err)
@@ -51,14 +53,29 @@ func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.U
 	defer tx.Rollback(ctx)
 	qtx := s.q.WithTx(tx)
 
+	// Parse absolute booking window times
+	opensAt, err := time.Parse(time.RFC3339, req.BookingOpensAt)
+	if err != nil {
+		return uuid.Nil, commonerrors.New("INVALID_INPUT", 400, "Invalid booking_opens_at format")
+	}
+	closesAt, err := time.Parse(time.RFC3339, req.BookingClosesAt)
+	if err != nil {
+		return uuid.Nil, commonerrors.New("INVALID_INPUT", 400, "Invalid booking_closes_at format")
+	}
+
+	openOffset := int32(req.DepartureTime.Sub(opensAt).Hours())
+	closeOffset := int32(req.DepartureTime.Sub(closesAt).Hours())
+
+	basePrice := common.AmountToLowestUnit(req.BasePrice)
+
 	tripID, err := qtx.CreateTrip(ctx, transport_db.CreateTripParams{
 		RouteID:                 req.RouteID,
 		DepartureTime:           req.DepartureTime,
-		BookingOpenOffsetHours:  int32(req.BookingOpenOffsetHours),
-		BookingCloseOffsetHours: int32(req.BookingCloseOffsetHours),
+		BookingOpenOffsetHours:  openOffset,
+		BookingCloseOffsetHours: closeOffset,
 		TotalCapacity:           int32(req.TotalCapacity),
 		AvailableSeats:          int32(req.TotalCapacity),
-		BasePrice:               req.BasePrice,
+		BasePrice:               basePrice,
 		BusType:                 req.BusType,
 		Direction:               req.Direction,
 	})
@@ -454,12 +471,3 @@ func GenerateRandomCode() string {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	return fmt.Sprintf("%04d", rng.Intn(10000))
 }
-
-//func (s *Service) AdminListTrips(ctx context.Context) ([]TripResponse, error) {
-//	rows, err := s.q.AdminGetAllTrips(ctx)
-//	if err != nil {
-//		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-//	}
-//
-//	return MapDBAdminTripsToTrips(rows), nil
-//}

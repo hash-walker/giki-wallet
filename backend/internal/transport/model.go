@@ -42,19 +42,28 @@ type QuickSlotItem struct {
 }
 
 type CreateTripRequest struct {
-	RouteID                 uuid.UUID         `json:"route_id"`
-	DepartureTime           time.Time         `json:"departure_time"`
-	BookingOpenOffsetHours  int               `json:"booking_open_offset_hours"`
-	BookingCloseOffsetHours int               `json:"booking_close_offset_hours"`
-	TotalCapacity           int               `json:"total_capacity"`
-	BasePrice               int32             `json:"base_price"`
-	BusType                 string            `json:"bus_type"`
-	Direction               string            `json:"direction"`
-	Stops                   []TripStopRequest `json:"stops"`
+	RouteID         uuid.UUID         `json:"route_id"`
+	DepartureTime   time.Time         `json:"departure_time"`
+	BookingOpensAt  string            `json:"booking_opens_at"`
+	BookingClosesAt string            `json:"booking_closes_at"`
+	TotalCapacity   int               `json:"total_capacity"`
+	BasePrice       float64           `json:"base_price"`
+	BusType         string            `json:"bus_type"`
+	Direction       string            `json:"direction"`
+	Stops           []TripStopRequest `json:"stops"`
 }
 
 type TripStopRequest struct {
 	StopID uuid.UUID `json:"stop_id"`
+}
+
+type UpdateTripRequest struct {
+	DepartureTime   time.Time `json:"departure_time"`
+	BookingOpensAt  string    `json:"booking_opens_at"`
+	BookingClosesAt string    `json:"booking_closes_at"`
+	TotalCapacity   int       `json:"total_capacity"`
+	BasePrice       float64   `json:"base_price"`
+	BusType         string    `json:"bus_type"`
 }
 
 type CreateTripResponse struct {
@@ -72,10 +81,10 @@ type TripResponse struct {
 	BookingOpensAt  time.Time `json:"booking_opens_at"`
 	BookingClosesAt time.Time `json:"booking_closes_at"`
 
-	Status         string `json:"status"`
-	AvailableSeats int32  `json:"available_seats"`
-	TotalCapacity  int32  `json:"total_capacity"`
-	BasePrice      int32  `json:"base_price"`
+	Status         string  `json:"status"`
+	AvailableSeats int32   `json:"available_seats"`
+	TotalCapacity  int32   `json:"total_capacity"`
+	BasePrice      float64 `json:"base_price"`
 
 	Stops []TripStopItem `json:"stops"`
 }
@@ -178,7 +187,7 @@ type MyTicketResponse struct {
 
 	DepartureTime time.Time `json:"departure_time"`
 	BusType       string    `json:"bus_type"`
-	Price         int32     `json:"price"`
+	Price         float64   `json:"price"`
 	IsCancellable bool      `json:"is_cancellable"`
 }
 
@@ -199,7 +208,7 @@ func mapDBTicketsToResponse(rows []transport_db.GetUserTicketsByIDRow) []MyTicke
 
 			RouteName: row.RouteName,
 			Direction: row.Direction,
-			
+
 			RelevantLocation: row.RelevantLocation,
 
 			PickupLocation:  row.PickupLocation,
@@ -207,7 +216,7 @@ func mapDBTicketsToResponse(rows []transport_db.GetUserTicketsByIDRow) []MyTicke
 
 			DepartureTime: row.DepartureTime,
 			BusType:       row.BusType,
-			Price:         row.BasePrice,
+			Price:         common.LowestUnitToAmount(row.BasePrice),
 			IsCancellable: row.IsCancellable,
 		})
 	}
@@ -240,7 +249,7 @@ func mapDbTripsToResponse(rows []transport_db.GetWeeklyTripsWithStopsRow) []Trip
 			Status:         common.TextToString(row.Status),
 			AvailableSeats: row.AvailableSeats,
 			TotalCapacity:  row.TotalCapacity,
-			BasePrice:      row.BasePrice,
+			BasePrice:      common.LowestUnitToAmount(row.BasePrice),
 
 			Stops: stops,
 		})

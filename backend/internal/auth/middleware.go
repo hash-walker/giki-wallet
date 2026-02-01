@@ -20,42 +20,45 @@ const (
 	userRoleKey contextKey = "user_role"
 )
 
+// =============================================================================
+// MIDDLEWARES
+// =============================================================================
+
 func RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestID := middleware.GetRequestID(r.Context())
 
-		authHeader := r.Header.Get("Authorization")
-		token, err := GetBearerToken(authHeader)
+		userID, userRole, err := validateRequest(r)
 		if err != nil {
 			middleware.HandleError(w, err, requestID)
 			return
 		}
 
-		// Validate token
-		tokenSecret := os.Getenv("TOKEN_SECRET")
-		claims, err := ValidateJWT(token, tokenSecret)
-		if err != nil {
-			middleware.HandleError(w, err, requestID)
-			return
-		}
-
-		userID, err := uuid.Parse(claims.Subject)
-		if err != nil {
-			middleware.HandleError(w, commonerrors.Wrap(ErrInvalidToken, err), requestID)
-			return
-		}
-
-		// Set UserID and UserRole in context
+		// Success: Set Context
 		ctx := context.WithValue(r.Context(), userIDKey, userID)
-		ctx = context.WithValue(ctx, userRoleKey, claims.UserType)
-
-		r = r.WithContext(ctx)
-
-		next.ServeHTTP(w, r)
+		ctx = context.WithValue(ctx, userRoleKey, userRole)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-// RequireRole creates middleware that ensures the user has one of the allowed roles
+func RequireLogin(redirectOnFail string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+			userID, userRole, err := validateRequest(r)
+
+			if err != nil {
+				http.Redirect(w, r, redirectOnFail, http.StatusFound)
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), userIDKey, userID)
+			ctx = context.WithValue(ctx, userRoleKey, userRole)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
 func RequireRole(allowedRoles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -67,8 +70,6 @@ func RequireRole(allowedRoles ...string) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Check if user has one of the allowed roles
-			// Super Admin is always allowed (fail-safe)
 			if userRole == RoleSuperAdmin {
 				next.ServeHTTP(w, r)
 				return
@@ -79,35 +80,56 @@ func RequireRole(allowedRoles ...string) func(http.Handler) http.Handler {
 				return
 			}
 
-			// If we get here, user does not have permission
 			middleware.HandleError(w, commonerrors.ErrForbidden, requestID)
 		})
 	}
 }
 
-func GetBearerToken(authHeader string) (string, error) {
+// =============================================================================
+// HELPERS (Logic Extraction)
+// =============================================================================
 
-	if authHeader == "" {
-		return "", ErrMissingAuthHeader
+func validateRequest(r *http.Request) (uuid.UUID, string, error) {
+
+	tokenString, err := getTokenFromRequest(r)
+	if err != nil {
+		return uuid.Nil, "", err
 	}
 
-	authorizationSplit := strings.Split(authHeader, " ")
-
-	if len(authorizationSplit) != 2 {
-		return "", ErrMalformedAuthHeader
+	tokenSecret := os.Getenv("TOKEN_SECRET")
+	claims, err := ValidateJWT(tokenString, tokenSecret)
+	if err != nil {
+		return uuid.Nil, "", err
 	}
 
-	if authorizationSplit[0] != "Bearer" {
-		return "", ErrMalformedAuthHeader
+	userID, err := uuid.Parse(claims.Subject)
+	if err != nil {
+		return uuid.Nil, "", commonerrors.Wrap(ErrInvalidToken, err)
 	}
 
-	return authorizationSplit[1], nil
+	return userID, claims.UserType, nil
+}
+
+func getTokenFromRequest(r *http.Request) (string, error) {
+
+	authHeader := r.Header.Get("Authorization")
+	if authHeader != "" {
+		split := strings.Split(authHeader, " ")
+		if len(split) == 2 && split[0] == "Bearer" {
+			return split[1], nil
+		}
+	}
+
+	cookie, err := r.Cookie("token")
+	if err == nil && cookie.Value != "" {
+		return cookie.Value, nil
+	}
+
+	return "", ErrMissingAuthHeader
 }
 
 func ValidateJWT(tokenString, tokenSecret string) (*CustomClaims, error) {
-
 	parsedClaims := &CustomClaims{}
-
 	token, err := jwt.ParseWithClaims(tokenString, parsedClaims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(tokenSecret), nil
 	})
@@ -124,6 +146,17 @@ func ValidateJWT(tokenString, tokenSecret string) (*CustomClaims, error) {
 	return claims, nil
 }
 
+func GetBearerToken(authHeader string) (string, error) {
+	if authHeader == "" {
+		return "", ErrMissingAuthHeader
+	}
+	authorizationSplit := strings.Split(authHeader, " ")
+	if len(authorizationSplit) != 2 || authorizationSplit[0] != "Bearer" {
+		return "", ErrMalformedAuthHeader
+	}
+	return authorizationSplit[1], nil
+}
+
 func GetUserIDFromContext(ctx context.Context) (uuid.UUID, bool) {
 	userID, ok := ctx.Value(userIDKey).(uuid.UUID)
 	return userID, ok
@@ -132,10 +165,4 @@ func GetUserIDFromContext(ctx context.Context) (uuid.UUID, bool) {
 func GetUserRoleFromContext(ctx context.Context) (string, bool) {
 	role, ok := ctx.Value(userRoleKey).(string)
 	return role, ok
-}
-
-// SetUserInContext sets user ID and Role in context (for testing)
-func SetUserInContext(ctx context.Context, userID uuid.UUID, role string) context.Context {
-	ctx = context.WithValue(ctx, userIDKey, userID)
-	return context.WithValue(ctx, userRoleKey, role)
 }
