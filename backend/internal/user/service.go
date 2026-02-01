@@ -268,10 +268,20 @@ func (s *Service) createRoleProfile(ctx context.Context, tx pgx.Tx, userID uuid.
 	}
 }
 
-func (s *Service) ListUsers(ctx context.Context) ([]AdminUser, error) {
-	rows, err := s.userQ.ListUsers(ctx)
+func (s *Service) ListUsers(ctx context.Context, page, pageSize int) (*UsersListWithPagination, error) {
+	offset := (page - 1) * pageSize
+
+	rows, err := s.userQ.ListUsers(ctx, user_db.ListUsersParams{
+		Limit:  int32(pageSize),
+		Offset: int32(offset),
+	})
 	if err != nil {
 		return nil, translateDBError(err)
+	}
+
+	var totalCount int64 = 0
+	if len(rows) > 0 {
+		totalCount = rows[0].TotalCount
 	}
 
 	users := make([]AdminUser, len(rows))
@@ -279,7 +289,12 @@ func (s *Service) ListUsers(ctx context.Context) ([]AdminUser, error) {
 		users[i] = mapDBAdminUserToAdminUser(row)
 	}
 
-	return users, nil
+	return &UsersListWithPagination{
+		Data:       users,
+		TotalCount: totalCount,
+		Page:       page,
+		PageSize:   pageSize,
+	}, nil
 }
 
 func (s *Service) UpdateUserStatus(ctx context.Context, userID uuid.UUID, isActive bool) (AdminUser, error) {

@@ -95,6 +95,33 @@ type TripStopItem struct {
 	Sequence int32     `json:"sequence"`
 }
 
+type TripHistoryResponse struct {
+	ID        uuid.UUID `json:"id"`
+	RouteID   uuid.UUID `json:"route_id"`
+	RouteName string    `json:"route_name"`
+	Direction string    `json:"direction"`
+	BusType   string    `json:"bus_type"`
+
+	DepartureTime   time.Time `json:"departure_time"`
+	BookingOpensAt  time.Time `json:"booking_opens_at"`
+	BookingClosesAt time.Time `json:"booking_closes_at"`
+
+	Status         string  `json:"status"`
+	AvailableSeats int32   `json:"available_seats"`
+	TotalCapacity  int32   `json:"total_capacity"`
+	BasePrice      float64 `json:"base_price"`
+
+	DeletedAt time.Time      `json:"deleted_at"`
+	Stops     []TripStopItem `json:"stops"`
+}
+
+type TripHistoryWithPagination struct {
+	Data       []TripHistoryResponse `json:"data"`
+	TotalCount int64                 `json:"total_count"`
+	Page       int                   `json:"page"`
+	PageSize   int                   `json:"page_size"`
+}
+
 // --- Requests ---
 
 // Legacy single hold (kept for backward compatibility)
@@ -250,6 +277,73 @@ func mapDbTripsToResponse(rows []transport_db.GetWeeklyTripsWithStopsRow) []Trip
 			BasePrice:      common.LowestUnitToAmount(row.BasePrice),
 
 			Stops: stops,
+		})
+	}
+	return dtos
+}
+
+func mapDbTripsForWeekToResponse(rows []transport_db.GetTripsForWeekWithStopsRow) []TripResponse {
+
+	dtos := make([]TripResponse, 0, len(rows))
+
+	for _, row := range rows {
+
+		var stops []TripStopItem
+		if err := json.Unmarshal([]byte(row.StopsJson), &stops); err != nil {
+			stops = []TripStopItem{}
+		}
+
+		dtos = append(dtos, TripResponse{
+			ID:        row.TripID,
+			RouteID:   row.RouteID,
+			RouteName: row.RouteName,
+			Direction: row.Direction,
+			BusType:   row.BusType,
+
+			DepartureTime:   row.DepartureTime,
+			BookingOpensAt:  row.BookingOpensAt,
+			BookingClosesAt: row.BookingClosesAt,
+
+			Status:         common.TextToString(row.Status),
+			AvailableSeats: row.AvailableSeats,
+			TotalCapacity:  row.TotalCapacity,
+			BasePrice:      common.LowestUnitToAmount(row.BasePrice),
+
+			Stops: stops,
+		})
+	}
+	return dtos
+}
+
+func mapDbDeletedTripsToResponse(rows []transport_db.GetDeletedTripsHistoryRow) []TripHistoryResponse {
+
+	dtos := make([]TripHistoryResponse, 0, len(rows))
+
+	for _, row := range rows {
+
+		var stops []TripStopItem
+		if err := json.Unmarshal([]byte(row.StopsJson), &stops); err != nil {
+			stops = []TripStopItem{}
+		}
+
+		dtos = append(dtos, TripHistoryResponse{
+			ID:        row.TripID,
+			RouteID:   row.RouteID,
+			RouteName: row.RouteName,
+			Direction: row.Direction,
+			BusType:   row.BusType,
+
+			DepartureTime:   row.DepartureTime,
+			BookingOpensAt:  row.BookingOpensAt,
+			BookingClosesAt: row.BookingClosesAt,
+
+			Status:         common.TextToString(row.Status),
+			AvailableSeats: row.AvailableSeats,
+			TotalCapacity:  row.TotalCapacity,
+			BasePrice:      common.LowestUnitToAmount(row.BasePrice),
+
+			DeletedAt: row.DeletedAt,
+			Stops:     stops,
 		})
 	}
 	return dtos

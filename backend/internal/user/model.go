@@ -125,3 +125,10 @@ func mapDBUpdateUserStatusToAdminUser(u userdb.UpdateUserStatusRow) AdminUser {
 		UpdatedAt:   u.UpdatedAt,
 	}
 }
+
+type UsersListWithPagination struct {
+	Data       []AdminUser `json:"data"`
+	TotalCount int64       `json:"total_count"`
+	Page       int         `json:"page"`
+	PageSize   int         `json:"page_size"`
+}

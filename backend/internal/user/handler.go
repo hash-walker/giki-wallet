@@ -3,6 +3,7 @@ package user
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -53,7 +54,19 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
 
-	users, err := h.service.ListUsers(r.Context())
+	pageStr := r.URL.Query().Get("page")
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	pageSizeStr := r.URL.Query().Get("page_size")
+	pageSize, err := strconv.Atoi(pageSizeStr)
+	if err != nil || pageSize < 1 {
+		pageSize = 20
+	}
+
+	users, err := h.service.ListUsers(r.Context(), page, pageSize)
 	if err != nil {
 		middleware.HandleError(w, err, requestID)
 		return

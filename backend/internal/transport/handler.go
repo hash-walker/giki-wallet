@@ -2,8 +2,11 @@ package transport
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -31,7 +34,38 @@ func NewHandler(service *Service) *Handler {
 func (h *Handler) HandleWeeklyTrips(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
 
-	trips, err := h.service.GetWeeklyTrips(r.Context())
+	startDate, endDate, err := h.parseDateRangeParams(r)
+	if err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err), requestID)
+		return
+	}
+
+	trips, err := h.service.GetWeeklyTrips(r.Context(), startDate, endDate)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, trips, requestID)
+}
+
+// HandleDeletedTripsHistory returns deleted trips for admin history view with pagination
+func (h *Handler) HandleDeletedTripsHistory(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	pageStr := r.URL.Query().Get("page")
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	pageSizeStr := r.URL.Query().Get("page_size")
+	pageSize, err := strconv.Atoi(pageSizeStr)
+	if err != nil || pageSize < 1 {
+		pageSize = 20
+	}
+
+	trips, err := h.service.GetDeletedTripsHistory(r.Context(), page, pageSize)
 	if err != nil {
 		middleware.HandleError(w, err, requestID)
 		return
@@ -118,6 +152,100 @@ func (h *Handler) AdminGetRevenueTransactions(w http.ResponseWriter, r *http.Req
 	}
 
 	common.ResponseWithJSON(w, http.StatusOK, txns, requestID)
+}
+
+func (h *Handler) HandleExportTrips(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	// 1. Parse & Validate Date Range
+	startDate, endDate, err := h.parseDateRangeParams(r)
+	if err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err), requestID)
+		return
+	}
+
+	// 2. Parse Route IDs (Optional filter)
+	routeIDs, err := h.parseUUIDListParam(r, "route_ids")
+	if err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err), requestID)
+		return
+	}
+
+	// 3. Call Service
+	zipBytes, err := h.service.ExportTripData(r.Context(), startDate, endDate, routeIDs)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	// 4. Return File Response
+	filename := fmt.Sprintf("trips_export_%s.zip", time.Now().Format("20060102"))
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(zipBytes)
+}
+
+// --- Handler Helpers ---
+
+func (h *Handler) parseDateRangeParams(r *http.Request) (time.Time, time.Time, error) {
+	startStr := r.URL.Query().Get("start_date")
+	endStr := r.URL.Query().Get("end_date")
+
+	var startDate, endDate time.Time
+	var err error
+
+	// Start Date Parsing
+	if startStr != "" {
+		startDate, err = time.Parse(time.RFC3339, startStr)
+		if err != nil {
+			return time.Time{}, time.Time{}, fmt.Errorf("invalid start_date format, expected ISO8601")
+		}
+	} else {
+		// Default: Start of current week (Monday)
+		now := time.Now()
+		offset := int(time.Monday - now.Weekday())
+		if offset > 0 {
+			offset = -6
+		}
+		// Normalize to midnight
+		startDate = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, offset)
+	}
+
+	// End Date Parsing
+	if endStr != "" {
+		endDate, err = time.Parse(time.RFC3339, endStr)
+		if err != nil {
+			return time.Time{}, time.Time{}, fmt.Errorf("invalid end_date format, expected ISO8601")
+		}
+	} else {
+		// Default: 7 days from start
+		endDate = startDate.AddDate(0, 0, 7)
+	}
+
+	return startDate, endDate, nil
+}
+
+func (h *Handler) parseUUIDListParam(r *http.Request, key string) ([]uuid.UUID, error) {
+	raw := r.URL.Query().Get(key)
+	if raw == "" {
+		return nil, nil
+	}
+
+	var ids []uuid.UUID
+	for _, p := range strings.Split(raw, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+
+		id, err := uuid.Parse(p)
+		if err != nil {
+			return nil, fmt.Errorf("invalid uuid in %s: %s", key, p)
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 // =============================================================================

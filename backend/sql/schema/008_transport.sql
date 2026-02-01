@@ -145,6 +145,12 @@ CREATE TABLE giki_transport.trip_holds (
         created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS idx_trip_departure_status
+ON giki_transport.trip (departure_time, status);
+
+CREATE INDEX IF NOT EXISTS idx_trip_status_updated
+ON giki_transport.trip (status, updated_at DESC);
+
 
 
 -- +goose down

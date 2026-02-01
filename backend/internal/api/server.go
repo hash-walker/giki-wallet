@@ -113,9 +113,11 @@ func (s *Server) MountRoutes() {
 		r.Get("/trips", s.Transport.HandleWeeklyTrips)
 		r.Post("/trips", s.Transport.CreateTrip)
 		r.Delete("/trips/{trip_id}", s.Transport.DeleteTrip)
+		r.Get("/trips/history", s.Transport.HandleDeletedTripsHistory)
 
 		// Transport Revenue
 		r.Get("/transport/transactions", s.Transport.AdminGetRevenueTransactions)
+		r.Get("/transport/trips/export", s.Transport.HandleExportTrips)
 
 		r.Route("/users", func(r chi.Router) {
 			r.Get("/", s.User.ListUsers)

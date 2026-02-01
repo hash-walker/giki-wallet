@@ -1,10 +1,15 @@
 package transport
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"math/rand"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -34,14 +39,44 @@ func NewService(dbPool *pgxpool.Pool, walletService *wallet.Service) *Service {
 // 1. TRIP MANAGEMENT (The New Logic)
 // =============================================================================
 
-func (s *Service) GetWeeklyTrips(ctx context.Context) ([]TripResponse, error) {
+func (s *Service) GetWeeklyTrips(ctx context.Context, startDate, endDate time.Time) ([]TripResponse, error) {
 
-	rows, err := s.q.GetWeeklyTripsWithStops(ctx)
+	rows, err := s.q.GetTripsForWeekWithStops(ctx, transport_db.GetTripsForWeekWithStopsParams{
+		DepartureTime:   startDate,
+		DepartureTime_2: endDate,
+	})
 	if err != nil {
 		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}
 
-	return mapDbTripsToResponse(rows), nil
+	return mapDbTripsForWeekToResponse(rows), nil
+}
+
+func (s *Service) GetDeletedTripsHistory(ctx context.Context, page, pageSize int) (*TripHistoryWithPagination, error) {
+
+	offset := (page - 1) * pageSize
+
+	rows, err := s.q.GetDeletedTripsHistory(ctx, transport_db.GetDeletedTripsHistoryParams{
+		Limit:  int32(pageSize),
+		Offset: int32(offset),
+	})
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	var totalCount int64 = 0
+	if len(rows) > 0 {
+		totalCount = rows[0].TotalCount
+	}
+
+	data := mapDbDeletedTripsToResponse(rows)
+
+	return &TripHistoryWithPagination{
+		Data:       data,
+		TotalCount: totalCount,
+		Page:       page,
+		PageSize:   pageSize,
+	}, nil
 }
 
 func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.UUID, error) {
@@ -478,4 +513,116 @@ func (s *Service) GetRevenueTransactions(ctx context.Context) ([]wallet.Transact
 	}
 
 	return s.wallet.GetWalletHistory(ctx, revenueWalletID)
+}
+func (s *Service) ExportTripData(ctx context.Context, startDate, endDate time.Time, routeIDs []uuid.UUID) ([]byte, error) {
+	rows, err := s.q.GetTripsForExport(ctx, transport_db.GetTripsForExportParams{
+		DepartureTime:   startDate,
+		DepartureTime_2: endDate,
+		Column3:         routeIDs,
+	})
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	// Create ZIP buffer
+	buf := new(bytes.Buffer)
+	zipWriter := zip.NewWriter(buf)
+
+	// Group rows by TripID
+	type TripGroup struct {
+		TripID        uuid.UUID
+		RouteName     string
+		DepartureTime time.Time
+		BusType       string
+		Tickets       []transport_db.GetTripsForExportRow
+		StopCounts    map[string]int
+	}
+
+	trips := make(map[uuid.UUID]*TripGroup)
+	// Maintain order
+	var tripOrder []*TripGroup
+
+	for _, row := range rows {
+		tg, exists := trips[row.TripID]
+		if !exists {
+			tg = &TripGroup{
+				TripID:        row.TripID,
+				RouteName:     row.RouteName,
+				DepartureTime: row.DepartureTime,
+				BusType:       row.BusType,
+				Tickets:       []transport_db.GetTripsForExportRow{},
+				StopCounts:    make(map[string]int),
+			}
+			trips[row.TripID] = tg
+			tripOrder = append(tripOrder, tg)
+		}
+		tg.Tickets = append(tg.Tickets, row)
+		tg.StopCounts[row.PickupStopName]++
+	}
+
+	for _, tg := range tripOrder {
+		// Create CSV file for this trip
+		// Filename: RouteName_Date_Time.csv (Sanitized)
+		safeRouteName := strings.ReplaceAll(tg.RouteName, " ", "_")
+		safeRouteName = strings.ReplaceAll(safeRouteName, "/", "-")
+		filename := fmt.Sprintf("%s_%s.csv", safeRouteName, tg.DepartureTime.Format("20060102_1504"))
+
+		f, err := zipWriter.Create(filename)
+		if err != nil {
+			return nil, commonerrors.Wrap(commonerrors.ErrInternal, err)
+		}
+
+		w := csv.NewWriter(f)
+
+		// 1. Header Info
+		var stopCountsStr []string
+		for stop, count := range tg.StopCounts {
+			stopCountsStr = append(stopCountsStr, fmt.Sprintf("%s: %d", stop, count))
+		}
+		stopCountsDisplay := strings.Join(stopCountsStr, "; ")
+
+		headerInfo := []string{
+			"Route: " + tg.RouteName,
+			"Bus: " + tg.BusType,
+			"Dep: " + tg.DepartureTime.Format("Mon, 02 Jan 15:04"),
+			"Stops: " + stopCountsDisplay,
+		}
+		if err := w.Write(headerInfo); err != nil {
+			return nil, commonerrors.Wrap(commonerrors.ErrInternal, err)
+		}
+
+		// 2. Empty Row
+		w.Write([]string{})
+
+		// 3. Column Headers
+		if err := w.Write([]string{"Serial", "Ticket Code", "Passenger", "Mobile", "Pickup", "Status"}); err != nil {
+			return nil, commonerrors.Wrap(commonerrors.ErrInternal, err)
+		}
+
+		// 4. Ticket Data
+		for _, ticket := range tg.Tickets {
+			record := []string{
+				strconv.Itoa(int(ticket.SerialNo)),
+				ticket.TicketCode,
+				ticket.PassengerName,
+				ticket.UserPhoneNumber,
+				ticket.PickupStopName,
+				ticket.Status,
+			}
+			if err := w.Write(record); err != nil {
+				return nil, commonerrors.Wrap(commonerrors.ErrInternal, err)
+			}
+		}
+
+		w.Flush()
+		if err := w.Error(); err != nil {
+			return nil, commonerrors.Wrap(commonerrors.ErrInternal, err)
+		}
+	}
+
+	if err := zipWriter.Close(); err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrInternal, err)
+	}
+
+	return buf.Bytes(), nil
 }

@@ -46,6 +46,8 @@ CREATE TABLE giki_wallet.access_tokens (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS idx_users_created_at_desc ON giki_wallet.users(created_at DESC);
+
 -- +goose down
 DROP TABLE giki_wallet.access_tokens;
 DROP TABLE giki_wallet.student_profiles;
