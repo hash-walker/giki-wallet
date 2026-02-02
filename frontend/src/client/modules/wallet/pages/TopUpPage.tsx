@@ -7,6 +7,7 @@ import { Input } from '@/shared/components/ui/Input';
 import { PaymentMethodSelector } from '../components/PaymentMethodSelector';
 import { toast } from '@/lib/toast';
 import { topUp } from '../api';
+import { getErrorMessage } from '@/lib/errors';
 import { TopUpRequest } from '../types';
 import JazzCashPayment from '../components/JazzCashPayment';
 import { useWalletModuleStore } from '../store';
@@ -55,8 +56,7 @@ const TopUpPage = () => {
             }
         } catch (error) {
             console.error('Payment error:', error);
-            const err = error as { response?: { data?: { message?: string } } };
-            const errorMessage = err.response?.data?.message || 'Payment failed. Please try again.';
+            const errorMessage = getErrorMessage(error);
             toast.error(errorMessage);
         } finally {
             setIsLoading(false);

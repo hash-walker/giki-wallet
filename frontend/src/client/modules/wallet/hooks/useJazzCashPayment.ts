@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useWalletModuleStore, PaymentFlowStatus } from '../store';
 import { topUp, getTransactionStatus } from '../api';
+import { getErrorMessage } from '@/lib/errors';
 import { TopUpRequest } from '../types';
 
 export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast6: string) => {
@@ -133,7 +134,7 @@ export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast
             if (err.code === 'ERR_CANCELED' || err.name === 'CanceledError') {
                 return; // User cancelled/unmounted, do nothing
             }
-            handleFailure(err.response?.data?.message || err.message || "Connection failed");
+            handleFailure(getErrorMessage(err)); // Use standard error extraction
         } finally {
             isActive.current = false;
         }

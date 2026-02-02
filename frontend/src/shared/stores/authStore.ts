@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { getErrorMessage } from '@/lib/errors';
 import {
     signUp,
     signIn,
@@ -99,7 +100,7 @@ export const useAuthStore = create<AuthState>()(
                 localStorage.setItem('auth_token', accessToken);
                 set({ token: accessToken, user: mapAuthResponseToUser(data), isLoading: false, error: null, initialized: true });
             } catch (e) {
-                const message = getApiErrorMessage(e);
+                const message = getErrorMessage(e);
                 set({ error: message, isLoading: false });
                 throw new Error(message);
             }
@@ -114,7 +115,7 @@ export const useAuthStore = create<AuthState>()(
                 set({ isLoading: false, error: null });
                 return user;
             } catch (e) {
-                const message = getApiErrorMessage(e);
+                const message = getErrorMessage(e);
                 set({ error: message, isLoading: false });
                 throw new Error(message);
             }
@@ -129,7 +130,7 @@ export const useAuthStore = create<AuthState>()(
                 localStorage.setItem('auth_token', accessToken);
                 set({ token: accessToken, user: mapAuthResponseToUser(data), isLoading: false, error: null, initialized: true });
             } catch (e) {
-                const message = getApiErrorMessage(e);
+                const message = getErrorMessage(e);
                 set({ error: message, isLoading: false });
                 throw new Error(message);
             }

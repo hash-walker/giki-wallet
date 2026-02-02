@@ -349,11 +349,20 @@ export const useTransportStore = create<TransportState>((set, get) => ({
             await get().fetchData(false); // Update quota/seats if necessary
             toast.success('Ticket cancelled successfully');
         } catch (e) {
-            const msg = getErrorMessage(e);
-            toast.error(msg);
             if (e instanceof AppError) {
+                if (e.statusCode === 400) {
+
+                    if (e.code === 'CANCELLATION_CLOSED' || e.message.includes('closed')) {
+                        toast.error("Too late to cancel!", {
+                            description: "The bus is departing soon or booking window has closed."
+                        });
+                        return;
+                    }
+                }
                 logError(e, { action: 'cancelTicket', ticketId });
             }
+            const msg = getErrorMessage(e);
+            toast.error(msg);
         } finally {
             set({ loading: false });
         }
