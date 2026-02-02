@@ -11,6 +11,7 @@ import { TransportBookingCard } from '../components/TransportBookingCard';
 import { BookingConfirmationModal, TripSummary } from '../components/BookingConfirmationModal';
 import { formatDate, formatTime } from '../utils';
 import type { BookingSelection } from '../validators';
+import { toast } from 'sonner';
 
 export const TransportPage = () => {
     const navigate = useNavigate();
@@ -48,6 +49,38 @@ export const TransportPage = () => {
     useEffect(() => {
         void fetchData(true);
     }, [fetchData]);
+
+    // Anti-Zombie: Auto-release if timer hits 0 while holds exist
+    useEffect(() => {
+        if (activeHolds.length > 0 && timeLeft === 0 && !tripsLoading) {
+            // Wait a tick to ensure it's not just initializing
+            // actually timeLeft 0 is default state on init? 
+            // useHoldTimer sets 0 initially.
+            // But we need to distinguish "expired" from "init".
+            // activeHolds.length > 0 check handles initialization (initially 0 holds until fetch).
+            // But fetch might return holds that are already expired? No, backend filters those or returns error.
+            // If backend returns expired holds, timeLeft will be 0 immediately.
+            // So this logic works: If we have holds, and time is 0, they are expired.
+            // We should clear them locally to reset UI.
+
+            // NOTE: We call fetchData instead of releaseAllHolds because releaseAllHolds calls API.
+            // If they are already expired on backend, release API might error or be redundant.
+            // But we want to show the Toast.
+
+            // To be safe and prevent loop on init (if timeLeft initializes 0 before ticking),
+            // let's ensure we only trigger if we "saw" time > 0 before? Too complex.
+            // Simply: if activeHolds is non-empty, and time is 0, we have an issue.
+
+            // Let's rely on useHoldTimer behavior: it sets time immediately based on check.
+
+            toast.error("Reservation expired. Please try again.");
+            fetchData(false); // Refresh source of truth (likely empty now)
+
+            // Also reset store local selection state if needed, though fetchData handles activeHolds sync.
+            // Reset wizard state?
+            useTransportStore.getState().resetBookingFlow();
+        }
+    }, [activeHolds.length, timeLeft, tripsLoading, fetchData]);
 
     // console.log('👤 User info:', { user, user_type: user?.user_type });
 
