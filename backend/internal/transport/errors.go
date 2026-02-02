@@ -27,4 +27,5 @@ var (
 	ErrCancellationClosed   = errors.New("CANCELLATION_CLOSED", http.StatusConflict, "Cancellation window has closed")
 
 	ErrBusTypeMismatch = errors.New("BUS_TYPE_MISMATCH", http.StatusForbidden, "User role must match trip bus type")
+	ErrTripNotOpen     = errors.New("TRIP_NOT_OPEN", http.StatusConflict, "Trip is not open for booking")
 )

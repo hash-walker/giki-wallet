@@ -195,6 +195,10 @@ func (s *Service) HoldSeats(ctx context.Context, userID uuid.UUID, userRole stri
 		if trip.BusType != userRole {
 			return nil, ErrBusTypeMismatch
 		}
+
+		if common.TextToString(trip.Status) != "OPEN" {
+			return nil, ErrTripNotOpen
+		}
 	}
 
 	rule, err := qtx.GetQuotaRule(ctx, transport_db.GetQuotaRuleParams{
