@@ -360,7 +360,7 @@ func (h *Handler) HandleAdminTickets(w http.ResponseWriter, r *http.Request) {
 
 	requestID := middleware.GetRequestID(r.Context())
 
-	var params common.AdminFinanceListParams
+	var params common.TicketListParams
 	if err := params.Bind(r); err != nil {
 		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err), requestID)
 		return
@@ -371,32 +371,23 @@ func (h *Handler) HandleAdminTickets(w http.ResponseWriter, r *http.Request) {
 		busType = ""
 	}
 
+	status := r.URL.Query().Get("status")
+	if status == "all" {
+		status = ""
+	}
+
+	search := r.URL.Query().Get("search")
+
 	response, err := h.service.AdminGetTickets(
 		r.Context(),
 		params.StartDate,
 		params.EndDate,
 		busType,
+		status,
+		search,
 		params.Page,
 		params.PageSize,
 	)
-	if err != nil {
-		middleware.HandleError(w, err, requestID)
-		return
-	}
-
-	common.ResponseWithJSON(w, http.StatusOK, response, requestID)
-}
-
-func (h *Handler) HandleAdminTicketHistory(w http.ResponseWriter, r *http.Request) {
-	requestID := middleware.GetRequestID(r.Context())
-
-	var params common.PaginationParams
-	if err := params.Bind(r); err != nil {
-		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err), requestID)
-		return
-	}
-
-	response, err := h.service.AdminGetTicketHistory(r.Context(), params.Page, params.PageSize)
 	if err != nil {
 		middleware.HandleError(w, err, requestID)
 		return

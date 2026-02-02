@@ -358,13 +358,19 @@ JOIN giki_transport.stops s_dropoff ON t.dropoff_stop_id = s_dropoff.id
 WHERE
     tr.departure_time >= sqlc.arg('start_date')
     AND tr.departure_time < sqlc.arg('end_date')
-    AND (sqlc.arg('bus_type')::text = '' OR tr.bus_type = sqlc.arg('bus_type')::text) -- bus_type filter
-    AND t.status = 'CONFIRMED'
+    AND (sqlc.arg('bus_type')::text = '' OR tr.bus_type = sqlc.arg('bus_type')::text)
+    AND (sqlc.arg('status')::text = '' OR t.status = sqlc.arg('status')::text)
+    AND (
+        sqlc.arg('search')::text = '' OR
+        t.ticket_code ILIKE '%' || sqlc.arg('search')::text || '%' OR
+        t.passenger_name ILIKE '%' || sqlc.arg('search')::text || '%' OR
+        u.name ILIKE '%' || sqlc.arg('search')::text || '%' OR
+        u.email ILIKE '%' || sqlc.arg('search')::text || '%'
+    )
 ORDER BY tr.departure_time ASC, t.serial_no ASC
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: GetTicketHistoryForAdmin :many
--- Admin query: Get tickets with status other than CONFIRMED (CANCELLED, etc.)
 SELECT
     t.id as ticket_id,
     t.serial_no,
@@ -425,6 +431,18 @@ WHERE t.trip_id = $1 AND t.status = 'CONFIRMED';
 SELECT COUNT(*) as booking_count
 FROM giki_transport.tickets
 WHERE trip_id = $1 AND status = 'CONFIRMED';
+
+-- name: GetWeeklyTicketStats :one
+SELECT
+    COUNT(CASE WHEN tr.bus_type = 'Student' THEN 1 END) as student_count,
+    COUNT(CASE WHEN tr.bus_type = 'Employee' THEN 1 END) as employee_count,
+    COUNT(*) as total_confirmed
+FROM giki_transport.tickets t
+JOIN giki_transport.trip tr ON t.trip_id = tr.id
+WHERE
+    tr.departure_time >= $1
+    AND tr.departure_time < $2
+    AND t.status = 'CONFIRMED';
 
 -- name: CancelTicketsByTripID :exec
 UPDATE giki_transport.tickets

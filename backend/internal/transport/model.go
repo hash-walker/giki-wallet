@@ -127,6 +127,13 @@ type AdminTicketPaginationResponse struct {
 	TotalCount int64             `json:"total_count"`
 	Page       int               `json:"page"`
 	PageSize   int               `json:"page_size"`
+	Stats      *WeeklyStats      `json:"stats,omitempty"`
+}
+
+type WeeklyStats struct {
+	StudentCount   int64 `json:"student_count"`
+	EmployeeCount  int64 `json:"employee_count"`
+	TotalConfirmed int64 `json:"total_confirmed"`
 }
 
 // --- Requests ---
@@ -328,6 +335,32 @@ func mapDBRouteTemplateToRouteTemplate(rows []transport_db.GetRouteStopsDetailsR
 	}
 
 	return response
+}
+
+func mapAdminTicketsToItem(rows []transport_db.GetTicketsForAdminRow) []AdminTicketItem {
+	items := make([]AdminTicketItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, AdminTicketItem{
+			TicketID:          row.TicketID,
+			SerialNo:          row.SerialNo,
+			TicketCode:        row.TicketCode,
+			PassengerName:     row.PassengerName,
+			PassengerRelation: row.PassengerRelation,
+			Status:            row.TicketStatus,
+			BookingTime:       row.BookingTime,
+			UserName:          row.UserName,
+			UserEmail:         row.UserEmail,
+			TripID:            row.TripID,
+			DepartureTime:     row.DepartureTime,
+			BusType:           row.BusType,
+			Direction:         row.Direction,
+			RouteName:         row.RouteName,
+			PickupLocation:    row.PickupLocation,
+			DropoffLocation:   row.DropoffLocation,
+			Price:             row.Price,
+		})
+	}
+	return items
 }
 
 func mapDBRouteToRoute(row transport_db.GetAllRoutesRow) Route {

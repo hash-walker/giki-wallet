@@ -121,7 +121,6 @@ func (s *Server) MountRoutes() {
 
 		// Tickets Management
 		r.Get("/tickets", s.Transport.HandleAdminTickets)
-		r.Get("/tickets/history", s.Transport.HandleAdminTicketHistory)
 
 		r.Route("/users", func(r chi.Router) {
 			r.Get("/", s.User.HandlerListUsers)

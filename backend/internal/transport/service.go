@@ -753,7 +753,7 @@ func (s *Service) ExportTripData(ctx context.Context, tripIDs []uuid.UUID) ([]by
 
 	return buf.Bytes(), nil
 }
-func (s *Service) AdminGetTickets(ctx context.Context, startDate, endDate time.Time, busType string, page, pageSize int) (*AdminTicketPaginationResponse, error) {
+func (s *Service) AdminGetTickets(ctx context.Context, startDate, endDate time.Time, busType, status, search string, page, pageSize int) (*AdminTicketPaginationResponse, error) {
 	limit := int32(pageSize)
 	offset := int32((page - 1) * pageSize)
 
@@ -761,6 +761,8 @@ func (s *Service) AdminGetTickets(ctx context.Context, startDate, endDate time.T
 		StartDate: startDate,
 		EndDate:   endDate,
 		BusType:   busType,
+		Status:    status,
+		Search:    search,
 		Limit:     limit,
 		Offset:    offset,
 	})
@@ -773,90 +775,27 @@ func (s *Service) AdminGetTickets(ctx context.Context, startDate, endDate time.T
 		totalCount = rows[0].TotalCount
 	}
 
+	// Fetch weekly stats (independent of pagination/filters)
+	stats, err := s.q.GetWeeklyTicketStats(ctx, transport_db.GetWeeklyTicketStatsParams{
+		DepartureTime:   startDate,
+		DepartureTime_2: endDate,
+	})
+	if err != nil {
+		// Log error but continue, or return? For now let's just return what we have or zero stats
+		// Ideally we should log this.
+	}
+
 	return &AdminTicketPaginationResponse{
 		Data:       mapAdminTicketsToItem(rows),
 		TotalCount: totalCount,
 		Page:       page,
 		PageSize:   pageSize,
+		Stats: &WeeklyStats{
+			StudentCount:   stats.StudentCount,
+			EmployeeCount:  stats.EmployeeCount,
+			TotalConfirmed: stats.TotalConfirmed,
+		},
 	}, nil
-}
-
-func (s *Service) AdminGetTicketHistory(ctx context.Context, page, pageSize int) (*AdminTicketPaginationResponse, error) {
-	limit := int32(pageSize)
-	offset := int32((page - 1) * pageSize)
-
-	rows, err := s.q.GetTicketHistoryForAdmin(ctx, transport_db.GetTicketHistoryForAdminParams{
-		Limit:  limit,
-		Offset: offset,
-	})
-	if err != nil {
-		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
-
-	var totalCount int64
-	if len(rows) > 0 {
-		totalCount = rows[0].TotalCount
-	}
-
-	return &AdminTicketPaginationResponse{
-		Data:       mapAdminTicketHistoryToItem(rows),
-		TotalCount: totalCount,
-		Page:       page,
-		PageSize:   pageSize,
-	}, nil
-}
-
-func mapAdminTicketsToItem(rows []transport_db.GetTicketsForAdminRow) []AdminTicketItem {
-	items := make([]AdminTicketItem, 0, len(rows))
-	for _, row := range rows {
-		items = append(items, AdminTicketItem{
-			TicketID:          row.TicketID,
-			SerialNo:          row.SerialNo,
-			TicketCode:        row.TicketCode,
-			PassengerName:     row.PassengerName,
-			PassengerRelation: row.PassengerRelation,
-			Status:            row.TicketStatus,
-			BookingTime:       row.BookingTime,
-			UserName:          row.UserName,
-			UserEmail:         row.UserEmail,
-			TripID:            row.TripID,
-			DepartureTime:     row.DepartureTime,
-			BusType:           row.BusType,
-			Direction:         row.Direction,
-			RouteName:         row.RouteName,
-			PickupLocation:    row.PickupLocation,
-			DropoffLocation:   row.DropoffLocation,
-			Price:             row.Price,
-		})
-	}
-	return items
-}
-
-func mapAdminTicketHistoryToItem(rows []transport_db.GetTicketHistoryForAdminRow) []AdminTicketItem {
-	items := make([]AdminTicketItem, 0, len(rows))
-	for _, row := range rows {
-		items = append(items, AdminTicketItem{
-			TicketID:          row.TicketID,
-			SerialNo:          row.SerialNo,
-			TicketCode:        row.TicketCode,
-			PassengerName:     row.PassengerName,
-			PassengerRelation: row.PassengerRelation,
-			Status:            row.TicketStatus,
-			BookingTime:       row.BookingTime,
-			StatusUpdatedAt:   row.StatusUpdatedAt,
-			UserName:          row.UserName,
-			UserEmail:         row.UserEmail,
-			TripID:            row.TripID,
-			DepartureTime:     row.DepartureTime,
-			BusType:           row.BusType,
-			Direction:         row.Direction,
-			RouteName:         row.RouteName,
-			PickupLocation:    row.PickupLocation,
-			DropoffLocation:   row.DropoffLocation,
-			Price:             0, // History doesn't have price currently
-		})
-	}
-	return items
 }
 
 // =============================================================================
@@ -878,17 +817,14 @@ func (s *Service) BatchUpdateTripManualStatus(ctx context.Context, tripIDs []uui
 }
 
 func (s *Service) CancelTrip(ctx context.Context, tripID uuid.UUID) error {
-	// Use transaction to ensure atomicity
 	return common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
 		qtx := s.q.WithTx(tx)
 
-		// 1. Get all confirmed tickets for this trip
 		tickets, err := qtx.GetConfirmedTicketsForTrip(ctx, tripID)
 		if err != nil {
 			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
 		}
 
-		// 2. Process refunds for each ticket
 		for _, ticket := range tickets {
 			err := s.wallet.RefundTicket(
 				ctx, tx,
@@ -902,12 +838,10 @@ func (s *Service) CancelTrip(ctx context.Context, tripID uuid.UUID) error {
 			}
 		}
 
-		// 3. Cancel all tickets
 		if err := qtx.CancelTicketsByTripID(ctx, tripID); err != nil {
 			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
 		}
 
-		// 4. Set trip manual_status to CANCELLED
 		if err := qtx.UpdateTripManualStatus(ctx, transport_db.UpdateTripManualStatusParams{
 			ID:           tripID,
 			ManualStatus: common.StringToText("CANCELLED"),

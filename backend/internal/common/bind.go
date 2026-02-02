@@ -90,3 +90,18 @@ func (p *AdminFinanceListParams) Bind(r *http.Request) error {
 	}
 	return nil
 }
+
+type TicketListParams struct {
+	PaginationParams
+	DateRangeParams
+}
+
+func (p *TicketListParams) Bind(r *http.Request) error {
+	if err := p.PaginationParams.Bind(r); err != nil {
+		return err
+	}
+	if err := p.DateRangeParams.Bind(r); err != nil {
+		return err
+	}
+	return nil
+}
