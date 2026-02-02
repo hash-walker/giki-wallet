@@ -111,7 +111,9 @@ func (s *Server) MountRoutes() {
 		r.Get("/trips", s.Transport.HandleWeeklyTrips)
 		r.Post("/trips", s.Transport.CreateTrip)
 		r.Delete("/trips/{trip_id}", s.Transport.DeleteTrip)
-		r.Get("/trips/history", s.Transport.HandleDeletedTripsHistory)
+		r.Patch("/trips/{id}/status", s.Transport.UpdateTripManualStatus)
+		r.Patch("/trips/batch-status", s.Transport.BatchUpdateTripManualStatus)
+		r.Post("/trips/{id}/cancel", s.Transport.CancelTrip)
 
 		// Transport Revenue
 		r.Get("/transport/transactions", s.Transport.AdminGetRevenueTransactions)

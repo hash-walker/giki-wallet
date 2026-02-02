@@ -153,6 +153,23 @@ func (s *Service) ExecuteTransaction(
 
 }
 
+func (s *Service) RefundTicket(ctx context.Context, tx pgx.Tx, userID uuid.UUID, amount int64, referenceID string, description string) error {
+	// 1. Get Transport Revenue Wallet
+	transportWalletID, err := s.GetSystemWalletByName(ctx, TransportSystemWallet, SystemWalletRevenue)
+	if err != nil {
+		return err
+	}
+
+	// 2. Get User Wallet
+	userWallet, err := s.GetOrCreateWallet(ctx, tx, userID)
+	if err != nil {
+		return err
+	}
+
+	// 3. Execute Transaction
+	return s.ExecuteTransaction(ctx, tx, transportWalletID, userWallet.ID, amount, "REFUND", referenceID, description)
+}
+
 func (s *Service) GetOrCreateWallet(ctx context.Context, tx pgx.Tx, userID uuid.UUID) (*Wallet, error) {
 
 	walletQ := s.q
@@ -264,7 +281,7 @@ func (s *Service) GetWalletHistory(ctx context.Context, walletID uuid.UUID, page
 }
 
 func (s *Service) GetAdminRevenueTransactions(ctx context.Context, page, pageSize int, startDate, endDate time.Time) ([]wallet.GetAdminRevenueTransactionsRow, int64, error) {
-	// 1. Get Revenue Wallet ID
+
 	revWalletID, err := s.GetSystemWalletByName(ctx, TransportSystemWallet, SystemWalletRevenue)
 	if err != nil {
 		return nil, 0, err
@@ -272,7 +289,6 @@ func (s *Service) GetAdminRevenueTransactions(ctx context.Context, page, pageSiz
 
 	offset := (page - 1) * pageSize
 
-	// 2. Fetch Transactions with User Info
 	txns, err := s.q.GetAdminRevenueTransactions(ctx, wallet.GetAdminRevenueTransactionsParams{
 		WalletID:  revWalletID,
 		StartDate: startDate,

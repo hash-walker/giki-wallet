@@ -48,25 +48,6 @@ func (h *Handler) HandleWeeklyTrips(w http.ResponseWriter, r *http.Request) {
 	common.ResponseWithJSON(w, http.StatusOK, trips, requestID)
 }
 
-// HandleDeletedTripsHistory returns deleted trips for admin history view with pagination
-func (h *Handler) HandleDeletedTripsHistory(w http.ResponseWriter, r *http.Request) {
-	requestID := middleware.GetRequestID(r.Context())
-
-	var params common.PaginationParams
-	if err := params.Bind(r); err != nil {
-		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err), requestID)
-		return
-	}
-
-	trips, err := h.service.GetDeletedTripsHistory(r.Context(), params.Page, params.PageSize)
-	if err != nil {
-		middleware.HandleError(w, err, requestID)
-		return
-	}
-
-	common.ResponseWithJSON(w, http.StatusOK, trips, requestID)
-}
-
 func (h *Handler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
 	var req CreateTripRequest
@@ -424,4 +405,82 @@ func (h *Handler) HandleAdminTicketHistory(w http.ResponseWriter, r *http.Reques
 	}
 
 	common.ResponseWithJSON(w, http.StatusOK, response, requestID)
+}
+
+// =============================================================================
+// TRIP MANUAL STATUS MANAGEMENT
+// =============================================================================
+
+func (h *Handler) UpdateTripManualStatus(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	tripIDStr := chi.URLParam(r, "id")
+	tripID, err := uuid.Parse(tripIDStr)
+	if err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err), requestID)
+		return
+	}
+
+	var req struct {
+		ManualStatus string `json:"manual_status"` // "OPEN", "CLOSED", or null to clear
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidJSON, err), requestID)
+		return
+	}
+
+	if err := h.service.UpdateTripManualStatus(r.Context(), tripID, req.ManualStatus); err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"message": "Trip status updated"}, requestID)
+}
+
+func (h *Handler) BatchUpdateTripManualStatus(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	var req struct {
+		TripIDs      []string `json:"trip_ids"`
+		ManualStatus string   `json:"manual_status"` // "OPEN" or "CLOSED"
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidJSON, err), requestID)
+		return
+	}
+
+	tripIDs := make([]uuid.UUID, len(req.TripIDs))
+	for i, idStr := range req.TripIDs {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err), requestID)
+			return
+		}
+		tripIDs[i] = id
+	}
+
+	if err := h.service.BatchUpdateTripManualStatus(r.Context(), tripIDs, req.ManualStatus); err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"message": fmt.Sprintf("%d trips updated", len(tripIDs))}, requestID)
+}
+
+func (h *Handler) CancelTrip(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	tripIDStr := chi.URLParam(r, "id")
+	tripID, err := uuid.Parse(tripIDStr)
+	if err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err), requestID)
+		return
+	}
+
+	if err := h.service.CancelTrip(r.Context(), tripID); err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"message": "Trip cancelled and refunds processed"}, requestID)
 }

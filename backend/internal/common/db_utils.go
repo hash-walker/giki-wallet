@@ -33,6 +33,13 @@ func TextToString(text pgtype.Text) string {
 	return text.String
 }
 
+func TextToStringPointer(text pgtype.Text) *string {
+	if !text.Valid {
+		return nil
+	}
+	return &text.String
+}
+
 func Int4ToInt(n pgtype.Int4) int {
 	return int(n.Int32)
 }

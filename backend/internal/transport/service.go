@@ -30,17 +30,17 @@ type Service struct {
 	worker *worker.JobWorker
 	dbPool *pgxpool.Pool
 
-	dashboardCache     []TripResponse
-	dashboardCacheTime time.Time
-	cacheMutex         sync.RWMutex
+	dashboardCache map[string]tripCacheEntry
+	cacheMutex     sync.RWMutex
 }
 
 func NewService(dbPool *pgxpool.Pool, walletService *wallet.Service, worker *worker.JobWorker) *Service {
 	return &Service{
-		q:      transport_db.New(dbPool),
-		wallet: walletService,
-		worker: worker,
-		dbPool: dbPool,
+		q:              transport_db.New(dbPool),
+		wallet:         walletService,
+		worker:         worker,
+		dbPool:         dbPool,
+		dashboardCache: make(map[string]tripCacheEntry),
 	}
 }
 
@@ -50,18 +50,22 @@ func NewService(dbPool *pgxpool.Pool, walletService *wallet.Service, worker *wor
 
 func (s *Service) GetWeeklyTrips(ctx context.Context, startDate, endDate time.Time) ([]TripResponse, error) {
 
+	cacheKey := fmt.Sprintf("%d_%d", startDate.Unix(), endDate.Unix())
+
 	s.cacheMutex.RLock()
-	if !s.dashboardCacheTime.IsZero() && time.Since(s.dashboardCacheTime) < 5*time.Second {
-		defer s.cacheMutex.RUnlock()
-		return s.dashboardCache, nil
-	}
+	entry, found := s.dashboardCache[cacheKey]
 	s.cacheMutex.RUnlock()
+
+	if found && time.Now().Before(entry.expiresAt) {
+		return entry.data, nil
+	}
 
 	s.cacheMutex.Lock()
 	defer s.cacheMutex.Unlock()
 
-	if !s.dashboardCacheTime.IsZero() && time.Since(s.dashboardCacheTime) < 5*time.Second {
-		return s.dashboardCache, nil
+	entry, found = s.dashboardCache[cacheKey]
+	if found && time.Now().Before(entry.expiresAt) {
+		return entry.data, nil
 	}
 
 	rows, err := s.q.GetTripsForWeekWithStops(ctx, transport_db.GetTripsForWeekWithStopsParams{
@@ -75,37 +79,16 @@ func (s *Service) GetWeeklyTrips(ctx context.Context, startDate, endDate time.Ti
 
 	data := mapDbTripsForWeekToResponse(rows)
 
-	s.dashboardCache = data
-	s.dashboardCacheTime = time.Now()
+	if len(s.dashboardCache) > 100 {
+		s.dashboardCache = make(map[string]tripCacheEntry)
+	}
+
+	s.dashboardCache[cacheKey] = tripCacheEntry{
+		data:      data,
+		expiresAt: time.Now().Add(5 * time.Second),
+	}
 
 	return data, nil
-}
-
-func (s *Service) GetDeletedTripsHistory(ctx context.Context, page, pageSize int) (*TripHistoryWithPagination, error) {
-
-	offset := (page - 1) * pageSize
-
-	rows, err := s.q.GetDeletedTripsHistory(ctx, transport_db.GetDeletedTripsHistoryParams{
-		Limit:  int32(pageSize),
-		Offset: int32(offset),
-	})
-	if err != nil {
-		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
-
-	var totalCount int64 = 0
-	if len(rows) > 0 {
-		totalCount = rows[0].TotalCount
-	}
-
-	data := mapDbDeletedTripsToResponse(rows)
-
-	return &TripHistoryWithPagination{
-		Data:       data,
-		TotalCount: totalCount,
-		Page:       page,
-		PageSize:   pageSize,
-	}, nil
 }
 
 func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.UUID, error) {
@@ -165,11 +148,16 @@ func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.U
 }
 
 func (s *Service) DeleteTrip(ctx context.Context, tripID uuid.UUID) error {
-	err := s.q.SoftDeleteTrip(ctx, tripID)
+	count, err := s.q.GetTripBookingCount(ctx, tripID)
 	if err != nil {
 		return commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}
-	return nil
+
+	if count > 0 {
+		return ErrTripHasBookings
+	}
+
+	return s.q.DeleteTrip(ctx, tripID)
 }
 
 // =============================================================================
@@ -839,7 +827,7 @@ func mapAdminTicketsToItem(rows []transport_db.GetTicketsForAdminRow) []AdminTic
 			RouteName:         row.RouteName,
 			PickupLocation:    row.PickupLocation,
 			DropoffLocation:   row.DropoffLocation,
-			Price:             200, // Hardcoded for now
+			Price:             row.Price,
 		})
 	}
 	return items
@@ -866,8 +854,68 @@ func mapAdminTicketHistoryToItem(rows []transport_db.GetTicketHistoryForAdminRow
 			RouteName:         row.RouteName,
 			PickupLocation:    row.PickupLocation,
 			DropoffLocation:   row.DropoffLocation,
-			Price:             200, // Hardcoded for now
+			Price:             0, // History doesn't have price currently
 		})
 	}
 	return items
+}
+
+// =============================================================================
+// MANUAL STATUS MANAGEMENT
+// =============================================================================
+
+func (s *Service) UpdateTripManualStatus(ctx context.Context, tripID uuid.UUID, manualStatus string) error {
+	return s.q.UpdateTripManualStatus(ctx, transport_db.UpdateTripManualStatusParams{
+		ID:           tripID,
+		ManualStatus: common.StringToText(manualStatus),
+	})
+}
+
+func (s *Service) BatchUpdateTripManualStatus(ctx context.Context, tripIDs []uuid.UUID, manualStatus string) error {
+	return s.q.BatchUpdateTripManualStatus(ctx, transport_db.BatchUpdateTripManualStatusParams{
+		Column1:      tripIDs,
+		ManualStatus: common.StringToText(manualStatus),
+	})
+}
+
+func (s *Service) CancelTrip(ctx context.Context, tripID uuid.UUID) error {
+	// Use transaction to ensure atomicity
+	return common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
+		qtx := s.q.WithTx(tx)
+
+		// 1. Get all confirmed tickets for this trip
+		tickets, err := qtx.GetConfirmedTicketsForTrip(ctx, tripID)
+		if err != nil {
+			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
+
+		// 2. Process refunds for each ticket
+		for _, ticket := range tickets {
+			err := s.wallet.RefundTicket(
+				ctx, tx,
+				ticket.UserID,
+				int64(ticket.BasePrice),
+				ticket.TicketID.String(),
+				fmt.Sprintf("Refund for cancelled trip %s", ticket.RouteName),
+			)
+			if err != nil {
+				return commonerrors.Wrap(ErrRefundFailed, err)
+			}
+		}
+
+		// 3. Cancel all tickets
+		if err := qtx.CancelTicketsByTripID(ctx, tripID); err != nil {
+			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
+
+		// 4. Set trip manual_status to CANCELLED
+		if err := qtx.UpdateTripManualStatus(ctx, transport_db.UpdateTripManualStatusParams{
+			ID:           tripID,
+			ManualStatus: common.StringToText("CANCELLED"),
+		}); err != nil {
+			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
+
+		return nil
+	})
 }
