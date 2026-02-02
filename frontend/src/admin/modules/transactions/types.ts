@@ -75,6 +75,7 @@ export interface TransactionsPaginationResponse {
     total_count: number;
     page: number;
     page_size: number;
+    stats?: WeeklyStats;
 }
 
 

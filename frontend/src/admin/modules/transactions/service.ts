@@ -47,12 +47,14 @@ export const getTransportTransactions = async (
     page = 1,
     pageSize = 20,
     startDate?: Date,
-    endDate?: Date
+    endDate?: Date,
+    search?: string
 ): Promise<FinanceResponse> => {
 
     const params: any = { page, page_size: pageSize };
     if (startDate) params.start_date = startDate.toISOString();
     if (endDate) params.end_date = endDate.toISOString();
+    if (search) params.search = search;
 
     const { data } = await axios.get('/admin/finance/transactions', { params });
 

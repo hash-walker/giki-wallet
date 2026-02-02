@@ -1,14 +1,15 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { PageHeader, TableWrapper } from '../../../shared';
+import { PageHeader, TableWrapper, WeekSelector, getWeekStart, getWeekEnd, formatWeekRange, PaginationControl, getCurrentWeek } from '../../../shared';
 import { TransactionsTable } from '../components/TransactionsTable';
 import { TransactionFilters } from '../components/TransactionFilters';
-import { Transaction, TransactionCategory } from '../types';
-import { Download, FileText } from 'lucide-react';
+import { Transaction, TransactionCategory, WeeklyStats } from '../types';
+import { Download, FileText, Banknote, ArrowRightLeft, Search as SearchIcon } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { useAuthStore } from '@/shared/stores/authStore';
 import { getTransportTransactions } from '../service';
 import { toast } from 'sonner';
-import { PaginationControl } from '../../../shared/components/PaginationControl';
+import { useDebounce } from '@/shared/hooks/useDebounce';
+import { Input } from '@/shared/components/ui/Input';
 
 export const TransactionsPage = () => {
     const { user } = useAuthStore();
@@ -17,128 +18,123 @@ export const TransactionsPage = () => {
     const [page, setPage] = useState(1);
     const [pageSize] = useState(100);
     const [totalCount, setTotalCount] = useState(0);
+    const [stats, setStats] = useState<WeeklyStats>({ total_income: 0, total_refunds: 0, transaction_count: 0 });
 
-    const loadTransactions = useCallback(async (pageNum: number) => {
+    const [currentWeek, setCurrentWeek] = useState(getCurrentWeek());
+    const weekStart = useMemo(() => getWeekStart(currentWeek), [currentWeek]);
+    const weekEnd = useMemo(() => getWeekEnd(currentWeek), [currentWeek]);
+    const weekRange = useMemo(() => formatWeekRange(currentWeek), [currentWeek]);
+
+    const [searchTerm, setSearchTerm] = useState('');
+    const debouncedSearch = useDebounce(searchTerm, 500);
+
+    const [category, setCategory] = useState<TransactionCategory | 'all'>('all');
+
+
+    const loadTransactions = useCallback(async () => {
         if (user?.user_type === 'TRANSPORT_ADMIN') {
             setIsLoading(true);
             try {
-                const response = await getTransportTransactions(pageNum, pageSize);
+                const response = await getTransportTransactions(
+                    page,
+                    pageSize,
+                    weekStart,
+                    weekEnd,
+                    debouncedSearch
+                );
                 setTransactions(response.data);
                 setTotalCount(response.total_count);
-                setPage(response.page);
+                if (response.stats) {
+                    setStats(response.stats);
+                } else if (response.weekly_stats) {
+                    setStats(response.weekly_stats);
+                }
             } catch (error) {
                 console.error("Failed to fetch transactions", error);
                 toast.error("Failed to load transactions");
             } finally {
                 setIsLoading(false);
             }
-        } else {
-            // Mock data for others
-            const now = Date.now();
-            setTransactions([
-                {
-                    id: '1',
-                    category: 'wallet',
-                    type: 'topup',
-                    userId: 1,
-                    userName: 'John Doe',
-                    userEmail: 'john@example.com',
-                    amount: 500,
-                    timestamp: new Date(now).toISOString(),
-                    status: 'completed',
-                    paymentMethod: 'jazzcash',
-                },
-            ]);
-            setTotalCount(1);
-            setPage(1);
         }
-    }, [user, pageSize]);
+    }, [user, page, pageSize, weekStart, weekEnd, debouncedSearch]);
 
     useEffect(() => {
-        loadTransactions(1);
+        loadTransactions();
     }, [loadTransactions]);
 
-    const handlePageChange = (newPage: number) => {
-        loadTransactions(newPage);
-    };
+    // Reset page on filter change
+    useEffect(() => {
+        setPage(1);
+    }, [currentWeek, debouncedSearch]);
 
-    const [searchTerm, setSearchTerm] = useState('');
-    const [category, setCategory] = useState<TransactionCategory | 'all'>('all');
-    const [type, setType] = useState<string>('all');
-    const [status, setStatus] = useState<string>('all');
-
-    const filteredTransactions = useMemo(() => {
-        // Important: this filtering is currently local to the fetched page
-        return transactions.filter((transaction) => {
-            const matchesSearch =
-                transaction.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (transaction.category === 'ticket' &&
-                    transaction.ticketNumber?.toLowerCase().includes(searchTerm.toLowerCase()));
-
-            const matchesCategory = category === 'all' || transaction.category === category;
-            const matchesType = type === 'all' || transaction.type === type;
-            const matchesStatus = status === 'all' || transaction.status === status;
-
-            return matchesSearch && matchesCategory && matchesType && matchesStatus;
-        });
-    }, [transactions, searchTerm, category, type, status]);
 
     const handleExport = () => {
-        console.log('Export transactions');
+        toast.info('Export functionality coming soon');
     };
-
-    const tableCategory = category !== 'all' ? category : undefined;
 
     return (
         <div className="space-y-6">
-            <PageHeader
-                title="Transactions Management"
-                description="View and manage all wallet and ticket transactions"
-                action={
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <PageHeader
+                    title="Transactions Ledger"
+                    description="View and manage all wallet and ticket transactions."
+                />
+                <div className="flex items-center gap-3">
                     <Button variant="outline" onClick={handleExport}>
                         <Download className="w-4 h-4 mr-2" />
                         Export
                     </Button>
-                }
+                </div>
+            </div>
+
+            {/* Week Selector */}
+            <WeekSelector
+                currentWeek={currentWeek}
+                onWeekChange={setCurrentWeek}
+                weekRange={weekRange}
             />
 
-            {/* Filters */}
-            <TransactionFilters
-                searchTerm={searchTerm}
-                onSearchChange={setSearchTerm}
-                category={category}
-                onCategoryChange={(value) => {
-                    setCategory(value as TransactionCategory | 'all');
-                    setType('all');
-                }}
-                type={type}
-                onTypeChange={setType}
-                status={status}
-                onStatusChange={setStatus}
-            />
+            {/* Weekly Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <SummaryCard
+                    title="Total Revenue (Week)"
+                    value={`RS ${stats.total_income.toLocaleString()}`}
+                    icon={<Banknote className="w-5 h-5" />}
+                    color="green"
+                />
+                <SummaryCard
+                    title="Total Refunds (Week)"
+                    value={`RS ${Math.abs(stats.total_refunds).toLocaleString()}`}
+                    icon={<ArrowRightLeft className="w-5 h-5" />}
+                    color="red"
+                />
+                <SummaryCard
+                    title="Total Transactions (Week)"
+                    value={stats.transaction_count}
+                    icon={<FileText className="w-5 h-5" />}
+                    color="blue"
+                />
+            </div>
 
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <SummaryCard
-                    title="Total Transactions"
-                    value={totalCount}
-                    icon={<FileText className="w-5 h-5" />}
-                />
-                <SummaryCard
-                    title="Page Transactions"
-                    value={filteredTransactions.length}
-                    icon={<FileText className="w-5 h-5" />}
-                />
-                <SummaryCard
-                    title="Ticket (Page)"
-                    value={filteredTransactions.filter(t => t.category === 'ticket').length}
-                    icon={<FileText className="w-5 h-5" />}
-                />
-                <SummaryCard
-                    title="Page Amount"
-                    value={`RS ${filteredTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0).toLocaleString()}`}
-                    icon={<FileText className="w-5 h-5" />}
-                />
+            {/* Filter Bar */}
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                <div className="flex-1 relative">
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                        placeholder="Search by user name, email, or reference ID..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-9 w-full xl:max-w-md"
+                    />
+                </div>
+                {/* 
+                <TransactionFilters 
+                    ... 
+                    // Keeping filters commented out regarding user request to 'align filters' 
+                    // effectively meaning rely on Search + Date + Ledger logic.
+                    // If Category filter needed, uncomment.
+                /> 
+                */}
             </div>
 
             {/* Transactions Table */}
@@ -146,19 +142,20 @@ export const TransactionsPage = () => {
                 count={totalCount}
                 itemName="transaction"
                 isLoading={isLoading}
+                page={page}
+                pageSize={pageSize}
             >
                 <div className="space-y-4">
                     <div className="flex justify-end">
                         <PaginationControl
                             currentPage={page}
                             totalPages={Math.ceil(totalCount / pageSize)}
-                            onPageChange={handlePageChange}
+                            onPageChange={setPage}
                         />
                     </div>
 
                     <TransactionsTable
-                        transactions={filteredTransactions}
-                        category={tableCategory}
+                        transactions={transactions}
                     />
                 </div>
             </TableWrapper>
@@ -166,20 +163,23 @@ export const TransactionsPage = () => {
     );
 };
 
+const SummaryCard = ({ title, value, icon, color = 'blue' }: { title: string; value: string | number; icon: React.ReactNode, color?: 'blue' | 'green' | 'red' | 'purple' }) => {
+    const colorClasses = {
+        blue: 'bg-blue-50 text-blue-600',
+        green: 'bg-green-50 text-green-600',
+        red: 'bg-red-50 text-red-600',
+        purple: 'bg-purple-50 text-purple-600'
+    };
 
-const SummaryCard = ({ title, value, icon }: { title: string; value: string | number; icon: React.ReactNode }) => {
     return (
-        <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
-            <div className="flex items-center justify-between">
-                <div className="min-w-0 flex-1">
-                    <p className="text-xs sm:text-sm text-gray-600">{title}</p>
-                    <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1 truncate">{value}</p>
-                </div>
-                <div className="p-2 sm:p-3 bg-blue-100 rounded-lg flex-shrink-0">
-                    <div className="text-blue-600">{icon}</div>
-                </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex items-center justify-between">
+            <div>
+                <p className="text-sm text-gray-500 font-medium">{title}</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+            </div>
+            <div className={`p-3 rounded-lg ${colorClasses[color]}`}>
+                {icon}
             </div>
         </div>
     );
 };
-
