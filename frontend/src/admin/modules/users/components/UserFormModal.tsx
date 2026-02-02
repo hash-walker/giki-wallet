@@ -22,7 +22,7 @@ export const UserFormModal = ({
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
-    const [role, setRole] = useState('student');
+    const [role, setRole] = useState('STUDENT');
     const [isActive, setIsActive] = useState(true);
 
     useEffect(() => {
@@ -36,7 +36,7 @@ export const UserFormModal = ({
             setName('');
             setEmail('');
             setPhone('');
-            setRole('student');
+            setRole('STUDENT');
             setIsActive(true);
         }
     }, [user, isOpen]);
@@ -109,9 +109,9 @@ export const UserFormModal = ({
                         value={role}
                         onChange={(value) => setRole(value)}
                         options={[
-                            { value: 'student', label: 'Student' },
-                            { value: 'employee', label: 'Employee' },
-                            { value: 'admin', label: 'Admin' },
+                            { value: 'STUDENT', label: 'Student' },
+                            { value: 'EMPLOYEE', label: 'Employee' },
+                            { value: 'TRANSPORT_ADMIN', label: 'Admin' },
                         ]}
                         placeholder="Select role"
                     />

@@ -15,4 +15,13 @@ export const UserService = {
         });
         return data;
     },
+
+    approveUser: async (userId: string): Promise<User> => {
+        const { data } = await apiClient.post<User>(`/admin/users/${userId}/approve`);
+        return data;
+    },
+
+    rejectUser: async (userId: string): Promise<void> => {
+        await apiClient.post(`/admin/users/${userId}/reject`);
+    },
 };

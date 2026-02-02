@@ -1,11 +1,15 @@
 import { User } from '../schema';
 import { Table, ActionButtons } from '../../../shared';
+import { Button } from '@/shared/components/ui/button';
+import { CheckCircle2, XCircle } from 'lucide-react';
 
 interface UsersTableProps {
     users: User[];
     onEdit: (user: User) => void;
     onDelete: (id: string) => void;
     onToggleActive: (id: string) => void;
+    onApprove: (id: string) => void;
+    onReject: (id: string) => void;
 }
 
 const getRoleBadge = (role: string) => {
@@ -19,6 +23,7 @@ const getRoleBadge = (role: string) => {
     const labels: Record<string, string> = {
         student: 'Student',
         employee: 'Employee',
+        transport_admin: 'Admin',
         admin: 'Admin',
     };
 
@@ -33,7 +38,9 @@ export const UsersTable = ({
     users,
     onEdit,
     onDelete,
-    onToggleActive
+    onToggleActive,
+    onApprove,
+    onReject
 }: UsersTableProps) => {
     const headers = [
         { content: 'Name', align: 'left' as const },
@@ -60,16 +67,39 @@ export const UsersTable = ({
                     Inactive
                 </span>
             ),
-            <ActionButtons
-                key="actions"
-                onEdit={() => onEdit(user)}
-                onDelete={() => onDelete(user.id)}
-                onToggle={() => onToggleActive(user.id)}
-                isActive={user.is_active}
-                showToggle={true}
-                activeLabel="Deactivate"
-                inactiveLabel="Activate"
-            />,
+            <div key="actions" className="flex items-center justify-end gap-2">
+                {user.user_type === 'EMPLOYEE' && !user.is_verified && (
+                    <div className="flex items-center border-r pr-2 mr-1 gap-1">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                            onClick={() => onApprove(user.id)}
+                            title="Approve Employee"
+                        >
+                            <CheckCircle2 className="w-4 h-4" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => onReject(user.id)}
+                            title="Reject Employee"
+                        >
+                            <XCircle className="w-4 h-4" />
+                        </Button>
+                    </div>
+                )}
+                <ActionButtons
+                    onEdit={() => onEdit(user)}
+                    onDelete={() => onDelete(user.id)}
+                    onToggle={() => onToggleActive(user.id)}
+                    isActive={user.is_active}
+                    showToggle={true}
+                    activeLabel="Deactivate"
+                    inactiveLabel="Activate"
+                />
+            </div>,
         ],
     }));
 

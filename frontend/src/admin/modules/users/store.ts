@@ -17,6 +17,8 @@ interface UserState {
     // Actions
     fetchUsers: (page?: number) => Promise<void>;
     toggleUserStatus: (userId: string, currentStatus: boolean) => Promise<void>;
+    approveUser: (userId: string) => Promise<void>;
+    rejectUser: (userId: string) => Promise<void>;
 }
 
 export const useUserStore = create<UserState>((set, get) => ({
@@ -60,6 +62,39 @@ export const useUserStore = create<UserState>((set, get) => ({
         } catch (error) {
             console.error(error);
             toast.error('Failed to update user status');
+        } finally {
+            set({ isUpdating: false });
+        }
+    },
+
+    approveUser: async (userId: string) => {
+        set({ isUpdating: true });
+        try {
+            const updatedUser = await UserService.approveUser(userId);
+            set((state) => ({
+                users: state.users.map((u) => (u.id === userId ? updatedUser : u)),
+            }));
+            toast.success('User approved and verification email sent');
+        } catch (error) {
+            console.error(error);
+            toast.error('Failed to approve user');
+        } finally {
+            set({ isUpdating: false });
+        }
+    },
+
+    rejectUser: async (userId: string) => {
+        set({ isUpdating: true });
+        try {
+            await UserService.rejectUser(userId);
+            // Optionally remove from list or update locally
+            set((state) => ({
+                users: state.users.map((u) => (u.id === userId ? { ...u, is_active: false } : u)),
+            }));
+            toast.success('User application rejected');
+        } catch (error) {
+            console.error(error);
+            toast.error('Failed to reject user');
         } finally {
             set({ isUpdating: false });
         }

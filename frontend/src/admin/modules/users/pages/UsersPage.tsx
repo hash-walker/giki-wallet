@@ -11,7 +11,7 @@ import { useUserStore } from '../store';
 import { PaginationControl } from '@/admin/shared/components/PaginationControl';
 
 export const UsersPage = () => {
-    const { users, isLoading, fetchUsers, toggleUserStatus, pagination } = useUserStore();
+    const { users, isLoading, fetchUsers, toggleUserStatus, approveUser, rejectUser, pagination } = useUserStore();
 
     const totalPages = Math.ceil(pagination.totalCount / pagination.pageSize);
 
@@ -104,9 +104,9 @@ export const UsersPage = () => {
                         onChange={(value) => setFilterRole(value)}
                         options={[
                             { value: 'all', label: 'All Roles' },
-                            { value: 'student', label: 'Student' },
-                            { value: 'employee', label: 'Employee' },
-                            { value: 'admin', label: 'Admin' },
+                            { value: 'STUDENT', label: 'Student' },
+                            { value: 'EMPLOYEE', label: 'Employee' },
+                            { value: 'TRANSPORT_ADMIN', label: 'Admin' },
                         ]}
                         placeholder="Filter by role"
                     />
@@ -140,6 +140,8 @@ export const UsersPage = () => {
                         onEdit={handleEditUser}
                         onDelete={handleDeleteUser}
                         onToggleActive={handleToggleActive}
+                        onApprove={approveUser}
+                        onReject={rejectUser}
                     />
                 </div>
             </TableWrapper>
