@@ -39,7 +39,7 @@ interface TransportState {
     error: string | null;
 
     // Booking Flow
-    direction: 'Outbound' | 'Inbound';
+    direction: 'OUTBOUND' | 'INBOUND';
     isRoundTrip: boolean; // Feature 2: Round Trip Toggle
     outboundSelection: BookingSelection | null;
     returnSelection: BookingSelection | null;
@@ -48,7 +48,7 @@ interface TransportState {
     // Actions
     fetchData: (showLoading?: boolean) => Promise<void>;
     releaseAllHolds: () => Promise<void>;
-    setDirection: (d: 'Outbound' | 'Inbound') => void;
+    setDirection: (d: 'OUTBOUND' | 'INBOUND') => void;
     setRoundTrip: (enabled: boolean) => void;
     updatePassenger: (holdId: string, passenger: Passenger) => void;
     resetBookingFlow: () => void;
@@ -71,7 +71,7 @@ export const useTransportStore = create<TransportState>((set, get) => ({
     loading: false,
     initialized: false,
     error: null,
-    direction: 'Outbound', // Default to Outbound (from GIKI)
+    direction: 'OUTBOUND', // Default to Outbound (from GIKI)
     isRoundTrip: false,
     outboundSelection: null,
     returnSelection: null,
@@ -93,24 +93,11 @@ export const useTransportStore = create<TransportState>((set, get) => ({
     setDirection: (direction) => {
         const { activeHolds, isRoundTrip } = get();
 
-        // If Round Trip is enabled, we allow direction switching IF we are in the middle of the flow.
-        // However, if manual switch is attempted while holds exist (and it's not the wizard auto-switch), we might want to block.
-        // For simplicity: If holds exist, only allow switch if it aligns with Round Trip logic (e.g. going to next leg).
-        // But the wizard auto-switch will use a direct state update perhaps? No, better to use action.
-
-        // Standard check:
         if (!isRoundTrip && activeHolds.length > 0) {
             toast.error('Please release active holds before changing direction');
             return;
         }
 
-        // Round Trip check: If we have holds, we can only switch if we haven't completed both legs? 
-        // Or cleaner: `addSelection` handles the switching. Manual switching might be restricted.
-        // Let's keep existing check for manual but relax it if isRoundTrip? 
-        // Actually, if I have Outbound hold, and I click Inbound tab, it should be fine in Round Trip mode.
-        // But if I have Inbound hold (2nd leg) and click Outbound?
-
-        // Let's rely on the UI to guide them. If manual click:
         if (activeHolds.length > 0 && !isRoundTrip) {
             toast.error('Please release active holds before changing direction');
             return;
@@ -149,8 +136,14 @@ export const useTransportStore = create<TransportState>((set, get) => ({
             const role = user?.user_type.toUpperCase();
 
             const filteredTrips = (tripsData || []).filter(trip => {
-                if (!role || role.includes('ADMIN')) return true;
-                return trip.bus_type.toUpperCase() === role;
+                // Filtering Logic:
+                // 1. Admins see everything.
+                // 2. Students see ONLY 'STUDENT' buses.
+                // 3. Employees see ONLY 'EMPLOYEE' buses.
+                if (role === 'STUDENT' && trip.bus_type !== 'STUDENT') return false;
+                if (role === 'EMPLOYEE' && trip.bus_type !== 'EMPLOYEE') return false;
+
+                return true;
             });
 
             set({
@@ -224,13 +217,13 @@ export const useTransportStore = create<TransportState>((set, get) => ({
             const gikiStop = getGIKIStopObject(trip.stops || []);
             const direction = get().direction;
 
-            if (direction === 'Outbound' && gikiStop && selection.pickupId !== gikiStop.stop_id) {
+            if (direction === 'OUTBOUND' && gikiStop && selection.pickupId !== gikiStop.stop_id) {
                 toast.error('Outbound trips must pick up from GIKI');
                 set({ loading: false });
                 return;
             }
 
-            if (direction === 'Inbound' && gikiStop && selection.dropoffId !== gikiStop.stop_id) {
+            if (direction === 'INBOUND' && gikiStop && selection.dropoffId !== gikiStop.stop_id) {
                 toast.error('Inbound trips must drop off at GIKI');
                 set({ loading: false });
                 return;
@@ -274,12 +267,12 @@ export const useTransportStore = create<TransportState>((set, get) => ({
             // direction is already declared above: const direction = get().direction;
             const { isRoundTrip } = get();
 
-            if (direction === 'Outbound') {
+            if (direction === 'OUTBOUND') {
                 set(state => ({
                     outboundSelection: selection,
                     passengers: { ...state.passengers, ...newPassengers },
                     // Wizard Flow: If Round Trip, auto switch to Inbound
-                    direction: isRoundTrip ? 'Inbound' : 'Outbound'
+                    direction: isRoundTrip ? 'INBOUND' : 'OUTBOUND'
                 }));
                 if (isRoundTrip) {
                     toast.success('Outbound seat held! Now select Return trip.');

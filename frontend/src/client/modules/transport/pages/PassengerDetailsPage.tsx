@@ -85,8 +85,8 @@ export const PassengerDetailsPage = () => {
 
     // Since we only allow one direction at a time (locked by setDirection), assume all active holds belong to current direction.
     // If we ever support mixed cart, we'd need reliable direction property on ActiveHold.
-    const outboundHolds = direction === 'Outbound' ? currentHolds : [];
-    const returnHolds = direction === 'Inbound' ? currentHolds : [];
+    const outboundHolds = direction === 'OUTBOUND' ? currentHolds : [];
+    const returnHolds = direction === 'INBOUND' ? currentHolds : [];
 
 
     const handleConfirmBooking = async () => {

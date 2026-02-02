@@ -67,7 +67,7 @@ const TicketSelect = ({
 };
 
 interface TransportBookingCardProps {
-    direction: 'Outbound' | 'Inbound';
+    direction: 'OUTBOUND' | 'INBOUND';
     allTrips: Trip[];
     onBook?: (selection: BookingSelection) => void;
     loading?: boolean;
@@ -97,7 +97,7 @@ export const TransportBookingCard = ({
         if (!allTrips.length) return [];
         const filtered = allTrips.filter(trip => {
             const isOutbound = trip.direction.toUpperCase() === 'OUTBOUND';
-            if (direction === 'Outbound') return isOutbound;
+            if (direction === 'OUTBOUND') return isOutbound;
             return !isOutbound;
         });
 
@@ -142,7 +142,7 @@ export const TransportBookingCard = ({
             const time = formatTime(trip.departure_time);
             return {
                 value: trip.id,
-                label: `${date} - ${time}`
+                label: `${date} - ${time} (${trip.bus_type})`
             };
         });
     }, [filteredTrips, selectedRouteId]);
@@ -161,7 +161,7 @@ export const TransportBookingCard = ({
 
         if (gikiIndex !== -1) {
             // GIKI explicitly in list
-            if (direction === 'Outbound') {
+            if (direction === 'OUTBOUND') {
                 validStops = sortedStops.slice(gikiIndex + 1);
             } else {
                 validStops = sortedStops.slice(0, gikiIndex);
@@ -192,7 +192,7 @@ export const TransportBookingCard = ({
         // Only release if we have a hold for THIS direction.
         // If we have a hold for the OTHER direction, we should preserve it.
         const hasHoldForThisDirection = activeHolds.some(h =>
-            h.direction?.toUpperCase() === direction.toUpperCase()
+            h.direction?.toUpperCase() === direction
         );
 
         return hasHoldForThisDirection;
@@ -200,11 +200,7 @@ export const TransportBookingCard = ({
 
     const handleRouteChange = (routeId: string | null) => {
         if (shouldReleaseOnUpdate() && selectedRouteId !== routeId) {
-            releaseAllHolds(); // NOTE: limitations of API mean we wipe all. 
-            // Ideally we'd only release THIS direction, but we don't have that action yet. 
-            // User will have to re-book leg 1 if they change leg 2 route while holding leg 2. 
-            // But crucially, if they hold leg 1 (Outbound) and are picking leg 2 (Inbound), 
-            // hasHoldForThisDirection (Inbound) is false, so we won't release!
+            releaseAllHolds();
         }
         setSelectedRouteId(routeId);
         setSelectedTripId(null);
@@ -245,8 +241,8 @@ export const TransportBookingCard = ({
 
         const payload: BookingSelection = {
             tripId: selectedTripId,
-            pickupId: direction === 'Outbound' ? gikiStop.stop_id : selectedStopId,
-            dropoffId: direction === 'Outbound' ? selectedStopId : gikiStop.stop_id,
+            pickupId: direction === 'OUTBOUND' ? gikiStop.stop_id : selectedStopId,
+            dropoffId: direction === 'OUTBOUND' ? selectedStopId : gikiStop.stop_id,
             ticketCount,
         };
 
@@ -266,7 +262,7 @@ export const TransportBookingCard = ({
     const hasCompleteSelection = !!(selectedRouteId && selectedTripId && selectedStopId && currentTrip);
 
     // Labels
-    const stopLabel = direction === 'Outbound' ? "Drop Location" : "Pickup Point";
+    const stopLabel = direction === 'OUTBOUND' ? "Drop Location" : "Pickup Point";
     const routeLabel = "Route";
 
     if (loading) return <div className="p-8 text-center text-gray-400">Loading schedules...</div>;
@@ -301,7 +297,7 @@ export const TransportBookingCard = ({
                     disabled={!selectedTripId}
                 />
 
-                {hasCompleteSelection && currentTrip && (
+                {currentTrip && (
                     <div className="space-y-3 pt-2 border-t border-gray-100">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-1.5">
@@ -372,7 +368,7 @@ export const TransportBookingCard = ({
                 </div>
 
                 <div className="w-[12%] flex justify-center">
-                    {hasCompleteSelection && currentTrip ? (
+                    {currentTrip ? (
                         <div className="flex items-center gap-1.5 flex-wrap justify-center">
                             {currentTrip.bus_type && (
                                 <Badge type={currentTrip.bus_type as any}>
@@ -388,7 +384,7 @@ export const TransportBookingCard = ({
                 </div>
 
                 <div className="w-[10%] text-center">
-                    {hasCompleteSelection && currentTrip ? (
+                    {currentTrip ? (
                         <Availability isFull={isFull} tickets={currentTrip.available_seats} />
                     ) : (
                         <span className="text-xs text-gray-400">--</span>

@@ -1,8 +1,8 @@
 import { Switch } from '@/shared/components/ui/switch';
 
 interface TransportBookingModeSelectorProps {
-    direction: 'Outbound' | 'Inbound';
-    onDirectionChange: (direction: 'Outbound' | 'Inbound') => void;
+    direction: 'OUTBOUND' | 'INBOUND';
+    onDirectionChange: (direction: 'OUTBOUND' | 'INBOUND') => void;
     isRoundTrip: boolean;
     onRoundTripChange: (enabled: boolean) => void;
 }
@@ -36,14 +36,14 @@ export function TransportBookingModeSelector({
 
                     <div className="flex bg-slate-100 p-1 rounded-xl">
                         <button
-                            onClick={() => onDirectionChange('Outbound')}
-                            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${direction === 'Outbound' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            onClick={() => onDirectionChange('OUTBOUND')}
+                            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${direction === 'OUTBOUND' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         >
                             From GIKI
                         </button>
                         <button
-                            onClick={() => onDirectionChange('Inbound')}
-                            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${direction === 'Inbound' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            onClick={() => onDirectionChange('INBOUND')}
+                            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${direction === 'INBOUND' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         >
                             To GIKI
                         </button>

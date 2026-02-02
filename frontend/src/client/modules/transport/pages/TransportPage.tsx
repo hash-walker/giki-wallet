@@ -173,7 +173,7 @@ export const TransportPage = () => {
 
                 <div className="space-y-4">
                     <h2 className="text-xl font-bold text-gray-900 px-2">
-                        {direction === 'Outbound' ? 'Select Outbound Trip' : 'Select Inbound Trip'}
+                        {direction === 'OUTBOUND' ? 'Select Outbound Trip' : 'Select Inbound Trip'}
                     </h2>
                     <TransportBookingCard
                         direction={direction}
