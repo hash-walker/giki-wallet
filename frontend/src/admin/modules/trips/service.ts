@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/axios';
-import { CreateTripRequest, CreateTripResponse, Route, RouteTemplateResponse, TripResponse, TripHistoryPaginationResponse } from './types';
+import { CreateTripRequest, CreateTripResponse, Route, RouteTemplateResponse, TripResponse } from './types';
 
 export const TripService = {
     getAllRoutes: async (): Promise<Route[]> => {
@@ -38,12 +38,6 @@ export const TripService = {
         return data;
     },
 
-    getDeletedTripsHistory: async (page: number = 1, pageSize: number = 100): Promise<TripHistoryPaginationResponse> => {
-        const { data } = await apiClient.get<TripHistoryPaginationResponse>('/admin/trips/history', {
-            params: { page, page_size: pageSize }
-        });
-        return data;
-    },
 
     exportTrips: async (startDate?: Date, endDate?: Date, routeIds?: string[]): Promise<Blob> => {
         const params = new URLSearchParams();
@@ -56,5 +50,17 @@ export const TripService = {
             responseType: 'blob',
         });
         return data;
+    },
+
+    updateTripManualStatus: async (tripId: string, manualStatus: string | null): Promise<void> => {
+        await apiClient.patch(`/admin/trips/${tripId}/status`, { manual_status: manualStatus });
+    },
+
+    batchUpdateTripManualStatus: async (tripIds: string[], manualStatus: string): Promise<void> => {
+        await apiClient.patch('/admin/trips/batch-status', { trip_ids: tripIds, manual_status: manualStatus });
+    },
+
+    cancelTrip: async (tripId: string): Promise<void> => {
+        await apiClient.post(`/admin/trips/${tripId}/cancel`);
     },
 };

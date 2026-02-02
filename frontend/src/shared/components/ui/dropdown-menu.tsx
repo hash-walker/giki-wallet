@@ -1,16 +1,19 @@
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { ChevronDown } from 'lucide-react';
 
 interface DropdownContextValue {
     isOpen: boolean;
     setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+    triggerRect: DOMRect | null;
 }
 
 const DropdownContext = React.createContext<DropdownContextValue | undefined>(undefined);
 
 export const DropdownMenu = ({ children }: { children: React.ReactNode }) => {
     const [isOpen, setIsOpen] = React.useState(false);
+    const [triggerRect, setTriggerRect] = React.useState<DOMRect | null>(null);
     const containerRef = React.useRef<HTMLDivElement>(null);
 
     React.useEffect(() => {
@@ -24,22 +27,37 @@ export const DropdownMenu = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     return (
-        <DropdownContext.Provider value={{ isOpen, setIsOpen }}>
+        <DropdownContext.Provider value={{ isOpen, setIsOpen, triggerRect }}>
             <div className="relative inline-block text-left" ref={containerRef}>
-                {children}
+                {React.Children.map(children, child => {
+                    if (React.isValidElement(child) && (child.type as any).displayName === 'DropdownMenuTrigger') {
+                        return React.cloneElement(child as React.ReactElement<any>, {
+                            onTriggerClick: (rect: DOMRect) => {
+                                setTriggerRect(rect);
+                                setIsOpen(!isOpen);
+                            }
+                        });
+                    }
+                    return child;
+                })}
             </div>
         </DropdownContext.Provider>
     );
 };
 
-export const DropdownMenuTrigger = ({ children, asChild }: { children: React.ReactNode; asChild?: boolean }) => {
+export const DropdownMenuTrigger = ({ children, asChild, onTriggerClick }: { children: React.ReactNode; asChild?: boolean; onTriggerClick?: (rect: DOMRect) => void }) => {
     const context = React.useContext(DropdownContext);
     if (!context) throw new Error('DropdownMenuTrigger must be used within DropdownMenu');
 
     const handleClick = (e: React.MouseEvent) => {
-        // e.stopPropagation(); // Optional
-        context.setIsOpen(!context.isOpen);
-        if (React.isValidElement(children)) {
+        const rect = e.currentTarget.getBoundingClientRect();
+        if (onTriggerClick) {
+            onTriggerClick(rect);
+        } else {
+            context.setIsOpen(!context.isOpen);
+        }
+
+        if (asChild && React.isValidElement(children)) {
             const child = children as React.ReactElement<any>;
             if (child.props.onClick) {
                 child.props.onClick(e);
@@ -60,6 +78,7 @@ export const DropdownMenuTrigger = ({ children, asChild }: { children: React.Rea
         </button>
     );
 };
+(DropdownMenuTrigger as any).displayName = 'DropdownMenuTrigger';
 
 export const DropdownMenuContent = ({
     children,
@@ -73,22 +92,39 @@ export const DropdownMenuContent = ({
     const context = React.useContext(DropdownContext);
     if (!context) throw new Error('DropdownMenuContent must be used within DropdownMenu');
 
-    if (!context.isOpen) return null;
+    if (!context.isOpen || !context.triggerRect) return null;
 
-    const alignClass = {
-        start: 'left-0',
-        center: 'left-1/2 -translate-x-1/2',
-        end: 'right-0',
-    }[align];
+    const { triggerRect } = context;
 
-    return (
-        <div className={cn(
-            "absolute z-50 mt-2 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95 data-[side=bottom]:slide-in-from-top-2",
-            alignClass,
-            className
-        )}>
+    // Calculate position
+    const top = triggerRect.bottom + window.scrollY;
+    let left = triggerRect.left + window.scrollX;
+
+    if (align === 'center') {
+        left = triggerRect.left + window.scrollX + (triggerRect.width / 2);
+    } else if (align === 'end') {
+        left = triggerRect.right + window.scrollX;
+    }
+
+    const style: React.CSSProperties = {
+        position: 'absolute',
+        top: `${top}px`,
+        left: `${left}px`,
+        transform: align === 'center' ? 'translateX(-50%)' : align === 'end' ? 'translateX(-100%)' : undefined,
+        zIndex: 9999,
+    };
+
+    return createPortal(
+        <div
+            style={style}
+            className={cn(
+                "mt-2 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95",
+                className
+            )}
+        >
             {children}
-        </div>
+        </div>,
+        document.body
     );
 };
 

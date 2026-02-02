@@ -15,18 +15,13 @@ const adminNavItems = [
     { path: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     // Operations Group
     { path: '/admin/trips', label: 'Trips', icon: Bus }, // Replaces "Routes" conceptually for day-to-day
-    { path: '/admin/routes', label: 'Roadmap', icon: Bus }, // Renaming Routes to Roadmap or keeping as "Routes Management"
-    { path: '/admin/time-slots', label: 'Time Slots', icon: Clock },
     { path: '/admin/tickets', label: 'Tickets', icon: Ticket },
     // Management Group
     { path: '/admin/users', label: 'Users', icon: Users },
     { path: '/admin/transactions', label: 'Transactions', icon: Receipt },
     { path: '/admin/gateway-transactions', label: 'Gateway Txns', icon: Receipt },
     // History
-    { path: '/admin/trips/history', label: 'Trip History', icon: History },
     { path: '/admin/tickets/history', label: 'Ticket History', icon: History },
-    // Settings
-    { path: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
 export const AdminLayout = ({ children }: AdminLayoutProps) => {
@@ -49,7 +44,6 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
                 '/admin/trips',
                 '/admin/users',
                 '/admin/transactions',
-                '/admin/trips/history',
                 '/admin/tickets',
                 '/admin/tickets/history',
             ];

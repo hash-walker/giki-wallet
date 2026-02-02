@@ -14,9 +14,22 @@ export const SignInPage = () => {
     const { login, isLoading } = useAuthStore();
 
     const redirectTo = useMemo(() => {
+        // 1. Check for 'from' state passed by protection components
+        const from = (location.state as any)?.from?.pathname;
+        if (from) return from;
+
+        // 2. Check for 'redirect' query parameter
         const params = new URLSearchParams(location.search);
-        return params.get('redirect') || '/';
-    }, [location.search]);
+        const queryRedirect = params.get('redirect');
+        if (queryRedirect) return queryRedirect;
+
+        // 3. Fallback: If we are on the admin sign-in page, default to admin dashboard
+        if (location.pathname.startsWith('/admin')) {
+            return '/admin';
+        }
+
+        return '/';
+    }, [location.search, location.state, location.pathname]);
 
     const {
         register,

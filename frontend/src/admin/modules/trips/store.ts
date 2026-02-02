@@ -8,46 +8,33 @@ interface TripCreateState {
     routes: Route[];
     template: RouteTemplateResponse | null;
     trips: TripResponse[];
-    deletedTrips: TripResponse[];
-    deletedTripsPagination: {
-        page: number;
-        pageSize: number;
-        totalCount: number;
-    };
 
     // UI State
     isLoadingRoutes: boolean;
     isLoadingTemplate: boolean;
     isLoadingTrips: boolean;
-    isLoadingDeletedTrips: boolean;
     isSubmitting: boolean;
     isDeletingTrip: boolean;
 
     // Actions
     fetchRoutes: () => Promise<void>;
     fetchTrips: (startDate?: Date, endDate?: Date) => Promise<void>;
-    fetchDeletedTripsHistory: (page?: number) => Promise<void>;
     selectRoute: (routeId: string) => Promise<void>;
     resetTemplate: () => void;
     createTrip: (payload: any) => Promise<boolean>;
     deleteTrip: (tripId: string) => Promise<boolean>;
+    updateTripManualStatus: (tripId: string, manualStatus: string | null) => Promise<boolean>;
+    batchUpdateTripManualStatus: (tripIds: string[], manualStatus: string) => Promise<boolean>;
+    cancelTrip: (tripId: string) => Promise<boolean>;
 }
 
 export const useTripCreateStore = create<TripCreateState>((set, get) => ({
     routes: [],
     template: null,
     trips: [],
-    deletedTrips: [],
-    deletedTripsPagination: {
-        page: 1,
-        pageSize: 100,
-        totalCount: 0,
-    },
-
     isLoadingRoutes: false,
     isLoadingTemplate: false,
     isLoadingTrips: false,
-    isLoadingDeletedTrips: false,
     isSubmitting: false,
     isDeletingTrip: false,
 
@@ -77,25 +64,6 @@ export const useTripCreateStore = create<TripCreateState>((set, get) => ({
         }
     },
 
-    fetchDeletedTripsHistory: async (page = 1) => {
-        set({ isLoadingDeletedTrips: true });
-        try {
-            const response = await TripService.getDeletedTripsHistory(page);
-            set({
-                deletedTrips: response.data,
-                deletedTripsPagination: {
-                    page: response.page,
-                    pageSize: response.page_size,
-                    totalCount: response.total_count,
-                }
-            });
-        } catch (error) {
-            console.error(error);
-            toast.error('Failed to load deleted trips history');
-        } finally {
-            set({ isLoadingDeletedTrips: false });
-        }
-    },
 
     selectRoute: async (routeId: string) => {
         set({ isLoadingTemplate: true, template: null });
@@ -144,5 +112,44 @@ export const useTripCreateStore = create<TripCreateState>((set, get) => ({
         } finally {
             set({ isDeletingTrip: false });
         }
-    }
+    },
+
+    updateTripManualStatus: async (tripId: string, manualStatus: string | null) => {
+        try {
+            await TripService.updateTripManualStatus(tripId, manualStatus);
+            toast.success("Trip status updated!");
+            get().fetchTrips(); // Refresh list
+            return true;
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to update trip status");
+            return false;
+        }
+    },
+
+    batchUpdateTripManualStatus: async (tripIds: string[], manualStatus: string) => {
+        try {
+            await TripService.batchUpdateTripManualStatus(tripIds, manualStatus);
+            toast.success(`${tripIds.length} trip(s) updated!`);
+            get().fetchTrips(); // Refresh list
+            return true;
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to update trips");
+            return false;
+        }
+    },
+
+    cancelTrip: async (tripId: string) => {
+        try {
+            await TripService.cancelTrip(tripId);
+            toast.success("Trip cancelled and refunds processed!");
+            get().fetchTrips(); // Refresh list
+            return true;
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to cancel trip");
+            return false;
+        }
+    },
 }));

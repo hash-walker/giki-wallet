@@ -59,16 +59,11 @@ export interface TripResponse {
     base_price: number; // Changed from price to match backend
     bus_type: string;
     direction: string;
+    manual_status?: string | null;
     deleted_at?: string; // Optional field for history
     stops: TripStopItem[];
 }
 
-export interface TripHistoryPaginationResponse {
-    data: TripResponse[];
-    total_count: number;
-    page: number;
-    page_size: number;
-}
 
 export interface TripStopItem {
     stop_id: string;

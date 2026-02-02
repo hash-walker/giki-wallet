@@ -13,7 +13,6 @@ interface UsersTableProps {
 }
 
 const getRoleBadge = (role: string) => {
-    // Standardize input for robustness, but map keys should match expected uppercase
     const roleUpper = role.toUpperCase();
     const styles: Record<string, string> = {
         STUDENT: 'bg-blue-100 text-blue-800',
