@@ -247,10 +247,8 @@ export const useTransportStore = create<TransportState>((set, get) => ({
                 };
             });
 
-            // Default first seat to SELF if user has no other passengers set for THIS trip
             if (resp.holds.length > 0) {
                 const currentData = get();
-                // Check if SELF exists in any holds for THIS trip
                 const currentTripHolds = currentData.activeHolds.filter(h => h.trip_id === selection.tripId);
                 const existingSelfOnTrip = currentTripHolds.some(h =>
                     currentData.passengers[h.id]?.relation === 'SELF'
@@ -264,14 +262,12 @@ export const useTransportStore = create<TransportState>((set, get) => ({
                 }
             }
 
-            // direction is already declared above: const direction = get().direction;
             const { isRoundTrip } = get();
 
             if (direction === 'OUTBOUND') {
                 set(state => ({
                     outboundSelection: selection,
                     passengers: { ...state.passengers, ...newPassengers },
-                    // Wizard Flow: If Round Trip, auto switch to Inbound
                     direction: isRoundTrip ? 'INBOUND' : 'OUTBOUND'
                 }));
                 if (isRoundTrip) {
@@ -281,12 +277,34 @@ export const useTransportStore = create<TransportState>((set, get) => ({
                 set(state => ({
                     returnSelection: selection,
                     passengers: { ...state.passengers, ...newPassengers }
-                    // If Inbound, stay here or maybe just done?
                 }));
             }
         } catch (e) {
-            const msg = getErrorMessage(e);
-            toast.error(msg);
+            const { isRoundTrip, direction, activeHolds, releaseAllHolds } = get();
+
+            if (isRoundTrip && direction === 'INBOUND' && activeHolds.length > 0) {
+                toast.error("Return trip is sold out", {
+                    description: "You still have your Outbound seat held.",
+                    action: {
+                        label: "Release Outbound",
+                        onClick: () => {
+                            void releaseAllHolds();
+                        }
+                    },
+                    cancel: {
+                        label: "Keep It",
+                        onClick: () => {
+                            set({ isRoundTrip: false, direction: 'OUTBOUND' });
+                            toast.success("Switched to One-Way trip");
+                        }
+                    },
+                    duration: 10000,
+                });
+            } else {
+                const msg = getErrorMessage(e);
+                toast.error(msg);
+            }
+
             if (e instanceof AppError) {
                 logError(e, { action: 'addSelection', tripId: selection.tripId });
             }
