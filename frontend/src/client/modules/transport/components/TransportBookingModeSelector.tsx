@@ -15,22 +15,10 @@ export function TransportBookingModeSelector({
     onRoundTripChange,
     quota
 }: TransportBookingModeSelectorProps) {
-    // Dynamic Quota Guard:
-    // A Round Trip requires 2 tickets (1 Outbound + 1 Inbound).
-    // If the user has less than 2 tickets remaining in TOTAL, they cannot possibly book a round trip.
-    // We sum up the remaining quota from both directions (since they share the same weekly limit pool usually, 
-    // or at least we need 1 in each bucket if they were separate, but for simplicity/safety we check total).
-
-    // Actually, in the backend 'GetQuotaRule', the limit is per direction usually, but often shared context.
-    // Let's look at the schema: quotaResponseSchema has outbound and inbound.
-    // If a user has 0 outbound remaining, they can't book round trip starting outbound.
-    // If a user has 0 inbound remaining, they can't book round trip returning inbound.
-    // So strictly: (quota.outbound.remaining >= 1 && quota.inbound.remaining >= 1).
 
     const canBookRoundTrip = quota
         ? (quota.outbound.remaining >= 1 && quota.inbound.remaining >= 1)
-        : true; // Default to true if loading or undefined to avoid premature locking? Or false for safety? 
-    // Let's default true so we don't flash disabled on load.
+        : true;
 
     const disabledRoundTrip = !canBookRoundTrip;
     return (
