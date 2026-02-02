@@ -60,7 +60,7 @@ func (w *JobWorker) StartJobTicker(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			return // Shutdown gracefully
+			return
 		case <-ticker.C:
 			w.processNextJob(ctx)
 		}

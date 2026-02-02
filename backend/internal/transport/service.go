@@ -191,6 +191,12 @@ func (s *Service) HoldSeats(ctx context.Context, userID uuid.UUID, userRole stri
 		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}
 
+	if userRole != "TRANSPORT_ADMIN" && userRole != "SUPER_ADMIN" {
+		if trip.BusType != userRole {
+			return nil, ErrBusTypeMismatch
+		}
+	}
+
 	rule, err := qtx.GetQuotaRule(ctx, transport_db.GetQuotaRuleParams{
 		UserRole:  userRole,
 		Direction: trip.Direction,

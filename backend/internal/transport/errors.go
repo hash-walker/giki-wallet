@@ -25,4 +25,6 @@ var (
 	ErrNoQuotaPolicy        = errors.New("NO_QUOTA_POLICY", http.StatusInternalServerError, "No quota policy found for user role")
 	ErrInvalidPassengerName = errors.New("INVALID_PASSENGER_NAME", http.StatusBadRequest, "Passenger name is required")
 	ErrCancellationClosed   = errors.New("CANCELLATION_CLOSED", http.StatusConflict, "Cancellation window has closed")
+
+	ErrBusTypeMismatch = errors.New("BUS_TYPE_MISMATCH", http.StatusForbidden, "User role must match trip bus type")
 )
