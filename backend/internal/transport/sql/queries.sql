@@ -306,7 +306,7 @@ INSERT INTO giki_transport.tickets (
     status, passenger_name, passenger_relation
 )
 VALUES ($1, $2, COALESCE((SELECT MAX(serial_no) FROM giki_transport.tickets WHERE trip_id = $1), 0) + 1, $3, $4, $5, 'CONFIRMED', $6, $7)
-RETURNING id;
+RETURNING id, serial_no;
 
 
 -- =============================================
@@ -514,3 +514,7 @@ WHERE
     t.status != 'CONFIRMED'
 ORDER BY t.updated_at DESC
 LIMIT $1 OFFSET $2;
+
+
+-- name: GetUserEmailAndName :one
+SELECT name, email FROM giki_wallet.users WHERE id = $1;

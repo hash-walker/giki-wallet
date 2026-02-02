@@ -16,8 +16,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/hash-walker/giki-wallet/internal/common"
 	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
+	"github.com/hash-walker/giki-wallet/internal/middleware"
 	"github.com/hash-walker/giki-wallet/internal/transport/transport_db"
 	"github.com/hash-walker/giki-wallet/internal/wallet"
+	"github.com/hash-walker/giki-wallet/internal/worker"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -25,6 +27,7 @@ import (
 type Service struct {
 	q      *transport_db.Queries
 	wallet *wallet.Service
+	worker *worker.JobWorker
 	dbPool *pgxpool.Pool
 
 	dashboardCache     []TripResponse
@@ -32,10 +35,11 @@ type Service struct {
 	cacheMutex         sync.RWMutex
 }
 
-func NewService(dbPool *pgxpool.Pool, walletService *wallet.Service) *Service {
+func NewService(dbPool *pgxpool.Pool, walletService *wallet.Service, worker *worker.JobWorker) *Service {
 	return &Service{
 		q:      transport_db.New(dbPool),
 		wallet: walletService,
+		worker: worker,
 		dbPool: dbPool,
 	}
 }
@@ -307,8 +311,14 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 	}
 
 	var tickets []BookTicketResponse
-	priceCache := make(map[uuid.UUID]int32)
+	// Caches for batch optimization
+	tripCache := make(map[uuid.UUID]transport_db.GikiTransportTrip)
+	routeCache := make(map[uuid.UUID]transport_db.GetRouteDetailsForTripRow)
+
 	isStudent := strings.ToUpper(userRole) == "STUDENT"
+
+	var emailDetails []worker.TicketDetail
+	var totalPrice int
 
 	err := common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
 		qtx := s.q.WithTx(tx)
@@ -337,28 +347,40 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 			}
 
 			if time.Now().After(hold.ExpiresAt) {
-				return ErrHoldExpired // Fails entire batch. Consider returning partial errors instead.
+				return ErrHoldExpired
 			}
 
-			var price int32
-
-			if cachedPrice, exists := priceCache[hold.TripID]; exists {
-				price = cachedPrice
+			var trip transport_db.GikiTransportTrip
+			if cachedTrip, exists := tripCache[hold.TripID]; exists {
+				trip = cachedTrip
 			} else {
-				price, priceErr := qtx.GetTripPrice(ctx, hold.TripID)
-				if priceErr != nil {
-					return commonerrors.Wrap(commonerrors.ErrDatabase, priceErr)
+				trip, err = qtx.GetTrip(ctx, hold.TripID)
+				if err != nil {
+					return commonerrors.Wrap(commonerrors.ErrDatabase, err)
 				}
+				tripCache[hold.TripID] = trip
+			}
+			price := trip.BasePrice
 
-				priceCache[hold.TripID] = price
+			var routeDetails transport_db.GetRouteDetailsForTripRow
+			if cachedRoute, exists := routeCache[hold.TripID]; exists {
+				routeDetails = cachedRoute
+			} else {
+				routeDetails, err = qtx.GetRouteDetailsForTrip(ctx, hold.TripID)
+				if err != nil {
+					routeDetails = transport_db.GetRouteDetailsForTripRow{RouteName: "Unknown Route", Direction: "Unknown"}
+				} else {
+					routeCache[hold.TripID] = routeDetails
+				}
 			}
 
-			var ticketID uuid.UUID
+			var ticketRow transport_db.ConfirmBookingWithDetailsRow
 			var bookingErr error
+			var finalCode string
 
-			for i := 0; i < 5; i++ {
+			for range 5 {
 				code := GenerateRandomCode()
-				ticketID, bookingErr = qtx.ConfirmBookingWithDetails(ctx, transport_db.ConfirmBookingWithDetailsParams{
+				ticketRow, bookingErr = qtx.ConfirmBookingWithDetails(ctx, transport_db.ConfirmBookingWithDetailsParams{
 					TripID:            hold.TripID,
 					UserID:            userID,
 					TicketCode:        code,
@@ -369,6 +391,7 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 				})
 
 				if bookingErr == nil {
+					finalCode = code
 					break
 				}
 
@@ -380,6 +403,8 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 			if bookingErr != nil {
 				return commonerrors.Wrap(commonerrors.ErrDatabase, bookingErr)
 			}
+
+			ticketID := ticketRow.ID
 
 			if err := qtx.DeleteHold(ctx, item.HoldID); err != nil {
 				return commonerrors.Wrap(commonerrors.ErrDatabase, err)
@@ -405,6 +430,17 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 				TicketID: ticketID,
 				Status:   "CONFIRMED",
 			})
+
+			emailDetails = append(emailDetails, worker.TicketDetail{
+				SerialNo:      strconv.Itoa(int(ticketRow.SerialNo)),
+				TicketCode:    finalCode,
+				PassengerName: item.PassengerName,
+				RouteName:     routeDetails.RouteName,
+				TripTime:      trip.DepartureTime.Format("Mon, 02 Jan 15:04"),
+				Price:         int(price),
+			})
+			totalPrice += int(price)
+
 		}
 
 		return nil
@@ -415,7 +451,32 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 		return nil, err
 	}
 
+	_ = s.enqueueTicketConfirmationJob(ctx, userID, emailDetails, totalPrice)
+
 	return &ConfirmBatchResponse{Tickets: tickets}, nil
+}
+
+func (s *Service) enqueueTicketConfirmationJob(ctx context.Context, userID uuid.UUID, tickets []worker.TicketDetail, totalPrice int) error {
+
+	user, err := s.q.GetUserEmailAndName(ctx, userID)
+	if err != nil {
+		middleware.LogAppError(err, "Failed to fetch user for email")
+		return err
+	}
+
+	payload := worker.TicketConfirmedPayload{
+		Email:      user.Email,
+		UserName:   user.Name,
+		TotalPrice: totalPrice,
+		Tickets:    tickets,
+	}
+
+	if err = s.worker.Enqueue(ctx, "SEND_TICKET_CONFIRMATION", payload); err != nil {
+		middleware.LogAppError(err, "Failed to enqueue ticket email")
+		return err
+	}
+
+	return nil
 }
 
 func (s *Service) GetUserQuota(ctx context.Context, userID uuid.UUID, userRole string) (*QuotaResponse, error) {

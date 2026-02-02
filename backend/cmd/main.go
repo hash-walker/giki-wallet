@@ -84,7 +84,7 @@ func main() {
 	walletHandler := wallet.NewHandler(walletService)
 	paymentService := payment.NewService(pool, jazzCashClient, walletService, inquiryRateLimiter)
 	paymentHandler := payment.NewHandler(paymentService, walletService)
-	transportService := transport.NewService(pool, walletService)
+	transportService := transport.NewService(pool, walletService, newWorker)
 	transportHandler := transport.NewHandler(transportService)
 
 	srv := api.NewServer(userHandler, authHandler, paymentHandler, transportHandler, walletHandler)

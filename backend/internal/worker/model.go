@@ -22,3 +22,19 @@ type EmployeeApprovedPayload struct {
 	Name  string `json:"name"`
 	Link  string `json:"link"`
 }
+
+type TicketDetail struct {
+	SerialNo      string `json:"serial_no"`
+	TicketCode    string `json:"ticket_code"`
+	PassengerName string `json:"passenger_name"`
+	RouteName     string `json:"route_name"`
+	TripTime      string `json:"trip_time"`
+	Price         int    `json:"price"`
+}
+
+type TicketConfirmedPayload struct {
+	Email      string         `json:"email"`
+	UserName   string         `json:"user_name"`
+	TotalPrice int            `json:"total_price"`
+	Tickets    []TicketDetail `json:"tickets"`
+}

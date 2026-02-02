@@ -58,7 +58,6 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetAdminTransactions(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
 
-	// 1. Bind Request Params (Struct-Based)
 	var params common.AdminFinanceListParams
 	if err := params.Bind(r); err != nil {
 		appErr := commonerrors.New("INVALID_REQUEST", http.StatusBadRequest, err.Error())
@@ -66,7 +65,6 @@ func (h *Handler) GetAdminTransactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. Get Data (Using params fields)
 	history, total, err := h.service.GetAdminRevenueTransactions(
 		r.Context(),
 		params.Page,
@@ -89,7 +87,6 @@ func (h *Handler) GetAdminTransactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 4. Construct Response
 	response := map[string]interface{}{
 		"data": history,
 		"meta": map[string]interface{}{

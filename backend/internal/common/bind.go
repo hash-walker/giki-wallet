@@ -11,14 +11,12 @@ import (
 // SHARED REQUEST DTOs
 // ============================================================================
 
-// PaginationParams handles standard page/page_size parsing
 type PaginationParams struct {
 	Page     int `json:"page"`
 	PageSize int `json:"page_size"`
 }
 
 func (p *PaginationParams) Bind(r *http.Request) error {
-	// Defaults
 	p.Page = 1
 	p.PageSize = 20
 
@@ -41,7 +39,6 @@ func (p *PaginationParams) Bind(r *http.Request) error {
 	return nil
 }
 
-// DateRangeParams handles start_date/end_date parsing with "Current Week" default
 type DateRangeParams struct {
 	StartDate time.Time `json:"start_date"`
 	EndDate   time.Time `json:"end_date"`
@@ -51,7 +48,6 @@ func (d *DateRangeParams) Bind(r *http.Request) error {
 	startStr := r.URL.Query().Get("start_date")
 	endStr := r.URL.Query().Get("end_date")
 
-	// 1. Start Date
 	if startStr != "" {
 		t, err := time.Parse(time.RFC3339, startStr)
 		if err != nil {
@@ -59,7 +55,6 @@ func (d *DateRangeParams) Bind(r *http.Request) error {
 		}
 		d.StartDate = t
 	} else {
-		// Default: Recent Monday
 		now := time.Now()
 		offset := int(time.Monday - now.Weekday())
 		if offset > 0 {
@@ -68,7 +63,6 @@ func (d *DateRangeParams) Bind(r *http.Request) error {
 		d.StartDate = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, offset)
 	}
 
-	// 2. End Date
 	if endStr != "" {
 		t, err := time.Parse(time.RFC3339, endStr)
 		if err != nil {
@@ -76,14 +70,12 @@ func (d *DateRangeParams) Bind(r *http.Request) error {
 		}
 		d.EndDate = t
 	} else {
-		// Default: +7 Days
 		d.EndDate = d.StartDate.AddDate(0, 0, 7)
 	}
 
 	return nil
 }
 
-// AdminFinanceListParams Combines both
 type AdminFinanceListParams struct {
 	PaginationParams
 	DateRangeParams
