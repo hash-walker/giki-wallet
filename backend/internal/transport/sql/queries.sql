@@ -121,7 +121,19 @@ WHERE id = $1;
 
 
 -- name: GetTrip :one
-SELECT * FROM giki_transport.trip WHERE id = $1;
+SELECT
+    t.*,
+    CASE
+        WHEN t.manual_status = 'CANCELLED' THEN 'CANCELLED'
+        WHEN t.manual_status = 'CLOSED' THEN 'CLOSED'
+        WHEN t.manual_status = 'OPEN' THEN 'OPEN'
+        WHEN t.available_seats <= 0 THEN 'FULL'
+        WHEN NOW() >= (t.departure_time - (t.booking_close_offset_hours * INTERVAL '1 hour')) THEN 'CLOSED'
+        WHEN NOW() < (t.departure_time - (t.booking_open_offset_hours * INTERVAL '1 hour')) THEN 'SCHEDULED'
+        ELSE 'OPEN'
+    END::TEXT as computed_status
+FROM giki_transport.trip t
+WHERE id = $1;
 
 -- name: GetTripPrice :one
 SELECT base_price FROM giki_transport.trip WHERE id = $1;

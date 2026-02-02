@@ -222,7 +222,7 @@ func (s *Service) HoldSeats(ctx context.Context, userID uuid.UUID, userRole stri
 				return ErrBusTypeMismatch
 			}
 
-			if common.TextToString(trip.Status) != "OPEN" {
+			if trip.ComputedStatus != "OPEN" {
 				return ErrTripNotOpen
 			}
 		}
@@ -300,7 +300,7 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 
 	var tickets []BookTicketResponse
 	// Caches for batch optimization
-	tripCache := make(map[uuid.UUID]transport_db.GikiTransportTrip)
+	tripCache := make(map[uuid.UUID]transport_db.GetTripRow)
 	routeCache := make(map[uuid.UUID]transport_db.GetRouteDetailsForTripRow)
 
 	isStudent := strings.ToUpper(userRole) == "STUDENT"
@@ -338,7 +338,7 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 				return ErrHoldExpired
 			}
 
-			var trip transport_db.GikiTransportTrip
+			var trip transport_db.GetTripRow
 			if cachedTrip, exists := tripCache[hold.TripID]; exists {
 				trip = cachedTrip
 			} else {
@@ -650,7 +650,6 @@ func (s *Service) ExportTripData(ctx context.Context, tripIDs []uuid.UUID) ([]by
 		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}
 
-	// Group rows by TripID
 	type TripGroup struct {
 		TripID        uuid.UUID
 		RouteName     string
@@ -696,14 +695,28 @@ func (s *Service) ExportTripData(ctx context.Context, tripIDs []uuid.UUID) ([]by
 
 		w := csv.NewWriter(f)
 
+		// Load PKT location
+		loc, err := time.LoadLocation("Asia/Karachi")
+		if err != nil {
+			// Fallback to UTC or offset if location not found
+			loc = time.FixedZone("PKT", 5*60*60)
+		}
+		localDeparture := tg.DepartureTime.In(loc)
+
 		// 1. Header Info
 		_ = w.Write([]string{"GIKI TRANSPORT - TRIP MANIFEST"})
 		_ = w.Write([]string{"Route", tg.RouteName})
 		_ = w.Write([]string{"Bus", tg.BusType})
-		_ = w.Write([]string{"Departure", tg.DepartureTime.Format("Mon, 02 Jan 15:04")})
+		_ = w.Write([]string{"Departure", localDeparture.Format("Mon, 02 Jan 15:04")})
 		_ = w.Write([]string{"Direction", tg.Direction})
 		_ = w.Write([]string{"Total Passengers", strconv.Itoa(len(tg.Tickets))})
 		_ = w.Write([]string{}) // Empty row
+
+		// Pre-calculate counts per stop
+		stopCounts := make(map[string]int)
+		for _, t := range tg.Tickets {
+			stopCounts[t.StopName]++
+		}
 
 		// 2. Group by Stops
 		currentStop := ""
@@ -711,10 +724,12 @@ func (s *Service) ExportTripData(ctx context.Context, tripIDs []uuid.UUID) ([]by
 			// If new stop, print stop header
 			if ticket.StopName != currentStop {
 				if currentStop != "" {
-					_ = w.Write([]string{}) // Space between stops
+					_ = w.Write([]string{})
 				}
 				currentStop = ticket.StopName
-				_ = w.Write([]string{"--- STOP: " + strings.ToUpper(currentStop) + " ---"})
+				count := stopCounts[currentStop]
+				// _ = w.Write([]string{"--- STOP: " + strings.ToUpper(currentStop) + " ---"})
+				_ = w.Write([]string{"STOP: " + strings.ToUpper(currentStop), "TOTAL: " + strconv.Itoa(count)})
 				_ = w.Write([]string{"Serial", "Ticket Code", "Passenger Name", "Mobile Number"})
 			}
 
