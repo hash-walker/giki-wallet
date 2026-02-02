@@ -294,32 +294,26 @@ ORDER BY tr.departure_time DESC;
 
 -- name: GetTripsForExport :many
 SELECT
+    t.id as trip_id,
     r.name as route_name,
     t.departure_time,
     t.bus_type,
-    s.address as pickup_stop_name,
-    t.id as trip_id,
+    t.direction,
     ti.serial_no,
     ti.ticket_code,
     ti.passenger_name,
-    ti.status,
-    s.id as stop_id,
-    u.phone_number as user_phone_number
+    u.phone_number as user_phone_number,
+    s.address as stop_name,
+    ts.sequence_order as stop_sequence
 FROM giki_transport.trip t
 JOIN giki_transport.routes r ON t.route_id = r.id
 JOIN giki_transport.tickets ti ON t.id = ti.trip_id
 JOIN giki_transport.stops s ON ti.pickup_stop_id = s.id
 JOIN giki_wallet.users u ON ti.user_id = u.id
-WHERE t.departure_time >= $1
-  AND t.departure_time <= $2
-  AND r.is_active = TRUE
-  AND t.status != 'DELETED'
-  AND t.status != 'SCHEDULED'
-  AND (
-      COALESCE(cardinality($3::uuid[]), 0) = 0
-      OR t.route_id = ANY($3::uuid[])
-  )
-ORDER BY r.name, t.departure_time, ti.serial_no;
+JOIN giki_transport.trip_stops ts ON (t.id = ts.trip_id AND s.id = ts.stop_id)
+WHERE t.id = ANY($1::uuid[])
+  AND ti.status = 'CONFIRMED'
+ORDER BY t.id, ts.sequence_order, ti.serial_no;
 
 
 -- name: GetTicketsForAdmin :many

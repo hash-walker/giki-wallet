@@ -137,29 +137,27 @@ func (h *Handler) AdminGetRevenueTransactions(w http.ResponseWriter, r *http.Req
 func (h *Handler) HandleExportTrips(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
 
-	// 1. Parse & Validate Date Range
-	var params common.DateRangeParams
-	if err := params.Bind(r); err != nil {
-		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err), requestID)
-		return
-	}
-
-	// 2. Parse Route IDs (Optional filter)
-	routeIDs, err := h.parseUUIDListParam(r, "route_ids")
+	// 1. Parse Trip IDs
+	tripIDs, err := h.parseUUIDListParam(r, "trip_ids")
 	if err != nil {
 		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err), requestID)
 		return
 	}
 
-	// 3. Call Service
-	zipBytes, err := h.service.ExportTripData(r.Context(), params.StartDate, params.EndDate, routeIDs)
+	if len(tripIDs) == 0 {
+		middleware.HandleError(w, commonerrors.New("MISSING_TRIP_IDS", http.StatusBadRequest, "At least one trip ID is required for export"), requestID)
+		return
+	}
+
+	// 2. Call Service
+	zipBytes, err := h.service.ExportTripData(r.Context(), tripIDs)
 	if err != nil {
 		middleware.HandleError(w, err, requestID)
 		return
 	}
 
-	// 4. Return File Response
-	filename := fmt.Sprintf("trips_export_%s.zip", time.Now().Format("20060102"))
+	// 3. Return File Response
+	filename := fmt.Sprintf("trip_manifests_%s.zip", time.Now().Format("20060102"))
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
 	w.WriteHeader(http.StatusOK)

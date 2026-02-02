@@ -18,7 +18,11 @@ export const DropdownMenu = ({ children }: { children: React.ReactNode }) => {
 
     React.useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+            const target = event.target as Node;
+            const isInsideTrigger = containerRef.current?.contains(target);
+            const isInsidePortal = (target as HTMLElement).closest?.('[data-dropdown-content="true"]');
+
+            if (!isInsideTrigger && !isInsidePortal) {
                 setIsOpen(false);
             }
         };
@@ -117,6 +121,7 @@ export const DropdownMenuContent = ({
     return createPortal(
         <div
             style={style}
+            data-dropdown-content="true"
             className={cn(
                 "mt-2 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95",
                 className

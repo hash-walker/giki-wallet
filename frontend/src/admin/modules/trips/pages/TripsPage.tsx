@@ -13,7 +13,8 @@ import {
     CheckSquare,
     Square,
     MoreVertical,
-    Ban
+    Ban,
+    Loader2
 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { WeekSelector } from '@/admin/shared/components/WeekSelector';
@@ -21,7 +22,6 @@ import { useTripCreateStore } from '../store';
 import { cn } from '@/lib/utils';
 import { TripResponse } from '../types';
 import { DeleteTripModal } from '../components/DeleteTripModal';
-import { ExportTripsModal } from '../components/ExportTripsModal';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -29,6 +29,8 @@ import {
     DropdownMenuTrigger,
 } from "@/shared/components/ui/dropdown-menu";
 import { Modal } from '@/shared/components/ui/Modal';
+import { toast } from 'sonner';
+import { TripService } from '../service';
 
 const STATUS_FILTERS = [
     { id: 'ALL', label: 'All Trips', color: 'bg-gray-100 text-gray-800' },
@@ -55,10 +57,10 @@ export const TripsPage = () => {
     const [currentWeek, setCurrentWeek] = useState(new Date());
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [cancelModalOpen, setCancelModalOpen] = useState(false);
-    const [exportModalOpen, setExportModalOpen] = useState(false);
     const [tripToProcess, setTripToProcess] = useState<TripResponse | null>(null);
     const [statusFilter, setStatusFilter] = useState('ALL');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [isExporting, setIsExporting] = useState(false);
 
     useEffect(() => {
         const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 });
@@ -101,7 +103,7 @@ export const TripsPage = () => {
         setSelectedIds(next);
     };
 
-    const handleBatchAction = async (action: 'OPEN' | 'CLOSED' | 'CANCEL') => {
+    const handleBatchAction = async (action: 'OPEN' | 'CLOSED' | 'CANCEL' | 'EXPORT') => {
         const ids = Array.from(selectedIds);
         if (ids.length === 0) return;
 
@@ -111,6 +113,26 @@ export const TripsPage = () => {
                     await cancelTrip(id);
                 }
                 setSelectedIds(new Set());
+            }
+        } else if (action === 'EXPORT') {
+            try {
+                setIsExporting(true);
+                const blob = await TripService.exportTrips(ids);
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `trip-manifests-${format(new Date(), 'yyyyMMdd')}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                toast.success('Manifests exported successfully');
+                setSelectedIds(new Set());
+            } catch (error) {
+                console.error(error);
+                toast.error('Failed to export manifests');
+            } finally {
+                setIsExporting(false);
             }
         } else {
             await batchUpdateTripManualStatus(ids, action);
@@ -158,10 +180,6 @@ export const TripsPage = () => {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setExportModalOpen(true)}>
-                        <Download className="w-4 h-4 mr-2" />
-                        Export
-                    </Button>
                     <Button onClick={() => navigate('/admin/trips/new')}>
                         <Plus className="w-4 h-4 mr-2" />
                         New Trip
@@ -227,6 +245,20 @@ export const TripsPage = () => {
                         >
                             <Ban className="w-4 h-4 mr-1" />
                             Cancel
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleBatchAction('EXPORT')}
+                            disabled={isExporting}
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        >
+                            {isExporting ? (
+                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                            ) : (
+                                <Download className="w-4 h-4 mr-1" />
+                            )}
+                            Export Manifests
                         </Button>
                     </div>
                 )}
@@ -512,10 +544,6 @@ export const TripsPage = () => {
                 </Modal>
             )}
 
-            <ExportTripsModal
-                isOpen={exportModalOpen}
-                onClose={() => setExportModalOpen(false)}
-            />
-        </div >
+        </div>
     );
 };

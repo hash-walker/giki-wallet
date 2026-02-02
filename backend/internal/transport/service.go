@@ -644,19 +644,11 @@ func (s *Service) GetRevenueTransactions(ctx context.Context, page, pageSize int
 
 	return s.wallet.GetWalletHistory(ctx, revenueWalletID, page, pageSize)
 }
-func (s *Service) ExportTripData(ctx context.Context, startDate, endDate time.Time, routeIDs []uuid.UUID) ([]byte, error) {
-	rows, err := s.q.GetTripsForExport(ctx, transport_db.GetTripsForExportParams{
-		DepartureTime:   startDate,
-		DepartureTime_2: endDate,
-		Column3:         routeIDs,
-	})
+func (s *Service) ExportTripData(ctx context.Context, tripIDs []uuid.UUID) ([]byte, error) {
+	rows, err := s.q.GetTripsForExport(ctx, tripIDs)
 	if err != nil {
 		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}
-
-	// Create ZIP buffer
-	buf := new(bytes.Buffer)
-	zipWriter := zip.NewWriter(buf)
 
 	// Group rows by TripID
 	type TripGroup struct {
@@ -664,12 +656,11 @@ func (s *Service) ExportTripData(ctx context.Context, startDate, endDate time.Ti
 		RouteName     string
 		DepartureTime time.Time
 		BusType       string
+		Direction     string
 		Tickets       []transport_db.GetTripsForExportRow
-		StopCounts    map[string]int
 	}
 
 	trips := make(map[uuid.UUID]*TripGroup)
-	// Maintain order
 	var tripOrder []*TripGroup
 
 	for _, row := range rows {
@@ -680,15 +671,18 @@ func (s *Service) ExportTripData(ctx context.Context, startDate, endDate time.Ti
 				RouteName:     row.RouteName,
 				DepartureTime: row.DepartureTime,
 				BusType:       row.BusType,
+				Direction:     row.Direction,
 				Tickets:       []transport_db.GetTripsForExportRow{},
-				StopCounts:    make(map[string]int),
 			}
 			trips[row.TripID] = tg
 			tripOrder = append(tripOrder, tg)
 		}
 		tg.Tickets = append(tg.Tickets, row)
-		tg.StopCounts[row.PickupStopName]++
 	}
+
+	// Create ZIP buffer
+	buf := new(bytes.Buffer)
+	zipWriter := zip.NewWriter(buf)
 
 	for _, tg := range tripOrder {
 		safeRouteName := strings.ReplaceAll(tg.RouteName, " ", "_")
@@ -703,43 +697,33 @@ func (s *Service) ExportTripData(ctx context.Context, startDate, endDate time.Ti
 		w := csv.NewWriter(f)
 
 		// 1. Header Info
-		var stopCountsStr []string
-		for stop, count := range tg.StopCounts {
-			stopCountsStr = append(stopCountsStr, fmt.Sprintf("%s: %d", stop, count))
-		}
-		stopCountsDisplay := strings.Join(stopCountsStr, "; ")
+		_ = w.Write([]string{"GIKI TRANSPORT - TRIP MANIFEST"})
+		_ = w.Write([]string{"Route", tg.RouteName})
+		_ = w.Write([]string{"Bus", tg.BusType})
+		_ = w.Write([]string{"Departure", tg.DepartureTime.Format("Mon, 02 Jan 15:04")})
+		_ = w.Write([]string{"Direction", tg.Direction})
+		_ = w.Write([]string{"Total Passengers", strconv.Itoa(len(tg.Tickets))})
+		_ = w.Write([]string{}) // Empty row
 
-		headerInfo := []string{
-			"Route: " + tg.RouteName,
-			"Bus: " + tg.BusType,
-			"Dep: " + tg.DepartureTime.Format("Mon, 02 Jan 15:04"),
-			"Stops: " + stopCountsDisplay,
-		}
-		if err := w.Write(headerInfo); err != nil {
-			return nil, commonerrors.Wrap(commonerrors.ErrInternal, err)
-		}
-
-		// 2. Empty Row
-		w.Write([]string{})
-
-		// 3. Column Headers
-		if err := w.Write([]string{"Serial", "Ticket Code", "Passenger", "Mobile", "Pickup", "Status"}); err != nil {
-			return nil, commonerrors.Wrap(commonerrors.ErrInternal, err)
-		}
-
-		// 4. Ticket Data
+		// 2. Group by Stops
+		currentStop := ""
 		for _, ticket := range tg.Tickets {
-			record := []string{
+			// If new stop, print stop header
+			if ticket.StopName != currentStop {
+				if currentStop != "" {
+					_ = w.Write([]string{}) // Space between stops
+				}
+				currentStop = ticket.StopName
+				_ = w.Write([]string{"--- STOP: " + strings.ToUpper(currentStop) + " ---"})
+				_ = w.Write([]string{"Serial", "Ticket Code", "Passenger Name", "Mobile Number"})
+			}
+
+			_ = w.Write([]string{
 				strconv.Itoa(int(ticket.SerialNo)),
 				ticket.TicketCode,
 				ticket.PassengerName,
 				ticket.UserPhoneNumber,
-				ticket.PickupStopName,
-				ticket.Status,
-			}
-			if err := w.Write(record); err != nil {
-				return nil, commonerrors.Wrap(commonerrors.ErrInternal, err)
-			}
+			})
 		}
 
 		w.Flush()

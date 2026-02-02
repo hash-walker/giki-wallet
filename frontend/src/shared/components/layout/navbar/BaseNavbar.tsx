@@ -47,7 +47,7 @@ export const BaseNavbar = ({
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="lg:hidden text-white hover:bg-white/10"
+                            className="lg:hidden text-gray-600 hover:bg-gray-100"
                             onClick={onMobileMenuToggle}
                         >
                             <Menu className="h-5 w-5" />

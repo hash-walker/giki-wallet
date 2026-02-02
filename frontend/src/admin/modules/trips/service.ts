@@ -39,11 +39,9 @@ export const TripService = {
     },
 
 
-    exportTrips: async (startDate?: Date, endDate?: Date, routeIds?: string[]): Promise<Blob> => {
+    exportTrips: async (tripIds: string[]): Promise<Blob> => {
         const params = new URLSearchParams();
-        if (startDate) params.append('start_date', startDate.toISOString());
-        if (endDate) params.append('end_date', endDate.toISOString());
-        if (routeIds && routeIds.length > 0) params.append('route_ids', routeIds.join(','));
+        if (tripIds && tripIds.length > 0) params.append('trip_ids', tripIds.join(','));
 
         const { data } = await apiClient.get('/admin/transport/trips/export', {
             params,
