@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react'; // You already added this
 import { useTransportStore } from '../store';
 import { formatDateTime } from '../utils';
 import { TicketCard } from '../components/TicketCard';
 import { Loader2 } from 'lucide-react';
+import { MyTicket } from '../validators';
 
 export const TicketsPage = () => {
     const {
@@ -14,21 +15,35 @@ export const TicketsPage = () => {
     } = useTransportStore();
 
     useEffect(() => {
-        // Fetch tickets on mount
         void fetchUserTickets();
     }, [fetchUserTickets]);
 
-    // Separate confirmed and cancelled tickets, or just show all sorted by date
-    const sortedTickets = [...myTickets].sort((a, b) =>
-        new Date(b.departure_time).getTime() - new Date(a.departure_time).getTime()
-    );
+
+    const upcomingTickets = useMemo(() => {
+        const now = new Date();
+        const cutoff = new Date(now.getTime() - (3 * 60 * 60 * 1000));
+
+        const list: MyTicket[] = [];
+
+        myTickets.forEach(ticket => {
+            const departure = new Date(ticket.departure_time);
+
+            if (ticket.status === 'CANCELLED' || departure < cutoff) {
+                return;
+            }
+            list.push(ticket);
+        });
+
+        list.sort((a, b) => new Date(a.departure_time).getTime() - new Date(b.departure_time).getTime());
+        return list;
+    }, [myTickets]);
 
     return (
         <div className="space-y-8 max-w-5xl mx-auto pb-20 px-4 md:px-0">
             {/* Header */}
             <div className="flex flex-col gap-2 mb-8">
                 <h1 className="text-3xl font-black tracking-tight text-slate-900 uppercase">My Tickets</h1>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Manage active reservations & history</p>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Manage active reservations</p>
             </div>
 
             {/* Active Holds Section */}
@@ -67,17 +82,17 @@ export const TicketsPage = () => {
             {/* Confirmed Tickets Section */}
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-gray-900">Booking History</h2>
+                    <h2 className="text-lg font-bold text-gray-900">Your Schedule</h2>
                     {loading && <Loader2 className="animate-spin text-gray-400" size={16} />}
                 </div>
 
-                {sortedTickets.length === 0 ? (
+                {upcomingTickets.length === 0 ? (
                     <div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                        <p className="text-gray-500">No confirmed tickets found.</p>
+                        <p className="text-gray-500">No upcoming trips scheduled.</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {sortedTickets.map(ticket => (
+                        {upcomingTickets.map(ticket => (
                             <TicketCard key={ticket.ticket_id} ticket={ticket} />
                         ))}
                     </div>

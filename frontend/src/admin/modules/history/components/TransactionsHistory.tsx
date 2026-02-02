@@ -1,106 +1,52 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Table, TableWrapper, getWeekStart, getWeekEnd, isDateInWeek } from '../../../shared';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
 import { Badge } from './HistoryBadge';
 import { formatDate, formatTime, formatCurrency } from '../utils/formatting';
-import { Transaction } from '../../transactions/types';
+import { Transaction, WeeklyStats } from '../../transactions/types';
+import { getTransportTransactions } from '../../transactions/service';
 
 interface TransactionsHistoryProps {
     selectedWeek: Date;
 }
 
-// Helper to create transaction data outside component render
-const getMockTransactionsData = (): Transaction[] => {
-    const now = Date.now();
-    const twoWeeksAgo = now - 604800000 * 2;
-    const oneWeekAgo = now - 604800000;
-    const threeWeeksAgo = now - 604800000 * 3;
-    const fourWeeksAgo = now - 604800000 * 4;
-    
-    return [
-        {
-            id: '1',
-            category: 'wallet',
-            type: 'topup',
-            userId: 1,
-            userName: 'John Doe',
-            userEmail: 'john@example.com',
-            amount: 500,
-            timestamp: new Date(twoWeeksAgo).toISOString(),
-            status: 'completed',
-            paymentMethod: 'jazzcash',
-        },
-        {
-            id: '2',
-            category: 'wallet',
-            type: 'transfer',
-            userId: 1,
-            userName: 'John Doe',
-            userEmail: 'john@example.com',
-            amount: -200,
-            timestamp: new Date(oneWeekAgo).toISOString(),
-            status: 'completed',
-            recipientId: 2,
-            recipientName: 'Jane Smith',
-            recipientEmail: 'jane@example.com',
-        },
-        {
-            id: '3',
-            category: 'ticket',
-            type: 'purchase',
-            userId: 2,
-            userName: 'Alice Smith',
-            userEmail: 'alice@example.com',
-            amount: -200,
-            timestamp: new Date(threeWeeksAgo).toISOString(),
-            status: 'completed',
-            ticketId: 'T001',
-            ticketNumber: '1234',
-            routeId: 1,
-            routeName: 'GIKI to Peshawar',
-            direction: 'to-giki',
-            cityId: 'peshawar',
-            cityName: 'Peshawar',
-            travelDate: new Date(threeWeeksAgo).toISOString().split('T')[0],
-        },
-        {
-            id: '4',
-            category: 'ticket',
-            type: 'cancellation',
-            userId: 3,
-            userName: 'Bob Johnson',
-            userEmail: 'bob@example.com',
-            amount: 150,
-            timestamp: new Date(fourWeeksAgo).toISOString(),
-            status: 'completed',
-            ticketId: 'T002',
-            ticketNumber: '5678',
-            originalTransactionId: '3',
-            refundAmount: 150,
-        },
-    ];
-};
-
 export const TransactionsHistory = ({ selectedWeek }: TransactionsHistoryProps) => {
-    // Mock data - all transactions from previous weeks (replace with API calls)
-    const [transactions] = useState<Transaction[]>(() => getMockTransactionsData());
+
+    // 1. STATE
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [stats, setStats] = useState<WeeklyStats | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [filterCategory, setFilterCategory] = useState<string>('all');
     const [filterType, setFilterType] = useState<string>('all');
-    const [filterStatus, setFilterStatus] = useState<string>('all');
 
     const weekStart = getWeekStart(selectedWeek);
     const weekEnd = getWeekEnd(selectedWeek);
 
+    // 2. FETCH DATA on Week Change
+    useEffect(() => {
+        const fetch = async () => {
+            setIsLoading(true);
+            try {
+                // Fetch ALL transactions for the week (high page size)
+                // In production, you would implement proper server-side pagination for the table.
+                const resp = await getTransportTransactions(1, 1000, weekStart, weekEnd);
+                setTransactions(resp.data);
+                setStats(resp.weekly_stats);
+            } catch (error) {
+                console.error("Failed to fetch transactions", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetch();
+    }, [selectedWeek]); // Re-fetch when week changes
+
+    // 3. CLIENT-SIDE FILTERING (on the fetched dataset)
     const filteredTransactions = useMemo(() => {
         return transactions.filter((transaction) => {
-            // Filter by selected week based on timestamp
-            const transactionDate = new Date(transaction.timestamp);
-            if (!isDateInWeek(transactionDate, weekStart, weekEnd)) {
-                return false;
-            }
 
             const matchesSearch =
                 transaction.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -110,11 +56,10 @@ export const TransactionsHistory = ({ selectedWeek }: TransactionsHistoryProps) 
 
             const matchesCategory = filterCategory === 'all' || transaction.category === filterCategory;
             const matchesType = filterType === 'all' || transaction.type === filterType;
-            const matchesStatus = filterStatus === 'all' || transaction.status === filterStatus;
 
-            return matchesSearch && matchesCategory && matchesType && matchesStatus;
+            return matchesSearch && matchesCategory && matchesType;
         });
-    }, [transactions, weekStart, weekEnd, searchTerm, filterCategory, filterType, filterStatus]);
+    }, [transactions, searchTerm, filterCategory, filterType]);
 
     const headers = [
         { content: 'Date & Time', align: 'left' as const },
@@ -131,34 +76,20 @@ export const TransactionsHistory = ({ selectedWeek }: TransactionsHistoryProps) 
 
         let details: React.ReactNode = null;
         if (transaction.category === 'wallet') {
-            if (transaction.type === 'topup') {
+            if (transaction.type === 'received') {
                 details = (
                     <div className="text-sm text-gray-600">
-                        {transaction.paymentMethod === 'jazzcash' ? 'Jazzcash Wallet' : 'Debit Card'}
-                    </div>
-                );
-            } else if (transaction.type === 'transfer') {
-                details = (
-                    <div className="text-sm text-gray-600">
-                        To: <span className="font-medium">{transaction.recipientName}</span>
-                    </div>
-                );
-            } else if (transaction.type === 'received') {
-                details = (
-                    <div className="text-sm text-gray-600">
-                        From: <span className="font-medium">{transaction.senderName}</span>
+                        {transaction.description || 'System Credit'}
                     </div>
                 );
             }
         } else {
             details = (
                 <div className="text-sm text-gray-600">
-                    {transaction.ticketNumber && `Ticket #${transaction.ticketNumber}`}
-                    {transaction.routeName && (
-                        <div className="text-xs text-gray-500">
-                            {transaction.direction === 'from-giki' ? 'From GIKI' : 'To GIKI'} → {transaction.cityName}
-                        </div>
-                    )}
+                    {transaction.ticketNumber && `Ref: ${transaction.ticketNumber}`}
+                    <div className="text-xs text-gray-500 truncate max-w-[200px]">
+                        {transaction.description}
+                    </div>
                 </div>
             );
         }
@@ -177,9 +108,8 @@ export const TransactionsHistory = ({ selectedWeek }: TransactionsHistoryProps) 
                 <Badge key="type" type="transactionType" value={transaction.type} category={transaction.category} />,
                 details,
                 <div key="amount" className="text-right">
-                    <span className={`text-sm font-semibold ${
-                        isDebit ? 'text-red-600' : 'text-green-600'
-                    }`}>
+                    <span className={`text-sm font-semibold ${isDebit ? 'text-red-600' : 'text-green-600'
+                        }`}>
                         {isDebit ? '-' : '+'} {formatCurrency(amount)}
                     </span>
                 </div>,
@@ -190,6 +120,31 @@ export const TransactionsHistory = ({ selectedWeek }: TransactionsHistoryProps) 
 
     return (
         <div className="space-y-6">
+
+            {/* 1. WEEKLY STATS CARDS */}
+            {stats && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col">
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Revenue</span>
+                        <span className="text-2xl font-black text-green-600">
+                            {formatCurrency(stats.total_income / 100)}
+                        </span>
+                    </div>
+                    <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col">
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Refunds</span>
+                        <span className="text-2xl font-black text-red-500">
+                            {formatCurrency(Math.abs(stats.total_refunds) / 100)}
+                        </span>
+                    </div>
+                    <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col">
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Net Profit</span>
+                        <span className="text-2xl font-black text-slate-800">
+                            {formatCurrency((stats.total_income + stats.total_refunds) / 100)}
+                        </span>
+                    </div>
+                </div>
+            )}
+
             {/* Filters */}
             <div className="flex flex-col md:flex-row gap-4">
                 <div className="flex-1">
@@ -218,33 +173,21 @@ export const TransactionsHistory = ({ selectedWeek }: TransactionsHistoryProps) 
                         onChange={(value) => setFilterType(value)}
                         options={[
                             { value: 'all', label: 'All Types' },
-                            { value: 'topup', label: 'Top Up' },
-                            { value: 'transfer', label: 'Transfer' },
-                            { value: 'received', label: 'Received' },
                             { value: 'purchase', label: 'Purchase' },
-                            { value: 'cancellation', label: 'Cancellation' },
                             { value: 'refund', label: 'Refund' },
+                            { value: 'received', label: 'Received' },
                         ]}
                         placeholder="Type"
-                    />
-                </div>
-                <div className="w-full md:w-48">
-                    <Select
-                        value={filterStatus}
-                        onChange={(value) => setFilterStatus(value)}
-                        options={[
-                            { value: 'all', label: 'All Statuses' },
-                            { value: 'completed', label: 'Completed' },
-                            { value: 'pending', label: 'Pending' },
-                            { value: 'failed', label: 'Failed' },
-                        ]}
-                        placeholder="Status"
                     />
                 </div>
             </div>
 
             {/* Table */}
-            <TableWrapper count={filteredTransactions.length} itemName="transaction">
+            <TableWrapper
+                count={filteredTransactions.length}
+                itemName="transaction"
+                isLoading={isLoading} // Need to update TableWrapper to support isLoading if not already
+            >
                 <Table headers={headers} rows={rows} emptyMessage="No transaction history found." />
             </TableWrapper>
         </div>

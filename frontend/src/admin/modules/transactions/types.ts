@@ -6,6 +6,24 @@ export type TicketTransactionType = 'purchase' | 'cancellation' | 'refund';
 
 export type TransactionType = WalletTransactionType | TicketTransactionType;
 
+export interface AdminRevenueTransaction {
+    id: string;
+    amount: number;
+    balance_after: number;
+    created_at: string;
+    type: string;
+    description: string;
+    reference_id: string;
+    user_name: string | null;
+    user_email: string | null;
+}
+export interface WeeklyStats {
+    total_income: number;
+    total_refunds: number;
+    transaction_count: number;
+}
+
+
 export interface BaseTransaction {
     id: string;
     userId: number;
@@ -14,6 +32,7 @@ export interface BaseTransaction {
     amount: number;
     timestamp: string; // ISO format
     status: 'completed' | 'pending' | 'failed';
+    description?: string;
 }
 
 export interface WalletTransaction extends BaseTransaction {
