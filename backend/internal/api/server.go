@@ -86,6 +86,7 @@ func (s *Server) MountRoutes() {
 			r.Get("/holds/active", s.Transport.GetActiveHolds)
 			r.Delete("/holds/active", s.Transport.ReleaseAllActiveHolds)
 			r.Get("/tickets", s.Transport.GetUserTickets)
+			r.Delete("/tickets/{ticket_id}", s.Transport.CancelTicket)
 			r.Post("/confirm", s.Transport.ConfirmBatch)
 		})
 	})

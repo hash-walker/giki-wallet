@@ -318,6 +318,11 @@ func (h *Handler) ReleaseAllActiveHolds(w http.ResponseWriter, r *http.Request) 
 
 func (h *Handler) CancelTicket(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
+	userID, ok := auth.GetUserIDFromContext(r.Context())
+	if !ok {
+		middleware.HandleError(w, commonerrors.ErrUnauthorized, requestID)
+		return
+	}
 
 	ticketIDParam := chi.URLParam(r, "ticket_id")
 	ticketID, err := uuid.Parse(ticketIDParam)
@@ -328,7 +333,7 @@ func (h *Handler) CancelTicket(w http.ResponseWriter, r *http.Request) {
 
 	userRole := getUserRoleForTransport(r)
 
-	if err := h.service.CancelTicketWithRole(r.Context(), ticketID, userRole); err != nil {
+	if err := h.service.CancelTicketWithRole(r.Context(), userID, ticketID, userRole); err != nil {
 		middleware.HandleError(w, err, requestID)
 		return
 	}

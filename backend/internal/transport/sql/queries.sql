@@ -325,6 +325,12 @@ SELECT id, trip_id FROM giki_transport.trip_holds
 WHERE expires_at < NOW()
 FOR UPDATE SKIP LOCKED LIMIT 50;
 
+-- name: GetRouteDetailsForTrip :one
+SELECT r.name as route_name, tr.direction
+FROM giki_transport.trip tr
+JOIN giki_transport.routes r ON tr.route_id = r.id
+WHERE tr.id = $1;
+
 -- name: GetTicketForCancellation :one
 SELECT
     t.id, t.trip_id, t.user_id, t.status, tr.base_price

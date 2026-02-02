@@ -568,59 +568,64 @@ func (s *Service) ReleaseAllHolds(ctx context.Context, userID uuid.UUID) error {
 	return nil
 }
 
-func (s *Service) CancelTicketWithRole(ctx context.Context, ticketID uuid.UUID, userRole string) error {
-	tx, err := s.dbPool.Begin(ctx)
-	if err != nil {
-		return commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
-	defer tx.Rollback(ctx)
-	qtx := s.q.WithTx(tx)
+func (s *Service) CancelTicketWithRole(ctx context.Context, requestingUserID uuid.UUID, ticketID uuid.UUID, userRole string) error {
 
-	// 1. Get ticket (enforces time limit via SQL)
-	ticket, err := qtx.GetTicketForCancellation(ctx, ticketID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ErrCancellationClosed
+	err := common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
+		qtx := s.q.WithTx(tx)
+
+		ticket, err := qtx.GetTicketForCancellation(ctx, ticketID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrCancellationClosed
+			}
+			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
 		}
-		return commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
 
-	// 2. Refund logic (Students only)
-	if userRole == "STUDENT" {
-		refundAmount := ticket.BasePrice
+		if ticket.UserID != requestingUserID {
+			return commonerrors.ErrUnauthorized
+		}
+		if strings.ToUpper(userRole) == "STUDENT" {
+			refundAmount := ticket.BasePrice
 
-		if refundAmount > 0 {
-			userWallet, err := s.wallet.GetOrCreateWallet(ctx, tx, ticket.UserID)
-			if err != nil {
-				return commonerrors.Wrap(commonerrors.ErrDatabase, err)
-			}
+			if refundAmount > 0 {
+				userWallet, err := s.wallet.GetOrCreateWallet(ctx, tx, ticket.UserID)
+				if err != nil {
+					return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+				}
 
-			revenueWalletID, err := s.wallet.GetSystemWalletByName(ctx, wallet.TransportSystemWallet, wallet.SystemWalletRevenue)
+				revenueWalletID, err := s.wallet.GetSystemWalletByName(ctx, wallet.TransportSystemWallet, wallet.SystemWalletRevenue)
+				if err != nil {
+					return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+				}
 
-			if err != nil {
-				return commonerrors.Wrap(commonerrors.ErrDatabase, err)
-			}
-
-			err = s.wallet.ExecuteTransaction(ctx, tx, revenueWalletID, userWallet.ID, int64(refundAmount), "REFUND", ticketID.String(), "Trip cancellation refund")
-			if err != nil {
-				return ErrRefundFailed
+				err = s.wallet.ExecuteTransaction(
+					ctx,
+					tx,
+					revenueWalletID,
+					userWallet.ID,
+					int64(refundAmount),
+					"REFUND",
+					ticketID.String(),
+					"Trip cancellation refund",
+				)
+				if err != nil {
+					return ErrRefundFailed
+				}
 			}
 		}
-	}
-	// Employees: No wallet operation needed (they paid 0)
 
-	// 3. Mark cancelled
-	if err := qtx.SetTicketCancelled(ctx, ticketID); err != nil {
-		return commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
+		if err := qtx.SetTicketCancelled(ctx, ticketID); err != nil {
+			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
+		if err := qtx.IncrementTripSeat(ctx, ticket.TripID); err != nil {
+			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
 
-	// 4. Return seat
-	if err := qtx.IncrementTripSeat(ctx, ticket.TripID); err != nil {
-		return commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
+		return nil
+	})
 
-	if err := tx.Commit(ctx); err != nil {
-		return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -698,8 +703,6 @@ func (s *Service) ExportTripData(ctx context.Context, startDate, endDate time.Ti
 	}
 
 	for _, tg := range tripOrder {
-		// Create CSV file for this trip
-		// Filename: RouteName_Date_Time.csv (Sanitized)
 		safeRouteName := strings.ReplaceAll(tg.RouteName, " ", "_")
 		safeRouteName = strings.ReplaceAll(safeRouteName, "/", "-")
 		filename := fmt.Sprintf("%s_%s.csv", safeRouteName, tg.DepartureTime.Format("20060102_1504"))
