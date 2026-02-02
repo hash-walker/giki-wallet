@@ -22,7 +22,8 @@ func NewHandler(service *Service) *Handler {
 	}
 }
 
-func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandlerRegister(w http.ResponseWriter, r *http.Request) {
+
 	requestID := middleware.GetRequestID(r.Context())
 
 	var params RegisterRequest
@@ -51,7 +52,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	common.ResponseWithJSON(w, http.StatusCreated, user, requestID)
 }
 
-func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandlerListUsers(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
 
 	pageStr := r.URL.Query().Get("page")
@@ -75,7 +76,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	common.ResponseWithJSON(w, http.StatusOK, users, requestID)
 }
 
-func (h *Handler) UpdateUserStatus(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HandlerUpdateUserStatus(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
 
 	userIDStr := chi.URLParam(r, "user_id")
@@ -89,16 +90,55 @@ func (h *Handler) UpdateUserStatus(w http.ResponseWriter, r *http.Request) {
 		IsActive bool `json:"is_active"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+	if err = json.NewDecoder(r.Body).Decode(&params); err != nil {
 		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidJSON, err), requestID)
 		return
 	}
 
 	user, err := h.service.UpdateUserStatus(r.Context(), userID, params.IsActive)
+
 	if err != nil {
 		middleware.HandleError(w, err, requestID)
 		return
 	}
 
 	common.ResponseWithJSON(w, http.StatusOK, user, requestID)
+}
+
+func (h *Handler) HandlerApproveEmployee(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	userIDStr := chi.URLParam(r, "user_id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidUUID, err), requestID)
+		return
+	}
+
+	user, err := h.service.ApproveEmployee(r.Context(), userID)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, user, requestID)
+}
+
+func (h *Handler) HandlerRejectEmployee(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	userIDStr := chi.URLParam(r, "user_id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidUUID, err), requestID)
+		return
+	}
+
+	err = h.service.RejectEmployee(r.Context(), userID)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, nil, requestID)
 }

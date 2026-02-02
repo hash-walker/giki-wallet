@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"crypto/rand"
@@ -38,21 +39,22 @@ func NewService(dbPool *pgxpool.Pool) *Service {
 
 func (s *Service) Login(ctx context.Context, req LoginParams) (*LoginResult, error) {
 
-	tx, err := s.dbPool.Begin(ctx)
+	var res *LoginResult
+	var authenticationErr error
 
-	if err != nil {
-		return nil, commonerrors.Wrap(commonerrors.ErrTransactionBegin, err)
-	}
-	defer tx.Rollback(ctx)
+	err := common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
 
-	res, err := s.authenticateAndIssueTokens(ctx, tx, req.Email, req.Password)
+		res, authenticationErr = s.authenticateAndIssueTokens(ctx, tx, req.Email, req.Password)
+
+		if authenticationErr != nil {
+			return authenticationErr
+		}
+
+		return nil
+	})
 
 	if err != nil {
 		return nil, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, commonerrors.Wrap(commonerrors.ErrTransactionCommit, err)
 	}
 
 	return res, nil
@@ -75,16 +77,9 @@ func (s *Service) GetUserByID(ctx context.Context, userID uuid.UUID) (user_db.Gi
 func (s *Service) VerifyEmailAndIssueTokens(ctx context.Context, token string) (*LoginResult, error) {
 	tokenHash := sha256Hex(token)
 
-	tx, err := s.dbPool.Begin(ctx)
-	if err != nil {
-		return nil, commonerrors.Wrap(commonerrors.ErrTransactionBegin, err)
-	}
-
-	defer tx.Rollback(ctx)
-
 	var res *LoginResult
 
-	err = common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
+	err := common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
 		authQ := s.authQ.WithTx(tx)
 
 		u, err := authQ.GetUserByTokenHash(ctx, tokenHash)
@@ -134,10 +129,6 @@ func (s *Service) VerifyEmailAndIssueTokens(ctx context.Context, token string) (
 		return nil, err
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return nil, commonerrors.Wrap(commonerrors.ErrTransactionCommit, err)
-	}
-
 	return res, nil
 }
 
@@ -156,9 +147,11 @@ func (s *Service) authenticateAndIssueTokens(ctx context.Context, tx pgx.Tx, ema
 		}
 	}
 
+	userType := strings.ToUpper(user.UserType)
+
 	if !user.IsActive {
-		// Employees generally require manual approval.
-		if user.UserType == "employee" {
+
+		if userType == RoleEmployee {
 			return nil, commonerrors.Wrap(ErrUserPendingApproval, fmt.Errorf("user pending approval: active=%v, verified=%v", user.IsActive, user.IsVerified))
 		}
 		return nil, commonerrors.Wrap(ErrUserInactive, fmt.Errorf("user inactive: active=%v, verified=%v", user.IsActive, user.IsVerified))

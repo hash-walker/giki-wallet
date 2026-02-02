@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hash-walker/giki-wallet/internal/auth"
 	"github.com/hash-walker/giki-wallet/internal/common"
 	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
 	"github.com/hash-walker/giki-wallet/internal/user/user_db"
@@ -42,16 +43,18 @@ func NewService(dbPool *pgxpool.Pool, jobs *worker.JobWorker) *Service {
 	}
 }
 
-func (s *Service) CreateUser(ctx context.Context, req RegisterRequest) (User, error) {
+func (s *Service) CreateUser(ctx context.Context, req RegisterRequest) (*User, error) {
 
-	req.UserType = strings.ToLower(req.UserType)
+	userType := strings.ToUpper(req.UserType)
+
 	if err := s.validateRegistration(req); err != nil {
-		return User{}, err
+		return nil, err
 	}
 
 	passwordHash, err := HashPassword(req.Password)
+
 	if err != nil {
-		return User{}, commonerrors.Wrap(commonerrors.ErrInternal, err)
+		return nil, commonerrors.Wrap(commonerrors.ErrInternal, err)
 	}
 
 	var user user_db.GikiWalletUser
@@ -61,41 +64,39 @@ func (s *Service) CreateUser(ctx context.Context, req RegisterRequest) (User, er
 		userQ := s.userQ.WithTx(tx)
 
 		isActive := false
-		isVerified := false
-		// Students can become active immediately, but must verify email first.
-		if req.UserType == "student" {
+
+		if userType == auth.RoleStudent {
 			isActive = true
 		}
 
-		var createErr error
-		user, createErr = userQ.CreateUser(ctx, user_db.CreateUserParams{
+		var userCreateErr error
+		user, userCreateErr = userQ.CreateUser(ctx, user_db.CreateUserParams{
 			Name:         req.Name,
 			Email:        req.Email,
 			PhoneNumber:  req.PhoneNumber,
 			AuthProvider: "Local",
 			PasswordAlgo: "BCRYPT",
-			UserType:     req.UserType,
+			UserType:     userType,
 			PasswordHash: passwordHash,
 			IsActive:     isActive,
-			IsVerified:   isVerified,
+			IsVerified:   false,
 		})
 
-		if createErr != nil {
-			// IMPORTANT: once a statement fails (e.g. unique constraint), the SQL transaction is aborted
-			// and we MUST return immediately (any further queries will fail with "current transaction is aborted").
-			return translateDBError(createErr)
+		if userCreateErr != nil {
+			return translateDBError(userCreateErr)
 		}
 
-		if err := s.createRoleProfile(ctx, tx, user.ID, req); err != nil {
-			return err
+		if userProfileErr := s.createRoleProfile(ctx, tx, user.ID, req); userProfileErr != nil {
+			return ErrProfileCreationFailed
 		}
 
-		// Create email verification token for students.
-		if req.UserType == "student" {
-			tok, err := generateBase64Token(64)
-			if err != nil {
-				return commonerrors.Wrap(commonerrors.ErrInternal, err)
+		if userType == auth.RoleStudent {
+
+			tok, tokenErr := generateBase64Token(64)
+			if tokenErr != nil {
+				return commonerrors.Wrap(commonerrors.ErrInternal, tokenErr)
 			}
+
 			verificationToken = tok
 
 			tokenHash := sha256Hex(verificationToken)
@@ -117,11 +118,9 @@ func (s *Service) CreateUser(ctx context.Context, req RegisterRequest) (User, er
 	})
 
 	if err != nil {
-		return User{}, err
+		return nil, err
 	}
 
-	// Enqueue any out-of-band messaging (email).
-	// For students, we include verification token link.
 	_ = s.enqueueAccountCreationJob(ctx, verificationToken, req)
 
 	return mapDBUserToUser(user), nil
@@ -194,54 +193,19 @@ func sha256Hex(s string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func (s *Service) enqueueAccountCreationJob(ctx context.Context, token string, req RegisterRequest) error {
-	var err error
-
-	switch req.UserType {
-	case "student":
-		verifyBase := os.Getenv("FRONTEND_VERIFY_URL")
-		if verifyBase == "" {
-			// Local default (nginx serves HTTPS on 8443).
-			verifyBase = "https://localhost:8443/verify"
-		}
-		if token == "" {
-			return commonerrors.Wrap(commonerrors.ErrInternal, errors.New("missing verification token"))
-		}
-
-		err = s.jobs.Enqueue(ctx, "SEND_STUDENT_VERIFY_EMAIL", worker.StudentVerifyPayload{
-			Email: req.Email,
-			Name:  req.Name,
-			Link:  fmt.Sprintf("%s?token=%s", verifyBase, token),
-		})
-
-	case "employee":
-		err = s.jobs.Enqueue(ctx, "SEND_EMPLOYEE_WAIT_EMAIL", worker.EmployeeWaitPayload{
-			Email: req.Email,
-			Name:  req.Name,
-		})
-
-	default:
-		return commonerrors.New("UNSUPPORTED_USER_TYPE", http.StatusBadRequest, fmt.Sprintf("unsupported user type: %s", req.UserType))
-	}
-
-	if err != nil {
-		return commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("failed to enqueue %s job: %w", req.UserType, err))
-	}
-
-	return nil
-}
-
 func (s *Service) validateRegistration(req RegisterRequest) error {
-	if req.UserType == "" {
+	userType := strings.ToUpper(req.UserType)
+
+	if userType == "" {
 		return ErrInvalidUserType
 	}
 
 	isGikiEmail := strings.HasSuffix(req.Email, "@giki.edu.pk")
-	if !isGikiEmail && req.UserType != "employee" {
+	if !isGikiEmail && userType != auth.RoleEmployee {
 		return ErrEmailRestricted
 	}
 
-	if req.UserType == "student" && req.RegID == "" {
+	if userType == auth.RoleStudent && req.RegID == "" {
 		return ErrMissingRegID
 	}
 
@@ -249,22 +213,25 @@ func (s *Service) validateRegistration(req RegisterRequest) error {
 }
 
 func (s *Service) createRoleProfile(ctx context.Context, tx pgx.Tx, userID uuid.UUID, req RegisterRequest) error {
-	switch req.UserType {
-	case "student":
+
+	userType := strings.ToUpper(req.UserType)
+
+	switch userType {
+	case auth.RoleStudent:
 		_, err := s.CreateStudent(ctx, tx, CreateStudentParams{
 			UserID: userID,
 			RegID:  req.RegID,
 		})
 		return err
 
-	case "employee":
+	case auth.RoleEmployee:
 		_, err := s.CreateEmployee(ctx, tx, CreateEmployeeParams{
 			UserID: userID,
 		})
 		return err
 
 	default:
-		return ErrInvalidUserType.WithDetails("userType", req.UserType)
+		return ErrInvalidUserType.WithDetails("userType", userType)
 	}
 }
 
@@ -298,6 +265,7 @@ func (s *Service) ListUsers(ctx context.Context, page, pageSize int) (*UsersList
 }
 
 func (s *Service) UpdateUserStatus(ctx context.Context, userID uuid.UUID, isActive bool) (AdminUser, error) {
+
 	row, err := s.userQ.UpdateUserStatus(ctx, user_db.UpdateUserStatusParams{
 		ID:       userID,
 		IsActive: isActive,
@@ -308,4 +276,152 @@ func (s *Service) UpdateUserStatus(ctx context.Context, userID uuid.UUID, isActi
 	}
 
 	return mapDBUpdateUserStatusToAdminUser(row), nil
+}
+
+func (s *Service) ApproveEmployee(ctx context.Context, userID uuid.UUID) (AdminUser, error) {
+	var adminUser AdminUser
+	var verificationToken string
+	var email, name string
+
+	err := common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
+		userQ := s.userQ.WithTx(tx)
+
+		dbUser, err := userQ.GetUserByID(ctx, userID)
+
+		if err != nil {
+			return translateDBError(err)
+		}
+
+		userType := strings.ToUpper(dbUser.UserType)
+
+		if userType != auth.RoleEmployee {
+			return ErrNotAnEmployee
+		}
+
+		if dbUser.IsVerified {
+			return ErrAlreadyVerified
+		}
+
+		// Generate verification token
+		tok, err := generateBase64Token(64)
+
+		if err != nil {
+			return commonerrors.Wrap(commonerrors.ErrInternal, err)
+		}
+
+		verificationToken = tok
+		email = dbUser.Email
+		name = dbUser.Name
+
+		tokenHash := sha256Hex(verificationToken)
+		expiresAt := time.Now().UTC().Add(48 * time.Hour)
+
+		err = userQ.CreateAccessToken(ctx, user_db.CreateAccessTokenParams{
+			TokenHash: tokenHash,
+			UserID:    dbUser.ID,
+			Type:      "EMAIL_VERIFICATION",
+			ExpiresAt: expiresAt,
+		})
+
+		if err != nil {
+			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
+
+		row, err := userQ.UpdateUserStatus(ctx, user_db.UpdateUserStatusParams{
+			ID:       dbUser.ID,
+			IsActive: true,
+		})
+
+		if err != nil {
+			return translateDBError(err)
+		}
+
+		adminUser = mapDBUpdateUserStatusToAdminUser(row)
+
+		return nil
+	})
+
+	if err != nil {
+		return AdminUser{}, err
+	}
+
+	_ = s.enqueueAccountApprovalJob(ctx, verificationToken, email, name)
+
+	return adminUser, nil
+}
+
+func (s *Service) RejectEmployee(ctx context.Context, userID uuid.UUID) error {
+	dbUser, err := s.userQ.GetUserByID(ctx, userID)
+	if err != nil {
+		return translateDBError(err)
+	}
+
+	if dbUser.UserType != auth.RoleEmployee {
+		return ErrNotAnEmployee
+	}
+
+	_ = s.enqueueAccountRejectionJob(ctx, dbUser.Email, dbUser.Name)
+
+	return nil
+}
+
+func (s *Service) enqueueAccountCreationJob(ctx context.Context, token string, req RegisterRequest) error {
+	var err error
+	userType := strings.ToUpper(req.UserType)
+
+	switch userType {
+	case auth.RoleStudent:
+		verifyBase := os.Getenv("FRONTEND_VERIFY_URL")
+		if verifyBase == "" {
+			verifyBase = "https://giktransport@giki.edu.pk/verify"
+		}
+		if token == "" {
+			return commonerrors.Wrap(commonerrors.ErrInternal, errors.New("missing verification token"))
+		}
+
+		err = s.jobs.Enqueue(ctx, "SEND_STUDENT_VERIFY_EMAIL", worker.StudentVerifyPayload{
+			Email: req.Email,
+			Name:  req.Name,
+			Link:  fmt.Sprintf("%s?token=%s", verifyBase, token),
+		})
+
+	case auth.RoleEmployee:
+		err = s.jobs.Enqueue(ctx, "SEND_EMPLOYEE_WAIT_EMAIL", worker.EmployeeWaitPayload{
+			Email: req.Email,
+			Name:  req.Name,
+		})
+
+	default:
+		return commonerrors.New("UNSUPPORTED_USER_TYPE", http.StatusBadRequest, fmt.Sprintf("unsupported user type: %s", req.UserType))
+	}
+
+	if err != nil {
+		return commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("failed to enqueue %s job: %w", req.UserType, err))
+	}
+
+	return nil
+}
+
+func (s *Service) enqueueAccountApprovalJob(ctx context.Context, token, email, name string) error {
+	verifyBase := os.Getenv("FRONTEND_VERIFY_URL")
+	if verifyBase == "" {
+		verifyBase = "https://giktransport.giki.edu.pk/verify"
+	}
+
+	_ = s.jobs.Enqueue(ctx, "SEND_EMPLOYEE_APPROVED_EMAIL", worker.EmployeeApprovedPayload{
+		Email: email,
+		Name:  name,
+		Link:  fmt.Sprintf("%s?token=%s", verifyBase, token),
+	})
+
+	return nil
+}
+
+func (s *Service) enqueueAccountRejectionJob(ctx context.Context, email, name string) error {
+	_ = s.jobs.Enqueue(ctx, "SEND_EMPLOYEE_REJECTED_EMAIL", worker.EmployeeWaitPayload{
+		Email: email,
+		Name:  name,
+	})
+
+	return nil
 }

@@ -22,6 +22,8 @@ var (
 	ErrDuplicateRegID = errors.New("DUPLICATE_REG_ID", http.StatusConflict, "This registration number is already in use")
 
 	// Student/Employee Errors
-	ErrMissingRegID = errors.New("MISSING_REG_ID", http.StatusBadRequest, "Registration number required for students")
-	ErrInvalidRegID = errors.New("INVALID_REG_ID", http.StatusBadRequest, "Invalid registration ID format")
+	ErrMissingRegID    = errors.New("MISSING_REG_ID", http.StatusBadRequest, "Registration number required for students")
+	ErrInvalidRegID    = errors.New("INVALID_REG_ID", http.StatusBadRequest, "Invalid registration ID format")
+	ErrNotAnEmployee   = errors.New("NOT_AN_EMPLOYEE", http.StatusBadRequest, "User is not an employee")
+	ErrAlreadyVerified = errors.New("ALREADY_VERIFIED", http.StatusBadRequest, "User is already verified")
 )

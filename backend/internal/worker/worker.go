@@ -9,6 +9,7 @@ import (
 
 	"github.com/hash-walker/giki-wallet/internal/common"
 	"github.com/hash-walker/giki-wallet/internal/mailer"
+	"github.com/hash-walker/giki-wallet/internal/middleware"
 	worker "github.com/hash-walker/giki-wallet/internal/worker/worker_db"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -75,14 +76,12 @@ func (w *JobWorker) StartStatusTicker(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// 1. Open trips that are ready
 			if err := w.q.AutoOpenTrips(ctx); err != nil {
-				log.Println("Error opening trips:", err)
+				middleware.LogAppError(err, "Error opening trips")
 			}
 
-			// 2. Close trips that are expiring or full
 			if err := w.q.AutoCloseTrips(ctx); err != nil {
-				log.Println("Error closing trips:", err)
+				middleware.LogAppError(err, "Error closing trips")
 			}
 		}
 	}
@@ -103,6 +102,8 @@ func (w *JobWorker) processNextJob(ctx context.Context) {
 		processErr = w.handleEmployeeWait(job.Payload)
 	case "SEND_EMPLOYEE_APPROVED_EMAIL":
 		processErr = w.handleEmployeeApproved(job.Payload)
+	case "SEND_EMPLOYEE_REJECTED_EMAIL":
+		processErr = w.handleEmployeeRejected(job.Payload)
 	default:
 		log.Printf("Unknown job type: %s", job.JobType)
 		processErr = fmt.Errorf("unknown job type")
@@ -139,10 +140,19 @@ func (w *JobWorker) handleEmployeeWait(payload json.RawMessage) error {
 }
 
 func (w *JobWorker) handleEmployeeApproved(payload json.RawMessage) error {
+	var data EmployeeApprovedPayload
+	if err := json.Unmarshal(payload, &data); err != nil {
+		return err
+	}
+
+	return w.mailer.SendTemplate(data.Email, "Account Approved!", "employee_approved.html", data)
+}
+
+func (w *JobWorker) handleEmployeeRejected(payload json.RawMessage) error {
 	var data EmployeeWaitPayload
 	if err := json.Unmarshal(payload, &data); err != nil {
 		return err
 	}
 
-	return w.mailer.SendTemplate(data.Email, "Account Approved!", "approved.html", data)
+	return w.mailer.SendTemplate(data.Email, "Application Status", "rejected.html", data)
 }

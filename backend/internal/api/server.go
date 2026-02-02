@@ -55,7 +55,7 @@ func (s *Server) MountRoutes() {
 		}
 	})
 
-	r.Post("/auth/register", s.User.Register)
+	r.Post("/auth/register", s.User.HandlerRegister)
 	r.Post("/auth/signin", s.Auth.Login)
 	r.Post("/auth/signout", s.Auth.Logout)
 	r.Get("/auth/verify", s.Auth.VerifyEmail)
@@ -124,8 +124,10 @@ func (s *Server) MountRoutes() {
 		r.Get("/tickets/history", s.Transport.HandleAdminTicketHistory)
 
 		r.Route("/users", func(r chi.Router) {
-			r.Get("/", s.User.ListUsers)
-			r.Patch("/{user_id}/status", s.User.UpdateUserStatus)
+			r.Get("/", s.User.HandlerListUsers)
+			r.Patch("/{user_id}/status", s.User.HandlerUpdateUserStatus)
+			r.Post("/{user_id}/approve", s.User.HandlerApproveEmployee)
+			r.Post("/{user_id}/reject", s.User.HandlerRejectEmployee)
 		})
 
 		r.Route("/transactions/gateway", func(r chi.Router) {

@@ -43,8 +43,8 @@ type CreateEmployeeParams struct {
 	Department  pgtype.Text
 }
 
-func mapDBUserToUser(u userdb.GikiWalletUser) User {
-	return User{
+func mapDBUserToUser(u userdb.GikiWalletUser) *User {
+	return &User{
 		ID:        u.ID,
 		Name:      u.Name,
 		Email:     u.Email,
