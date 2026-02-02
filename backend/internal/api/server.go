@@ -98,11 +98,8 @@ func (s *Server) MountRoutes() {
 	})
 
 	r.Route("/admin", func(r chi.Router) {
-		r.Use(auth.RequireAuth)
-
-		r.Use(auth.RequireRole(auth.RoleSuperAdmin, auth.RoleTransportAdmin, auth.RoleFinanceAdmin))
-
 		r.Use(auth.RequireLogin("/admin/signin"))
+		r.Use(auth.RequireRole(auth.RoleSuperAdmin, auth.RoleTransportAdmin, auth.RoleFinanceAdmin))
 
 		r.Get("/dashboard", func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("Admin Dashboard"))

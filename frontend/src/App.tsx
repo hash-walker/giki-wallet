@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import { ClientLayout } from '@/client/layout/ClientLayout';
 import { AdminLayout, AdminDashboard, RoutesPage, TimeSlotsPage, TicketsPage as AdminTicketsPage, TicketHistoryPage, UsersPage, SettingsPage, TransactionsPage, GatewayTransactionsPage, HistoryPage, CreateTripPage, TripsPage, TripHistoryPage } from '@/admin';
+import { AdminProtectedRoute } from '@/admin/components/AdminProtectedRoute';
 import { HomePage } from '@/client/pages/HomePage';
 import { TransportPage } from '@/client/modules/transport/pages/TransportPage';
 import TopUpPage from '@/client/modules/wallet/pages/TopUpPage';
@@ -44,6 +45,14 @@ const router = createBrowserRouter([
         element: (
             <AuthLayout>
                 <VerifyEmailPage />
+            </AuthLayout>
+        ),
+    },
+    {
+        path: '/admin/signin',
+        element: (
+            <AuthLayout>
+                <SignInPage />
             </AuthLayout>
         ),
     },
@@ -122,7 +131,7 @@ const router = createBrowserRouter([
     {
         element: (
             <AdminLayout>
-                <RequireAuth />
+                <AdminProtectedRoute />
             </AdminLayout>
         ),
         children: [
