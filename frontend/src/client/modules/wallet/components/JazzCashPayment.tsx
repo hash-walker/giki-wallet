@@ -83,7 +83,7 @@ const JazzCashPayment: React.FC<JazzCashPaymentProps> = ({
 
                 {(status === 'initiating' || status === 'processing') ? (
                     <div className="space-y-8 py-4 animate-in fade-in duration-700">
-                        {status === 'processing'? (<div className="text-center">
+                        {status === 'processing' ? (<div className="text-center">
                             <div className="relative inline-block">
                                 <div className="absolute inset-0 bg-primary/10 rounded-full scale-150 animate-ping opacity-20" />
                                 <h1 className="text-6xl font-black text-gray-900 tabular-nums">
@@ -91,32 +91,53 @@ const JazzCashPayment: React.FC<JazzCashPaymentProps> = ({
                                 </h1>
                             </div>
                             <p className="text-gray-400 text-sm font-bold uppercase tracking-tighter mt-4">Remaining Seconds</p>
-                        </div>): <></>}
+                        </div>) : (
+                            <div className="flex justify-center py-8">
+                                <div className="relative">
+                                    <div className="absolute inset-0 bg-yellow-500/20 rounded-full animate-ping" />
+                                    <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center relative z-10">
+                                        <Smartphone className="w-8 h-8 text-yellow-600 animate-pulse" />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
-                        <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                            <div className="flex gap-4 items-center">
-                                <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center shrink-0">
-                                    <Phone className="w-5 h-5 text-primary" />
+                        <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 relative overflow-hidden">
+                            {/* Security Strip */}
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary/20 to-transparent animate-shimmer" />
+
+                            <div className="flex gap-4 items-center relative z-10">
+                                <div className={`w-10 h-10 rounded-xl shadow-sm flex items-center justify-center shrink-0 transition-colors duration-500 ${status === 'initiating' ? 'bg-yellow-100 text-yellow-600' : 'bg-green-100 text-green-600'}`}>
+                                    {status === 'initiating' ? <ShieldCheck className="w-5 h-5" /> : <Phone className="w-5 h-5" />}
                                 </div>
                                 <div className="text-left">
-                                    <p className="text-xs text-gray-400 font-bold uppercase">
-                                        {status === 'initiating' ? 'Connecting Gateway...' : 'Pending Confirmation'}
+                                    <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-0.5">
+                                        {status === 'initiating' ? 'Security Handshake' : 'Action Required'}
                                     </p>
                                     <p className="text-sm font-bold text-gray-900">
-                                        {status === 'initiating' ? 'Please wait a moment' : 'Check your phone now'}
+                                        {status === 'initiating' ? 'Establishing Secure Tunnel...' : 'Check your phone now'}
                                     </p>
                                 </div>
                             </div>
-                            <p className="text-[11px] text-gray-500 mt-4 leading-relaxed font-medium">
+                            <p className="text-[11px] text-gray-500 mt-4 leading-relaxed font-medium pl-14">
                                 {status === 'initiating'
-                                    ? "We are establishing a secure connection to the JazzCash servers..."
-                                    : `We've sent a PIN prompt to ${phoneNumber}. Please enter your MPIN to authorize RS ${amount}.`}
+                                    ? "We are verifying your account details via encrypted channel..."
+                                    : `A secure MPIN prompt has been sent to ${phoneNumber}. Please authorize RS ${amount}.`}
                             </p>
                         </div>
 
                         <div className="flex items-center justify-center gap-2 text-primary">
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span className="text-[10px] font-black uppercase tracking-[0.2em] italic">Waiting for Network...</span>
+                            {status === 'initiating' ? (
+                                <>
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] italic text-gray-400">Connecting...</span>
+                                </>
+                            ) : (
+                                <div className="px-3 py-1 bg-primary/10 rounded-full flex items-center gap-2">
+                                    <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Live Transaction</span>
+                                </div>
+                            )}
                         </div>
                     </div>
                 ) : (
