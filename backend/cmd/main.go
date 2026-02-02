@@ -11,6 +11,7 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/auth"
 	"github.com/hash-walker/giki-wallet/internal/config"
 	"github.com/hash-walker/giki-wallet/internal/mailer"
+	"github.com/hash-walker/giki-wallet/internal/middleware"
 	"github.com/hash-walker/giki-wallet/internal/payment"
 	"github.com/hash-walker/giki-wallet/internal/payment/gateway"
 	"github.com/hash-walker/giki-wallet/internal/transport"
@@ -26,14 +27,7 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// Load .env file if it exists (for local development)
-	// In Docker, environment variables come from docker-compose.yml
 	_ = godotenv.Load()
-
-	dbURL := os.Getenv("DB_URL")
-	if dbURL == "" {
-		log.Fatal("DB_URL environment variable is required")
-	}
 
 	cfg := config.LoadConfig()
 
@@ -56,9 +50,21 @@ func main() {
 		cfg.Mailer.SenderEmail,
 	)
 
-	pool, err := pgxpool.New(ctx, dbURL)
+	dbConfig, err := pgxpool.ParseConfig(cfg.Database.DbURL)
 	if err != nil {
-		log.Fatalf("Unable to connect to database: %v\n", err)
+		middleware.LogAppError(err, "Unable to parse database connection string")
+	}
+
+	dbConfig.MaxConns = 50
+	dbConfig.MinConns = 10
+	dbConfig.MaxConnLifetime = 1 * time.Hour
+	dbConfig.MaxConnIdleTime = 30 * time.Minute
+	dbConfig.HealthCheckPeriod = 1 * time.Minute
+
+	pool, err := pgxpool.NewWithConfig(ctx, dbConfig)
+
+	if err != nil {
+		middleware.LogAppError(err, "Unable to connect to database")
 	}
 	defer pool.Close()
 
@@ -66,7 +72,7 @@ func main() {
 
 	// Initialize Worker first
 	newWorker := worker.NewWorker(pool, newMailer)
-	go newWorker.StartJobTicker(ctx)
+	go newWorker.StartJobTicker(ctx, 10)
 	go newWorker.StartStatusTicker(ctx)
 
 	// Initialize Services with dependencies

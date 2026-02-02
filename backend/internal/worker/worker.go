@@ -53,17 +53,21 @@ func (w *JobWorker) EnqueueIn(ctx context.Context, jobType string, payload inter
 	return nil
 }
 
-func (w *JobWorker) StartJobTicker(ctx context.Context) {
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			w.processNextJob(ctx)
-		}
+func (w *JobWorker) StartJobTicker(ctx context.Context, workerCount int) {
+	for i := range workerCount {
+		go func(workerID int) {
+			time.Sleep(time.Duration(workerID*100) * time.Millisecond)
+			ticker := time.NewTicker(200 * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					w.processNextJob(ctx)
+				}
+			}
+		}(i)
 	}
 }
 

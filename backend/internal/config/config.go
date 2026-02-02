@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"time"
 )
 
 type Config struct {
@@ -13,7 +14,12 @@ type Config struct {
 }
 
 type DatabaseConfig struct {
-	dbURL string
+	DbURL             string
+	MaxConns          int
+	MinConns          int
+	MaxConnLifetime   time.Duration
+	MaxConnIdleTime   time.Duration
+	HealthCheckPeriod time.Duration
 }
 
 type ServerConfig struct {
@@ -42,7 +48,7 @@ type GraphSenderConfig struct {
 func LoadConfig() *Config {
 	cfg := &Config{
 		Database: DatabaseConfig{
-			dbURL: getRequiredEnv("DB_URL"),
+			DbURL: getRequiredEnv("DB_URL"),
 		},
 		Server: ServerConfig{
 			Port: getEnvWithDefault("PORT", "8080"),

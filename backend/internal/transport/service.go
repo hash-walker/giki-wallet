@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,6 +26,10 @@ type Service struct {
 	q      *transport_db.Queries
 	wallet *wallet.Service
 	dbPool *pgxpool.Pool
+
+	dashboardCache     []TripResponse
+	dashboardCacheTime time.Time
+	cacheMutex         sync.RWMutex
 }
 
 func NewService(dbPool *pgxpool.Pool, walletService *wallet.Service) *Service {
@@ -41,15 +46,35 @@ func NewService(dbPool *pgxpool.Pool, walletService *wallet.Service) *Service {
 
 func (s *Service) GetWeeklyTrips(ctx context.Context, startDate, endDate time.Time) ([]TripResponse, error) {
 
+	s.cacheMutex.RLock()
+	if !s.dashboardCacheTime.IsZero() && time.Since(s.dashboardCacheTime) < 5*time.Second {
+		defer s.cacheMutex.RUnlock()
+		return s.dashboardCache, nil
+	}
+	s.cacheMutex.RUnlock()
+
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+
+	if !s.dashboardCacheTime.IsZero() && time.Since(s.dashboardCacheTime) < 5*time.Second {
+		return s.dashboardCache, nil
+	}
+
 	rows, err := s.q.GetTripsForWeekWithStops(ctx, transport_db.GetTripsForWeekWithStopsParams{
 		DepartureTime:   startDate,
 		DepartureTime_2: endDate,
 	})
+
 	if err != nil {
 		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
 	}
 
-	return mapDbTripsForWeekToResponse(rows), nil
+	data := mapDbTripsForWeekToResponse(rows)
+
+	s.dashboardCache = data
+	s.dashboardCacheTime = time.Now()
+
+	return data, nil
 }
 
 func (s *Service) GetDeletedTripsHistory(ctx context.Context, page, pageSize int) (*TripHistoryWithPagination, error) {
