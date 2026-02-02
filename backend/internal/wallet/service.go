@@ -280,7 +280,7 @@ func (s *Service) GetWalletHistory(ctx context.Context, walletID uuid.UUID, page
 	}, nil
 }
 
-func (s *Service) GetAdminRevenueTransactions(ctx context.Context, page, pageSize int, startDate, endDate time.Time) ([]wallet.GetAdminRevenueTransactionsRow, int64, error) {
+func (s *Service) GetAdminRevenueTransactions(ctx context.Context, page, pageSize int, startDate, endDate time.Time, search string) ([]wallet.GetAdminRevenueTransactionsRow, int64, error) {
 
 	revWalletID, err := s.GetSystemWalletByName(ctx, TransportSystemWallet, SystemWalletRevenue)
 	if err != nil {
@@ -295,6 +295,7 @@ func (s *Service) GetAdminRevenueTransactions(ctx context.Context, page, pageSiz
 		EndDate:   endDate,
 		Limit:     int32(pageSize),
 		Offset:    int32(offset),
+		Search:    search,
 	})
 	if err != nil {
 		return nil, 0, commonerrors.Wrap(ErrDatabase, err)

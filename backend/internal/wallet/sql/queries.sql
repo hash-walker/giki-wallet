@@ -77,6 +77,12 @@ LEFT JOIN giki_wallet.users u ON w.user_id = u.id
 WHERE l.wallet_id = $1
   AND l.created_at >= sqlc.arg('start_date')
   AND l.created_at <= sqlc.arg('end_date')
+  AND (
+      sqlc.arg('search')::text = '' OR
+      u.name ILIKE '%' || sqlc.arg('search')::text || '%' OR
+      u.email ILIKE '%' || sqlc.arg('search')::text || '%' OR
+      t.reference_id ILIKE '%' || sqlc.arg('search')::text || '%'
+  )
 ORDER BY l.created_at DESC
 LIMIT $2 OFFSET $3;
 

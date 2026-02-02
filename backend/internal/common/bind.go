@@ -105,3 +105,20 @@ func (p *TicketListParams) Bind(r *http.Request) error {
 	}
 	return nil
 }
+
+type TransactionListParams struct {
+	PaginationParams
+	DateRangeParams
+	Search string `json:"search"`
+}
+
+func (p *TransactionListParams) Bind(r *http.Request) error {
+	if err := p.PaginationParams.Bind(r); err != nil {
+		return err
+	}
+	if err := p.DateRangeParams.Bind(r); err != nil {
+		return err
+	}
+	p.Search = r.URL.Query().Get("search")
+	return nil
+}

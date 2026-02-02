@@ -58,7 +58,7 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetAdminTransactions(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
 
-	var params common.AdminFinanceListParams
+	var params common.TransactionListParams
 	if err := params.Bind(r); err != nil {
 		appErr := commonerrors.New("INVALID_REQUEST", http.StatusBadRequest, err.Error())
 		middleware.HandleError(w, appErr, requestID)
@@ -71,6 +71,7 @@ func (h *Handler) GetAdminTransactions(w http.ResponseWriter, r *http.Request) {
 		params.PageSize,
 		params.StartDate,
 		params.EndDate,
+		params.Search,
 	)
 	if err != nil {
 		middleware.HandleError(w, err, requestID)
