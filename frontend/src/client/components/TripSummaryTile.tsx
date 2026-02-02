@@ -19,7 +19,16 @@ export const TripSummaryTile = () => {
         if (showLoading) setLoading(true);
         try {
             const data = await getWeeklySummary();
-            setTrips(data || []);
+            const user = useAuthStore.getState().user;
+            const role = user?.user_type.toUpperCase();
+
+            const filteredData = (data || []).filter(trip => {
+                if (role === 'STUDENT' && trip.bus_type !== 'STUDENT') return false;
+                if (role === 'EMPLOYEE' && trip.bus_type !== 'EMPLOYEE') return false;
+                return true;
+            });
+
+            setTrips(filteredData);
         } catch (error) {
             if (showLoading) console.error('Failed to fetch weekly summary:', error);
             // Handle 409 specifically if needed, but [] works for empty state
@@ -79,7 +88,15 @@ export const TripSummaryTile = () => {
                     <Clock className="w-5 h-5" />
                 </div>
                 <div>
-                    <p className="text-xs font-black text-slate-900 tracking-tight uppercase leading-none">{trip.route_name}</p>
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className={cn(
+                            "px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider",
+                            trip.bus_type === 'STUDENT' ? "bg-accent/10 text-accent" : "bg-primary/10 text-primary"
+                        )}>
+                            {trip.bus_type}
+                        </span>
+                        <p className="text-xs font-black text-slate-900 tracking-tight uppercase leading-none">{trip.route_name}</p>
+                    </div>
                     <div className="flex items-center gap-2 mt-1.5">
                         <span className="text-[9px] font-bold text-slate-400 uppercase">{formatDate(trip.departure_time)}</span>
                         <span className="w-1 h-1 rounded-full bg-slate-200" />
