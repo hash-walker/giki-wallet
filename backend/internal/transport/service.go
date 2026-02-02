@@ -81,43 +81,55 @@ func (s *Service) GetDeletedTripsHistory(ctx context.Context, page, pageSize int
 
 func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.UUID, error) {
 
-	tx, err := s.dbPool.Begin(ctx)
-	if err != nil {
-		return uuid.Nil, commonerrors.Wrap(ErrTripCreationFailed, err)
-	}
-	defer tx.Rollback(ctx)
-	qtx := s.q.WithTx(tx)
-
-	basePrice := common.AmountToLowestUnit(req.BasePrice)
-
-	tripID, err := qtx.CreateTrip(ctx, transport_db.CreateTripParams{
-		RouteID:                 req.RouteID,
-		DepartureTime:           req.DepartureTime,
-		BookingOpenOffsetHours:  req.BookingOpenOffsetHours,
-		BookingCloseOffsetHours: req.BookingCloseOffsetHours,
-		TotalCapacity:           int32(req.TotalCapacity),
-		AvailableSeats:          int32(req.TotalCapacity),
-		BasePrice:               basePrice,
-		BusType:                 req.BusType,
-		Direction:               req.Direction,
-	})
-	if err != nil {
-		return uuid.Nil, commonerrors.Wrap(ErrTripCreationFailed, err)
+	// 1. Validate Input Early
+	if req.TotalCapacity <= 0 {
+		return uuid.Nil, commonerrors.ErrInvalidInput
 	}
 
-	for i, stop := range req.Stops {
-		err := qtx.CreateTripStop(ctx, transport_db.CreateTripStopParams{
-			TripID:        tripID,
-			StopID:        stop.StopID,
-			SequenceOrder: int32(i + 1), // 1-based index
+	if req.BasePrice < 0 {
+		return uuid.Nil, commonerrors.ErrInvalidInput
+	}
+
+	var tripID uuid.UUID
+
+	err := common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
+		qtx := s.q.WithTx(tx)
+
+		basePrice := common.AmountToLowestUnit(req.BasePrice)
+
+		var createErr error
+		tripID, createErr = qtx.CreateTrip(ctx, transport_db.CreateTripParams{
+			RouteID:                 req.RouteID,
+			DepartureTime:           req.DepartureTime,
+			BookingOpenOffsetHours:  req.BookingOpenOffsetHours,
+			BookingCloseOffsetHours: req.BookingCloseOffsetHours,
+			TotalCapacity:           int32(req.TotalCapacity),
+			AvailableSeats:          int32(req.TotalCapacity),
+			BasePrice:               basePrice,
+			BusType:                 req.BusType,
+			Direction:               req.Direction,
 		})
-		if err != nil {
-			return uuid.Nil, commonerrors.Wrap(ErrTripCreationFailed, err)
-		}
-	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return uuid.Nil, commonerrors.Wrap(ErrTripCreationFailed, err)
+		if createErr != nil {
+			return commonerrors.Wrap(ErrTripCreationFailed, createErr)
+		}
+
+		for i, stop := range req.Stops {
+			err := qtx.CreateTripStop(ctx, transport_db.CreateTripStopParams{
+				TripID:        tripID,
+				StopID:        stop.StopID,
+				SequenceOrder: int32(i + 1),
+			})
+			if err != nil {
+				return commonerrors.Wrap(ErrTripCreationFailed, err)
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return uuid.Nil, err
 	}
 
 	return tripID, nil
@@ -171,186 +183,211 @@ func (s *Service) GetRouteTemplate(ctx context.Context, routeID uuid.UUID) (*Rou
 
 func (s *Service) HoldSeats(ctx context.Context, userID uuid.UUID, userRole string, req HoldSeatsRequest) (*HoldSeatsResponse, error) {
 
-	tx, err := s.dbPool.Begin(ctx)
-	if err != nil {
-		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
-	defer tx.Rollback(ctx)
-	qtx := s.q.WithTx(tx)
-
-	if _, lockErr := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1))", userID.String()); lockErr != nil {
-		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, lockErr)
-	}
-
-	trip, err := qtx.GetTrip(ctx, req.TripID)
-
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrTripNotFound
-		}
-		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
-
-	if userRole != "TRANSPORT_ADMIN" && userRole != "SUPER_ADMIN" {
-		if trip.BusType != userRole {
-			return nil, ErrBusTypeMismatch
-		}
-
-		if common.TextToString(trip.Status) != "OPEN" {
-			return nil, ErrTripNotOpen
-		}
-	}
-
-	rule, err := qtx.GetQuotaRule(ctx, transport_db.GetQuotaRuleParams{
-		UserRole:  userRole,
-		Direction: trip.Direction,
-	})
-
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNoQuotaPolicy
-		}
-		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
-
-	usage, err := qtx.GetWeeklyTicketCountByDirection(ctx, transport_db.GetWeeklyTicketCountByDirectionParams{
-		UserID:    userID,
-		Direction: trip.Direction,
-	})
-
-	if err != nil {
-		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
-
-	if (usage + int64(req.Count)) > int64(rule.WeeklyLimit) {
-		return nil, ErrQuotaExceeded
-	}
-
 	var holds []HoldTicketResponse
-	expiry := time.Now().Add(5 * time.Minute)
 
-	for i := 0; i < req.Count; i++ {
+	err := common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
+		qtx := s.q.WithTx(tx)
 
-		_, err := qtx.DecreaseTripSeat(ctx, req.TripID)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return nil, ErrTripFull
+		if _, lockErr := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1))", userID.String()); lockErr != nil {
+			return commonerrors.Wrap(commonerrors.ErrDatabase, lockErr)
+		}
+
+		trip, tripErr := qtx.GetTrip(ctx, req.TripID)
+		if tripErr != nil {
+			if errors.Is(tripErr, pgx.ErrNoRows) {
+				return ErrTripNotFound
 			}
-			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+			return commonerrors.Wrap(commonerrors.ErrDatabase, tripErr)
 		}
 
-		hold, err := qtx.CreateBlankHold(ctx, transport_db.CreateBlankHoldParams{
-			TripID:        req.TripID,
-			UserID:        userID,
-			PickupStopID:  req.PickupStopID,
-			DropoffStopID: req.DropoffStopID,
-			ExpiresAt:     expiry,
-		})
-		if err != nil {
-			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		if userRole != "TRANSPORT_ADMIN" && userRole != "SUPER_ADMIN" {
+			if trip.BusType != userRole {
+				return ErrBusTypeMismatch
+			}
+
+			if common.TextToString(trip.Status) != "OPEN" {
+				return ErrTripNotOpen
+			}
 		}
 
-		holds = append(holds, HoldTicketResponse{
-			HoldID:    hold.ID,
-			ExpiresAt: expiry,
+		rule, quotaErr := qtx.GetQuotaRule(ctx, transport_db.GetQuotaRuleParams{
+			UserRole:  userRole,
+			Direction: trip.Direction,
 		})
-	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		if quotaErr != nil {
+			if errors.Is(quotaErr, pgx.ErrNoRows) {
+				return ErrNoQuotaPolicy
+			}
+			return commonerrors.Wrap(commonerrors.ErrDatabase, quotaErr)
+		}
+
+		usage, usageErr := qtx.GetWeeklyTicketCountByDirection(ctx, transport_db.GetWeeklyTicketCountByDirectionParams{
+			UserID:    userID,
+			Direction: trip.Direction,
+		})
+
+		if usageErr != nil {
+			return commonerrors.Wrap(commonerrors.ErrDatabase, usageErr)
+		}
+
+		if (usage + int64(req.Count)) > int64(rule.WeeklyLimit) {
+			return ErrQuotaExceeded
+		}
+
+		expiry := time.Now().Add(5 * time.Minute)
+
+		for i := 0; i < req.Count; i++ {
+
+			_, deleteErr := qtx.DecreaseTripSeat(ctx, req.TripID)
+			if deleteErr != nil {
+				if errors.Is(deleteErr, pgx.ErrNoRows) {
+					return ErrTripFull
+				}
+				return commonerrors.Wrap(commonerrors.ErrDatabase, deleteErr)
+			}
+
+			hold, holdErr := qtx.CreateBlankHold(ctx, transport_db.CreateBlankHoldParams{
+				TripID:        req.TripID,
+				UserID:        userID,
+				PickupStopID:  req.PickupStopID,
+				DropoffStopID: req.DropoffStopID,
+				ExpiresAt:     expiry,
+			})
+
+			if holdErr != nil {
+				return commonerrors.Wrap(commonerrors.ErrDatabase, holdErr)
+			}
+
+			holds = append(holds, HoldTicketResponse{
+				HoldID:    hold.ID,
+				ExpiresAt: expiry,
+			})
+		}
+
+		return nil // Transaction commits here automatically
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	return &HoldSeatsResponse{Holds: holds}, nil
 }
 
 func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole string, items []ConfirmItem) (*ConfirmBatchResponse, error) {
-	tx, err := s.dbPool.Begin(ctx)
-	if err != nil {
-		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
-	defer tx.Rollback(ctx)
-	qtx := s.q.WithTx(tx)
 
-	var userWalletID, revenueWalletID uuid.UUID
-	if userRole == "STUDENT" {
-		userWallet, err := s.wallet.GetOrCreateWallet(ctx, tx, userID)
-		if err != nil {
-			return nil, err
-		}
-		userWalletID = userWallet.ID
-
-		revWallet, err := s.wallet.GetSystemWalletByName(ctx, wallet.TransportSystemWallet, wallet.SystemWalletRevenue)
-		if err != nil {
-			return nil, err
-		}
-		revenueWalletID = revWallet
+	if len(items) == 0 {
+		return &ConfirmBatchResponse{Tickets: []BookTicketResponse{}}, nil
 	}
 
 	var tickets []BookTicketResponse
+	priceCache := make(map[uuid.UUID]int32)
+	isStudent := strings.ToUpper(userRole) == "STUDENT"
 
-	for _, item := range items {
+	err := common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
+		qtx := s.q.WithTx(tx)
 
-		hold, err := qtx.GetHold(ctx, item.HoldID)
-		if err != nil {
-			return nil, ErrHoldExpired
-		}
+		var userWalletID, revenueWalletID uuid.UUID
 
-		if time.Now().After(hold.ExpiresAt) {
-			return nil, ErrHoldExpired
-		}
-
-		price, err := qtx.GetTripPrice(ctx, hold.TripID)
-
-		if err != nil {
-			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-		}
-
-		var ticketID uuid.UUID
-		for i := 0; i < 5; i++ {
-			code := GenerateRandomCode()
-			ticketID, err = qtx.ConfirmBookingWithDetails(ctx, transport_db.ConfirmBookingWithDetailsParams{
-				TripID:            hold.TripID,
-				UserID:            userID,
-				TicketCode:        code,
-				PickupStopID:      hold.PickupStopID,
-				DropoffStopID:     hold.DropoffStopID,
-				PassengerName:     item.PassengerName,
-				PassengerRelation: item.PassengerRelation,
-			})
-			if err == nil {
-				break
-			}
-		}
-		if err != nil {
-			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-		}
-
-		_ = qtx.DeleteHold(ctx, item.HoldID)
-
-		if userRole == "STUDENT" && price > 0 {
-			err = s.wallet.ExecuteTransaction(
-				ctx,
-				tx,
-				userWalletID,
-				revenueWalletID,
-				int64(price),
-				"TRANSPORT_BOOKING",
-				ticketID.String(),
-				fmt.Sprintf("Ticket for %s", item.PassengerName),
-			)
+		if isStudent {
+			userWallet, err := s.wallet.GetOrCreateWallet(ctx, tx, userID)
 			if err != nil {
-				return nil, err
+				return err
 			}
+			userWalletID = userWallet.ID
+
+			revWallet, err := s.wallet.GetSystemWalletByName(ctx, wallet.TransportSystemWallet, wallet.SystemWalletRevenue)
+			if err != nil {
+				return err
+			}
+			revenueWalletID = revWallet
 		}
 
-		tickets = append(tickets, BookTicketResponse{
-			TicketID: ticketID,
-			Status:   "CONFIRMED",
-		})
-	}
+		for _, item := range items {
 
-	if err := tx.Commit(ctx); err != nil {
-		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+			hold, err := qtx.GetHold(ctx, item.HoldID)
+			if err != nil {
+				return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+			}
+
+			if time.Now().After(hold.ExpiresAt) {
+				return ErrHoldExpired // Fails entire batch. Consider returning partial errors instead.
+			}
+
+			var price int32
+
+			if cachedPrice, exists := priceCache[hold.TripID]; exists {
+				price = cachedPrice
+			} else {
+				price, priceErr := qtx.GetTripPrice(ctx, hold.TripID)
+				if priceErr != nil {
+					return commonerrors.Wrap(commonerrors.ErrDatabase, priceErr)
+				}
+
+				priceCache[hold.TripID] = price
+			}
+
+			var ticketID uuid.UUID
+			var bookingErr error
+
+			for i := 0; i < 5; i++ {
+				code := GenerateRandomCode()
+				ticketID, bookingErr = qtx.ConfirmBookingWithDetails(ctx, transport_db.ConfirmBookingWithDetailsParams{
+					TripID:            hold.TripID,
+					UserID:            userID,
+					TicketCode:        code,
+					PickupStopID:      hold.PickupStopID,
+					DropoffStopID:     hold.DropoffStopID,
+					PassengerName:     item.PassengerName,
+					PassengerRelation: item.PassengerRelation,
+				})
+
+				if bookingErr == nil {
+					break
+				}
+
+				if !common.IsUniqueConstraintViolation(bookingErr) {
+					return commonerrors.Wrap(commonerrors.ErrDatabase, bookingErr)
+				}
+			}
+
+			if bookingErr != nil {
+				return commonerrors.Wrap(commonerrors.ErrDatabase, bookingErr)
+			}
+
+			if err := qtx.DeleteHold(ctx, item.HoldID); err != nil {
+				return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+			}
+
+			if isStudent && price > 0 {
+				err := s.wallet.ExecuteTransaction(
+					ctx,
+					tx,
+					userWalletID,
+					revenueWalletID,
+					int64(price),
+					"TRANSPORT_BOOKING",
+					ticketID.String(),
+					fmt.Sprintf("Ticket for %s", item.PassengerName),
+				)
+				if err != nil {
+					return err
+				}
+			}
+
+			tickets = append(tickets, BookTicketResponse{
+				TicketID: ticketID,
+				Status:   "CONFIRMED",
+			})
+		}
+
+		return nil
+
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
 	return &ConfirmBatchResponse{Tickets: tickets}, nil
@@ -420,25 +457,29 @@ func (s *Service) GetActiveHolds(ctx context.Context, userID uuid.UUID) ([]Activ
 }
 
 func (s *Service) ReleaseAllHolds(ctx context.Context, userID uuid.UUID) error {
-	tx, err := s.dbPool.Begin(ctx)
-	if err != nil {
-		return commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
-	defer tx.Rollback(ctx)
-	qtx := s.q.WithTx(tx)
 
-	tripIDs, err := qtx.DeleteAllActiveHoldsByUserID(ctx, userID)
-	if err != nil {
-		return commonerrors.Wrap(commonerrors.ErrDatabase, err)
-	}
+	err := common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
+		qtx := s.q.WithTx(tx)
 
-	for _, tripID := range tripIDs {
-		if err := qtx.IncrementTripSeat(ctx, tripID); err != nil {
+		tripIDs, err := qtx.DeleteAllActiveHoldsByUserID(ctx, userID)
+		if err != nil {
 			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
 		}
+
+		for _, tripID := range tripIDs {
+			if err = qtx.IncrementTripSeat(ctx, tripID); err != nil {
+				return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
 	}
 
-	return tx.Commit(ctx)
+	return nil
 }
 
 func (s *Service) CancelTicketWithRole(ctx context.Context, ticketID uuid.UUID, userRole string) error {
