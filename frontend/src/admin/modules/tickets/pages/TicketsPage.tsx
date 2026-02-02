@@ -1,27 +1,38 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { PageHeader, TableWrapper, WeekSelector, getWeekStart, getWeekEnd, formatWeekRange, PaginationControl } from '../../../shared';
 import { TicketsTable } from '../components/TicketsTable';
-import { TicketFilters } from '../components/TicketFilters';
 import { AdminTicket } from '../types';
 import { getAdminTickets } from '../service';
-import { Ticket, Download } from 'lucide-react';
+import { Download, Search, Bus, Ticket, GraduationCap, Briefcase } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
+import { Input } from '@/shared/components/ui/Input';
+import { Select } from '@/shared/components/ui/Select';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { useDebounce } from '@/shared/hooks/useDebounce';
+
+const STATUS_FILTERS = [
+    { id: 'all', label: 'All Tickets' },
+    { id: 'CONFIRMED', label: 'Confirmed' },
+    { id: 'CANCELLED', label: 'Cancelled' },
+];
 
 export const TicketsPage = () => {
     const [currentWeek, setCurrentWeek] = useState<Date>(new Date());
     const [searchTerm, setSearchTerm] = useState('');
     const [status, setStatus] = useState<string>('all');
-    const [category, setCategory] = useState<string>('all');
     const [busType, setBusType] = useState<string>('all');
 
     const [tickets, setTickets] = useState<AdminTicket[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [totalCount, setTotalCount] = useState(0);
+    const [stats, setStats] = useState({ student_count: 0, employee_count: 0, total_confirmed: 0 });
 
-    // Pagination state
+    // Pagination
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize] = useState(100);
-    const [totalCount, setTotalCount] = useState(0);
+
+    const debouncedSearch = useDebounce(searchTerm, 500);
 
     const weekStart = useMemo(() => getWeekStart(currentWeek), [currentWeek]);
     const weekEnd = useMemo(() => getWeekEnd(currentWeek), [currentWeek]);
@@ -34,73 +45,52 @@ export const TicketsPage = () => {
                 weekStart.toISOString(),
                 weekEnd.toISOString(),
                 busType,
+                status,
+                debouncedSearch,
                 currentPage,
                 pageSize
             );
             setTickets(response.data);
             setTotalCount(response.total_count);
+            if (response.stats) {
+                setStats(response.stats);
+            }
         } catch (error) {
             console.error('Failed to fetch tickets:', error);
             toast.error('Failed to load tickets');
         } finally {
             setIsLoading(false);
         }
-    }, [weekStart, weekEnd, busType, currentPage, pageSize]);
+    }, [weekStart, weekEnd, busType, status, debouncedSearch, currentPage, pageSize]);
 
     useEffect(() => {
-        fetchTickets();
+        void fetchTickets();
     }, [fetchTickets]);
 
-    // Reset to page 1 when filters change
+    // Reset page when filters change
     useEffect(() => {
         setCurrentPage(1);
-    }, [currentWeek, busType]);
+    }, [currentWeek, busType, status, debouncedSearch]);
 
-    const filteredTickets = useMemo(() => {
-        if (!searchTerm) return tickets;
-
-        return tickets.filter((ticket) => {
-            const matchesSearch =
-                ticket.ticket_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                ticket.passenger_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                ticket.user_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                ticket.user_email.toLowerCase().includes(searchTerm.toLowerCase());
-
-            return matchesSearch;
-        });
-    }, [tickets, searchTerm]);
 
     const handleExport = () => {
-        // TODO: Implement export functionality using the same filters
-        console.log('Export tickets');
         toast.info('Export functionality coming soon');
     };
 
-    // Statistics (Note: These are for the current page only in this implementation)
-    const stats = useMemo(() => {
-        return {
-            total: totalCount,
-            confirmed: tickets.filter(t => t.status === 'CONFIRMED').length, // This is misleading if only current page
-            pending: tickets.filter(t => t.status === 'PENDING').length,
-            cancelled: tickets.filter(t => t.status === 'CANCELLED').length,
-            revenue: tickets
-                .filter(t => t.status === 'CONFIRMED')
-                .reduce((sum, t) => sum + t.price, 0),
-        };
-    }, [tickets, totalCount]);
-
     return (
         <div className="space-y-6">
-            <PageHeader
-                title="Tickets Management"
-                description="View and manage tickets for the current week"
-                action={
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <PageHeader
+                    title="Tickets Management"
+                    description="Manage bookings, verify tickets, and handle cancellations."
+                />
+                <div className="flex items-center gap-3">
                     <Button variant="outline" onClick={handleExport}>
                         <Download className="w-4 h-4 mr-2" />
                         Export
                     </Button>
-                }
-            />
+                </div>
+            </div>
 
             {/* Week Selector */}
             <WeekSelector
@@ -109,105 +99,102 @@ export const TicketsPage = () => {
                 weekRange={weekRange}
             />
 
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                <SummaryCard
-                    title="Total Tickets (Week)"
-                    value={totalCount}
-                    icon={<Ticket className="w-5 h-5" />}
-                />
-                <SummaryCard
-                    title="Confirmed (Page)"
-                    value={stats.confirmed}
-                    icon={<Ticket className="w-5 h-5" />}
-                    variant="success"
-                />
-                <SummaryCard
-                    title="Pending (Page)"
-                    value={stats.pending}
-                    icon={<Ticket className="w-5 h-5" />}
-                    variant="warning"
-                />
-                <SummaryCard
-                    title="Cancelled (Page)"
-                    value={stats.cancelled}
-                    icon={<Ticket className="w-5 h-5" />}
-                    variant="danger"
-                />
-                <SummaryCard
-                    title="Revenue (Page)"
-                    value={`RS ${(stats.revenue).toLocaleString()}`}
-                    icon={<Ticket className="w-5 h-5" />}
-                    variant="info"
-                />
+            {/* Weekly Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p className="text-sm text-gray-500 font-medium">Total Confirmed (Week)</p>
+                        <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total_confirmed}</p>
+                    </div>
+                    <div className="p-3 bg-blue-50 rounded-lg">
+                        <Ticket className="w-5 h-5 text-blue-600" />
+                    </div>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p className="text-sm text-gray-500 font-medium">Student Bookings</p>
+                        <p className="text-2xl font-bold text-gray-900 mt-1">{stats.student_count}</p>
+                    </div>
+                    <div className="p-3 bg-green-50 rounded-lg">
+                        <GraduationCap className="w-5 h-5 text-green-600" />
+                    </div>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p className="text-sm text-gray-500 font-medium">Employee Bookings</p>
+                        <p className="text-2xl font-bold text-gray-900 mt-1">{stats.employee_count}</p>
+                    </div>
+                    <div className="p-3 bg-purple-50 rounded-lg">
+                        <Briefcase className="w-5 h-5 text-purple-600" />
+                    </div>
+                </div>
             </div>
 
-            {/* Filters */}
-            <TicketFilters
-                searchTerm={searchTerm}
-                onSearchChange={setSearchTerm}
-                status={status}
-                onStatusChange={setStatus}
-                category={category}
-                onCategoryChange={setCategory}
-                busType={busType}
-                onBusTypeChange={setBusType}
-            />
+            {/* Filter Bar */}
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
 
-            {/* Tickets Table */}
-            <TableWrapper count={totalCount} itemName="ticket" isLoading={isLoading}>
-                <div className="mb-4">
-                    <PaginationControl
-                        currentPage={currentPage}
-                        totalPages={Math.ceil(totalCount / pageSize)}
-                        onPageChange={setCurrentPage}
-                    />
+                {/* Left: Status Query Tabs */}
+                <div className="flex bg-gray-100 p-1 rounded-lg w-fit">
+                    {STATUS_FILTERS.map(filter => (
+                        <button
+                            key={filter.id}
+                            onClick={() => setStatus(filter.id)}
+                            className={cn(
+                                "px-4 py-2 rounded-md text-sm font-medium transition-all",
+                                status === filter.id
+                                    ? "bg-white text-primary shadow-sm"
+                                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
+                            )}
+                        >
+                            {filter.label}
+                        </button>
+                    ))}
                 </div>
-                <TicketsTable tickets={filteredTickets} />
+
+                {/* Right: Search & Bus Type */}
+                <div className="flex flex-col sm:flex-row gap-3 xl:w-auto w-full">
+                    <div className="relative flex-1 sm:w-64">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <Input
+                            placeholder="Search ticket, name, email..."
+                            className="pl-9 h-10 w-full"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="sm:w-48">
+                        <Select
+                            value={busType}
+                            onChange={setBusType}
+                            options={[
+                                { value: 'all', label: 'All Bus Types' },
+                                { value: 'student', label: 'Student' },
+                                { value: 'employee', label: 'Employee' }
+                            ]}
+                            placeholder="Bus Type"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Table Content */}
+            <TableWrapper count={totalCount} itemName="ticket" isLoading={isLoading}>
+                {/* Pagination (Top) */}
+                {totalCount > pageSize && (
+                    <div className="mb-4 flex justify-end">
+                        <PaginationControl
+                            currentPage={currentPage}
+                            totalPages={Math.ceil(totalCount / pageSize)}
+                            onPageChange={setCurrentPage}
+                        />
+                    </div>
+                )}
+
+                <TicketsTable tickets={tickets} />
+
+
             </TableWrapper>
         </div>
     );
 };
-
-const SummaryCard = ({
-    title,
-    value,
-    icon,
-    variant = 'default'
-}: {
-    title: string;
-    value: string | number;
-    icon: React.ReactNode;
-    variant?: 'default' | 'success' | 'warning' | 'danger' | 'info';
-}) => {
-    const bgColors = {
-        default: 'bg-blue-100',
-        success: 'bg-green-100',
-        warning: 'bg-yellow-100',
-        danger: 'bg-red-100',
-        info: 'bg-indigo-100',
-    };
-
-    const iconColors = {
-        default: 'text-blue-600',
-        success: 'text-green-600',
-        warning: 'text-yellow-600',
-        danger: 'text-red-600',
-        info: 'text-indigo-600',
-    };
-
-    return (
-        <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
-            <div className="flex items-center justify-between">
-                <div className="min-w-0 flex-1">
-                    <p className="text-xs sm:text-sm text-gray-600">{title}</p>
-                    <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1 truncate">{value}</p>
-                </div>
-                <div className={`p-2 sm:p-3 rounded-lg flex-shrink-0 ${bgColors[variant]}`}>
-                    <div className={iconColors[variant]}>{icon}</div>
-                </div>
-            </div>
-        </div>
-    );
-};
-

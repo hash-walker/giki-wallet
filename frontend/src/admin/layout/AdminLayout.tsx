@@ -12,7 +12,6 @@ interface AdminLayoutProps {
 // Organized navigation: Operations (Routes, Time Slots, Tickets) grouped together,
 // then Management (Users, Transactions), then History, then Settings
 const adminNavItems = [
-    { path: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     // Operations Group
     { path: '/admin/trips', label: 'Trips', icon: Bus }, // Replaces "Routes" conceptually for day-to-day
     { path: '/admin/tickets', label: 'Tickets', icon: Ticket },
@@ -21,7 +20,7 @@ const adminNavItems = [
     { path: '/admin/transactions', label: 'Transactions', icon: Receipt },
     { path: '/admin/gateway-transactions', label: 'Gateway Txns', icon: Receipt },
     // History
-    { path: '/admin/tickets/history', label: 'Ticket History', icon: History },
+
 ];
 
 export const AdminLayout = ({ children }: AdminLayoutProps) => {
@@ -40,12 +39,11 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
 
         if (user.user_type === 'TRANSPORT_ADMIN') {
             const allowedPaths = [
-                '/admin',
                 '/admin/trips',
                 '/admin/users',
                 '/admin/transactions',
                 '/admin/tickets',
-                '/admin/tickets/history',
+
             ];
             return allowedPaths.includes(item.path);
         }

@@ -20,10 +20,17 @@ export interface AdminTicket {
     refund_amount?: number;
 }
 
+export interface WeeklyStats {
+    student_count: number;
+    employee_count: number;
+    total_confirmed: number;
+}
+
 export interface AdminTicketPaginationResponse {
     data: AdminTicket[];
     total_count: number;
     page: number;
     page_size: number;
+    stats?: WeeklyStats;
 }
 
