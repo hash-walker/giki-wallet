@@ -12,11 +12,11 @@ import { toast } from 'sonner';
 import type { BookingSelection } from '../validators';
 
 // Badge component
-const Badge = ({ type, children }: { type: 'employee' | 'student' | 'full'; children: React.ReactNode }) => {
+const Badge = ({ type, children }: { type: 'EMPLOYEE' | 'STUDENT' | 'FULL'; children: React.ReactNode }) => {
     const colors = {
-        employee: 'bg-primary',
-        student: 'bg-accent',
-        full: 'bg-destructive'
+        EMPLOYEE: 'bg-primary',
+        STUDENT: 'bg-accent',
+        FULL: 'bg-destructive'
     };
     return (
         <span className={cn("px-2 py-0.5 text-white text-[0.65rem] rounded-full font-medium", colors[type])}>
@@ -90,7 +90,7 @@ export const TransportBookingCard = ({
     const [ticketCount, setTicketCount] = useState(1);
 
     // Derived flags
-    const isStudent = user?.user_type === 'student';
+    const isStudent = user?.user_type === 'STUDENT';
 
     // Filter trips by direction
     const filteredTrips = useMemo(() => {
@@ -306,12 +306,12 @@ export const TransportBookingCard = ({
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-1.5">
                                 {currentTrip.bus_type && (
-                                    <Badge type={currentTrip.bus_type.toLowerCase() as any}>
+                                    <Badge type={currentTrip.bus_type as any}>
                                         {currentTrip.bus_type}
                                     </Badge>
                                 )}
                                 <span className="text-[10px] font-bold text-gray-500 uppercase">{currentTrip.route_name}</span>
-                                {isFull && <Badge type="full">Full</Badge>}
+                                {isFull && <Badge type="FULL">Full</Badge>}
                             </div>
                             <Availability isFull={isFull} tickets={currentTrip.available_seats} />
                         </div>
@@ -375,12 +375,12 @@ export const TransportBookingCard = ({
                     {hasCompleteSelection && currentTrip ? (
                         <div className="flex items-center gap-1.5 flex-wrap justify-center">
                             {currentTrip.bus_type && (
-                                <Badge type={currentTrip.bus_type.toLowerCase() as any}>
+                                <Badge type={currentTrip.bus_type as any}>
                                     {currentTrip.bus_type}
                                 </Badge>
                             )}
                             <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">{currentTrip.route_name}</span>
-                            {isFull && <Badge type="full">Full</Badge>}
+                            {isFull && <Badge type="FULL">Full</Badge>}
                         </div>
                     ) : (
                         <span className="text-xs text-gray-400">--</span>

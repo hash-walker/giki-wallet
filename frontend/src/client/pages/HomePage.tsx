@@ -15,12 +15,12 @@ export const HomePage = () => {
 
     return (
         <div className="space-y-6">
-            {user && user.user_type !== 'employee' && (
+            {user && user.user_type !== 'EMPLOYEE' && (
                 <div className="mt-6">
                     <WalletPage />
                 </div>
             )}
-            <TripSummaryTile/>
+            <TripSummaryTile />
             <ServiceTiles onTransportClick={openTransport} />
         </div>
     );

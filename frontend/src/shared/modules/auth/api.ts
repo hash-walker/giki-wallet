@@ -5,7 +5,7 @@ export type SignUpPayload = {
     email: string;
     phone_number: string;
     password: string;
-    user_type: 'student' | 'employee';
+    user_type: 'STUDENT' | 'EMPLOYEE';
     reg_id: string; // Required for students, empty string for employees
 };
 
@@ -20,7 +20,7 @@ export type AuthResponse = {
     name: string;
     email: string;
     phone_number?: string;
-    user_type: 'student' | 'employee';
+    user_type: 'STUDENT' | 'EMPLOYEE' | 'SUPER_ADMIN' | 'TRANSPORT_ADMIN' | 'FINANCE_ADMIN';
     auth?: {
         access_token: string;
         refresh_token: string;

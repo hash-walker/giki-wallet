@@ -10,7 +10,7 @@ import {
     type AuthResponse,
 } from '@/shared/modules/auth/api';
 
-export type AuthUserType = 'student' | 'employee' | 'SUPER_ADMIN' | 'TRANSPORT_ADMIN' | 'FINANCE_ADMIN';
+export type AuthUserType = 'STUDENT' | 'EMPLOYEE' | 'SUPER_ADMIN' | 'TRANSPORT_ADMIN' | 'FINANCE_ADMIN';
 
 export type AuthUser = {
     id: string;

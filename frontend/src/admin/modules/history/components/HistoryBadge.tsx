@@ -8,12 +8,13 @@ interface BadgeProps {
 
 export const Badge = ({ type, value, category }: BadgeProps) => {
     if (type === 'busType') {
-        const styles = {
-            Student: 'bg-accent/10 text-accent',
-            Employee: 'bg-primary/10 text-primary',
+        const valueUpper = value.toUpperCase();
+        const styles: Record<string, string> = {
+            STUDENT: 'bg-accent/10 text-accent',
+            EMPLOYEE: 'bg-primary/10 text-primary',
         };
         return (
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[value as keyof typeof styles] || 'bg-gray-100 text-gray-800'}`}>
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[valueUpper] || 'bg-gray-100 text-gray-800'}`}>
                 {value}
             </span>
         );
@@ -50,16 +51,15 @@ export const Badge = ({ type, value, category }: BadgeProps) => {
     }
 
     if (type === 'ticketCategory') {
-        const styles = {
-            employee: 'bg-primary/10 text-primary',
-            family: 'bg-purple-100 text-purple-800',
-            student: 'bg-accent/10 text-accent',
-            Employee: 'bg-primary/10 text-primary',
-            Student: 'bg-accent/10 text-accent',
+        const valueUpper = value.toUpperCase();
+        const styles: Record<string, string> = {
+            EMPLOYEE: 'bg-primary/10 text-primary',
+            FAMILY: 'bg-purple-100 text-purple-800',
+            STUDENT: 'bg-accent/10 text-accent',
         };
         const label = value.toLowerCase();
         return (
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[value as keyof typeof styles] || 'bg-gray-100 text-gray-800'}`}>
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[valueUpper] || 'bg-gray-100 text-gray-800'}`}>
                 {label.charAt(0).toUpperCase() + label.slice(1)}
             </span>
         );

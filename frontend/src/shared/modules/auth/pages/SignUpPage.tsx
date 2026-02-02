@@ -26,7 +26,7 @@ export const SignUpPage = () => {
         mode: 'onTouched',
         reValidateMode: 'onChange',
         defaultValues: {
-            userType: 'student',
+            userType: 'STUDENT',
             name: '',
             email: '',
             phoneNumber: '',
@@ -39,14 +39,14 @@ export const SignUpPage = () => {
     const email = useWatch({ control, name: 'email' });
 
     const studentRegId = useMemo(() => {
-        if (userType !== 'student') return null;
+        if (userType !== 'STUDENT') return null;
         return extractStudentRegIdFromEmail(email);
     }, [email, userType]);
 
     const onSubmit = async (data: SignUpFormData) => {
-        const regId = data.userType === 'student' ? extractStudentRegIdFromEmail(data.email) : '';
-        
-        if (data.userType === 'student' && !regId) {
+        const regId = data.userType === 'STUDENT' ? extractStudentRegIdFromEmail(data.email) : '';
+
+        if (data.userType === 'STUDENT' && !regId) {
             toast.error('Student email must look like u2022661@giki.edu.pk');
             return;
         }
@@ -60,7 +60,7 @@ export const SignUpPage = () => {
                 user_type: data.userType,
                 reg_id: regId || '',
             });
-            if (data.userType === 'student') {
+            if (data.userType === 'STUDENT') {
                 toast.success('Account created. Please check your email to verify, then sign in.');
             } else {
                 toast.success('Account created. Your account may require approval before you can sign in.');
@@ -89,17 +89,17 @@ export const SignUpPage = () => {
                 <div className="grid grid-cols-2 gap-2 mb-6">
                     <Button
                         type="button"
-                        variant={userType === 'student' ? 'default' : 'outline'}
+                        variant={userType === 'STUDENT' ? 'default' : 'outline'}
                         className="font-semibold"
-                        onClick={() => setValue('userType', 'student', { shouldValidate: true })}
+                        onClick={() => setValue('userType', 'STUDENT', { shouldValidate: true })}
                     >
                         Student
                     </Button>
                     <Button
                         type="button"
-                        variant={userType === 'employee' ? 'default' : 'outline'}
+                        variant={userType === 'EMPLOYEE' ? 'default' : 'outline'}
                         className="font-semibold"
-                        onClick={() => setValue('userType', 'employee', { shouldValidate: true })}
+                        onClick={() => setValue('userType', 'EMPLOYEE', { shouldValidate: true })}
                     >
                         Employee
                     </Button>
@@ -108,7 +108,7 @@ export const SignUpPage = () => {
                 <form className="space-y-4" onSubmit={handleSubmit(onSubmit)} noValidate>
                     <Input
                         label="Full name"
-                        placeholder="Your full name"
+                        placeholder="Your full name e.g Hamza Faraz"
                         autoComplete="name"
                         {...register('name')}
                         error={errors.name?.message}
@@ -117,13 +117,13 @@ export const SignUpPage = () => {
                     <Input
                         label="Email"
                         type="email"
-                        placeholder={userType === 'student' ? 'u2022661@giki.edu.pk' : 'you@company.com'}
+                        placeholder={userType === 'STUDENT' ? 'u2022661@giki.edu.pk' : 'u2022661@giki.edu.pk'}
                         autoComplete="email"
                         {...register('email')}
                         error={errors.email?.message}
                     />
 
-                    {userType === 'student' && (
+                    {userType === 'STUDENT' && (
                         <div className="text-xs text-gray-600 -mt-2">
                             Reg ID:{' '}
                             <span className="font-semibold text-gray-900">

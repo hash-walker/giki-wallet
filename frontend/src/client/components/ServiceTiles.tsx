@@ -53,7 +53,7 @@ export const ServiceTiles = ({ onTransportClick }: { onTransportClick?: () => vo
                 },
             ];
 
-            if (user?.user_type === 'employee') {
+            if (user?.user_type === 'EMPLOYEE') {
                 return allTiles.filter(t => t.key !== 'topup');
             }
             return allTiles;

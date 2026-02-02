@@ -51,7 +51,7 @@ export const TransportPage = () => {
 
     // console.log('👤 User info:', { user, user_type: user?.user_type });
 
-    const isStudent = user?.user_type?.toLowerCase() === 'student';
+    const isStudent = user?.user_type === 'STUDENT';
     // const isEmployee = user?.user_type?.toLowerCase() === 'employee';
 
     const handleBook = async (selection: BookingSelection) => {

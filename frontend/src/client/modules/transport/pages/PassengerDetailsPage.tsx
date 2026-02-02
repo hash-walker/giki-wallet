@@ -56,7 +56,7 @@ export const PassengerDetailsPage = () => {
         return p && p.name && (p.relation === 'SELF' || !!p.relation);
     });
 
-    const isStudent = user?.user_type?.toLowerCase() === 'student';
+    const isStudent = user?.user_type === 'STUDENT';
 
     // Prepare data for Confirmation Modal (logic copied from TransportPage)
     const getTripSummary = (selection: BookingSelection | null): TripSummary | null => {

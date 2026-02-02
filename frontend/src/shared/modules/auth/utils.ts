@@ -1,4 +1,4 @@
-export type AuthUserType = 'student' | 'employee';
+export type AuthUserType = 'STUDENT' | 'EMPLOYEE';
 
 export function extractStudentRegIdFromEmail(email: string): string | null {
     const normalized = email.trim().toLowerCase();

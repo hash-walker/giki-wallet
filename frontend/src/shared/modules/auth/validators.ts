@@ -18,7 +18,7 @@ export type SignInFormData = z.infer<typeof signInSchema>;
 
 export const signUpSchema = z
     .object({
-        userType: z.enum(['student', 'employee']),
+        userType: z.enum(['STUDENT', 'EMPLOYEE']),
         name: z.string().optional(),
         email: z.string().min(1, 'Email is required').email('Please enter a valid email address'),
         phoneNumber: phoneSchema,
@@ -38,7 +38,7 @@ export const signUpSchema = z
             ctx.addIssue({ code: 'custom', path: ['confirmPassword'], message: 'Passwords do not match' });
         }
 
-        if (data.userType === 'student') {
+        if (data.userType === 'STUDENT') {
             if (extractStudentRegIdFromEmail(data.email) === null) {
                 ctx.addIssue({
                     code: 'custom',

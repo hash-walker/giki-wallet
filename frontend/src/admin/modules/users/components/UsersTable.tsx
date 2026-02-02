@@ -13,23 +13,29 @@ interface UsersTableProps {
 }
 
 const getRoleBadge = (role: string) => {
-    const roleLower = role.toLowerCase();
+    // Standardize input for robustness, but map keys should match expected uppercase
+    const roleUpper = role.toUpperCase();
     const styles: Record<string, string> = {
-        student: 'bg-blue-100 text-blue-800',
-        employee: 'bg-green-100 text-green-800',
-        admin: 'bg-purple-100 text-purple-800',
+        STUDENT: 'bg-blue-100 text-blue-800',
+        EMPLOYEE: 'bg-green-100 text-green-800',
+        ADMIN: 'bg-purple-100 text-purple-800',
+        TRANSPORT_ADMIN: 'bg-purple-100 text-purple-800',
+        FINANCE_ADMIN: 'bg-purple-100 text-purple-800',
+        SUPER_ADMIN: 'bg-purple-100 text-purple-800',
     };
 
     const labels: Record<string, string> = {
-        student: 'Student',
-        employee: 'Employee',
-        transport_admin: 'Admin',
-        admin: 'Admin',
+        STUDENT: 'Student',
+        EMPLOYEE: 'Employee',
+        TRANSPORT_ADMIN: 'Transport Admin',
+        FINANCE_ADMIN: 'Finance Admin',
+        SUPER_ADMIN: 'Super Admin',
+        ADMIN: 'Admin',
     };
 
     return (
-        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[roleLower] || 'bg-gray-100 text-gray-800'}`}>
-            {labels[roleLower] || role}
+        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[roleUpper] || 'bg-gray-100 text-gray-800'}`}>
+            {labels[roleUpper] || role}
         </span>
     );
 };
