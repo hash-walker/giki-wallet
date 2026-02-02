@@ -95,15 +95,17 @@ export const TransportBookingCard = ({
     // Filter trips by direction
     const filteredTrips = useMemo(() => {
         if (!allTrips.length) return [];
+
         const filtered = allTrips.filter(trip => {
             const isOutbound = trip.direction.toUpperCase() === 'OUTBOUND';
-            if (direction === 'OUTBOUND') return isOutbound;
-            return !isOutbound;
-        });
+            const matchesDirection = direction === 'OUTBOUND' ? isOutbound : !isOutbound;
 
-        if (filtered.length > 0) {
-            console.log('🚌 Filtered trips:', filtered.length);
-        }
+            if (!matchesDirection) return false;
+
+            if (trip.status !== 'OPEN') return false;
+
+            return true;
+        });
 
         return filtered;
     }, [allTrips, direction]);
@@ -182,15 +184,10 @@ export const TransportBookingCard = ({
     // Handlers
     // Helper to determine if we should auto-release
     const shouldReleaseOnUpdate = () => {
-        // If no holds, nothing to release
         if (activeHolds.length === 0) return false;
 
-        // If strictly single trip mode (not round trip), ANY hold is a conflict when changing selection
         if (!isRoundTrip) return true;
 
-        // If Round Trip mode:
-        // Only release if we have a hold for THIS direction.
-        // If we have a hold for the OTHER direction, we should preserve it.
         const hasHoldForThisDirection = activeHolds.some(h =>
             h.direction?.toUpperCase() === direction
         );
