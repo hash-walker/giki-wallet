@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react'; // You already added this
 import { useTransportStore } from '../store';
 import { formatDateTime } from '../utils';
 import { TicketCard } from '../components/TicketCard';
+import { TicketCardSkeleton } from '../components/TicketCardSkeleton';
 import { Loader2 } from 'lucide-react';
 import { MyTicket } from '../validators';
 
@@ -83,10 +84,16 @@ export const TicketsPage = () => {
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
                     <h2 className="text-lg font-bold text-gray-900">Your Schedule</h2>
-                    {loading && <Loader2 className="animate-spin text-gray-400" size={16} />}
+                    {loading && <span className="text-xs text-gray-400 font-medium animate-pulse">Syncing...</span>}
                 </div>
 
-                {upcomingTickets.length === 0 ? (
+                {loading && upcomingTickets.length === 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {[1, 2, 3].map((i) => (
+                            <TicketCardSkeleton key={i} />
+                        ))}
+                    </div>
+                ) : upcomingTickets.length === 0 ? (
                     <div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
                         <p className="text-gray-500">No upcoming trips scheduled.</p>
                     </div>

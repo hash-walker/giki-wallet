@@ -10,6 +10,7 @@ import { getGIKIStopObject, formatTime, formatDate } from '../utils';
 import type { Trip } from '../validators';
 import { toast } from 'sonner';
 import type { BookingSelection } from '../validators';
+import { TransportBookingSkeleton } from './TransportBookingSkeleton';
 
 // Badge component
 const Badge = ({ type, children }: { type: 'EMPLOYEE' | 'STUDENT' | 'FULL'; children: React.ReactNode }) => {
@@ -280,7 +281,7 @@ export const TransportBookingCard = ({
     const stopLabel = direction === 'OUTBOUND' ? "Drop Location" : "Pickup Point";
     const routeLabel = "Route";
 
-    if (loading) return <div className="p-8 text-center text-gray-400">Loading schedules...</div>;
+    if (loading) return <TransportBookingSkeleton />;
 
     return (
         <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-200 hover:shadow-md transition-all duration-300">
