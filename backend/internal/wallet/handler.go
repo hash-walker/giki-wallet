@@ -54,3 +54,51 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 
 	common.ResponseWithJSON(w, http.StatusOK, res, requestID)
 }
+
+func (h *Handler) GetAdminTransactions(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	// 1. Bind Request Params (Struct-Based)
+	var params common.AdminFinanceListParams
+	if err := params.Bind(r); err != nil {
+		appErr := commonerrors.New("INVALID_REQUEST", http.StatusBadRequest, err.Error())
+		middleware.HandleError(w, appErr, requestID)
+		return
+	}
+
+	// 3. Get Data (Using params fields)
+	history, total, err := h.service.GetAdminRevenueTransactions(
+		r.Context(),
+		params.Page,
+		params.PageSize,
+		params.StartDate,
+		params.EndDate,
+	)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	stats, err := h.service.GetWeeklyStats(
+		r.Context(),
+		params.StartDate,
+		params.EndDate,
+	)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	// 4. Construct Response
+	response := map[string]interface{}{
+		"data": history,
+		"meta": map[string]interface{}{
+			"page":          params.Page,
+			"page_size":     params.PageSize,
+			"total_records": total,
+			"weekly_stats":  stats,
+		},
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, response, requestID)
+}

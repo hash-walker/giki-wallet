@@ -134,5 +134,7 @@ func (s *Server) MountRoutes() {
 			r.Get("/", s.Payment.ListGatewayTransactions)
 			r.Post("/{txnRefNo}/verify", s.Payment.VerifyGatewayTransaction)
 		})
+
+		r.Get("/finance/transactions", s.Wallet.GetAdminTransactions)
 	})
 }

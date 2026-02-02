@@ -18,13 +18,15 @@ SELECT
 
     rms.default_sequence_order,
     rms.is_default_active
+
 FROM giki_transport.routes as r
-         JOIN giki_transport.route_master_stops as rms ON r.id = rms.route_id
-         JOIN giki_transport.stops as s ON rms.stop_id = s.id
+JOIN giki_transport.route_master_stops as rms ON r.id = rms.route_id
+JOIN giki_transport.stops as s ON rms.stop_id = s.id
 WHERE r.id = $1
 ORDER BY rms.default_sequence_order ASC;
 
 -- name: GetRouteWeeklySchedule :many
+
 SELECT id, route_id, day_of_week, departure_time, created_at
 FROM giki_transport.route_weekly_schedules
 WHERE route_id = $1
@@ -384,11 +386,12 @@ SELECT
         )::BOOLEAN AS is_cancellable
 
 FROM giki_transport.tickets t
-         JOIN giki_transport.trip tr ON t.trip_id = tr.id
-         JOIN giki_transport.routes r ON tr.route_id = r.id
-         JOIN giki_transport.stops sp ON t.pickup_stop_id = sp.id
-         JOIN giki_transport.stops sd ON t.dropoff_stop_id = sd.id
+JOIN giki_transport.trip tr ON t.trip_id = tr.id
+JOIN giki_transport.routes r ON tr.route_id = r.id
+JOIN giki_transport.stops sp ON t.pickup_stop_id = sp.id
+JOIN giki_transport.stops sd ON t.dropoff_stop_id = sd.id
 WHERE t.user_id = $1
+AND tr.departure_time > (NOW() - INTERVAL '3 hours')
 ORDER BY tr.departure_time DESC;
 
 -- name: GetUpcomingTripsForWeek :many

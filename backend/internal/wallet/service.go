@@ -263,6 +263,55 @@ func (s *Service) GetWalletHistory(ctx context.Context, walletID uuid.UUID, page
 	}, nil
 }
 
+func (s *Service) GetAdminRevenueTransactions(ctx context.Context, page, pageSize int, startDate, endDate time.Time) ([]wallet.GetAdminRevenueTransactionsRow, int64, error) {
+	// 1. Get Revenue Wallet ID
+	revWalletID, err := s.GetSystemWalletByName(ctx, TransportSystemWallet, SystemWalletRevenue)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+
+	// 2. Fetch Transactions with User Info
+	txns, err := s.q.GetAdminRevenueTransactions(ctx, wallet.GetAdminRevenueTransactionsParams{
+		WalletID:  revWalletID,
+		StartDate: startDate,
+		EndDate:   endDate,
+		Limit:     int32(pageSize),
+		Offset:    int32(offset),
+	})
+	if err != nil {
+		return nil, 0, commonerrors.Wrap(ErrDatabase, err)
+	}
+
+	var totalCount int64 = 0
+	if len(txns) > 0 {
+		totalCount = txns[0].TotalCount
+	} else {
+		txns = []wallet.GetAdminRevenueTransactionsRow{}
+	}
+
+	return txns, totalCount, nil
+}
+
+func (s *Service) GetWeeklyStats(ctx context.Context, startDate, endDate time.Time) (*wallet.GetWeeklyWalletStatsRow, error) {
+	revWalletID, err := s.GetSystemWalletByName(ctx, TransportSystemWallet, SystemWalletRevenue)
+	if err != nil {
+		return nil, err
+	}
+
+	stats, err := s.q.GetWeeklyWalletStats(ctx, wallet.GetWeeklyWalletStatsParams{
+		WalletID:  revWalletID,
+		StartDate: startDate,
+		EndDate:   endDate,
+	})
+	if err != nil {
+		return nil, commonerrors.Wrap(ErrDatabase, err)
+	}
+
+	return &stats, nil
+}
+
 func (s *Service) GetSystemWalletByName(ctx context.Context, walletName SystemWalletName, walletType SystemWalletType) (uuid.UUID, error) {
 
 	walletQ := s.q

@@ -56,3 +56,36 @@ WHERE l.wallet_id = $1
 ORDER BY l.created_at DESC
 LIMIT $2 OFFSET $3;
 
+-- name: GetAdminRevenueTransactions :many
+SELECT
+    l.id,
+    l.amount,
+    l.created_at,
+    l.balance_after,
+    t.type,
+    t.description,
+    t.reference_id,
+
+    u.name as user_name,
+    u.email as user_email,
+    COUNT(*) OVER() as total_count
+FROM giki_wallet.ledger l
+JOIN giki_wallet.transactions t ON l.transaction_id = t.id
+LEFT JOIN giki_wallet.ledger other_side ON t.id = other_side.transaction_id AND other_side.id != l.id
+LEFT JOIN giki_wallet.wallets w ON other_side.wallet_id = w.id
+LEFT JOIN giki_wallet.users u ON w.user_id = u.id
+WHERE l.wallet_id = $1
+  AND l.created_at >= sqlc.arg('start_date')
+  AND l.created_at <= sqlc.arg('end_date')
+ORDER BY l.created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: GetWeeklyWalletStats :one
+SELECT
+    COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0)::BIGINT as total_income,
+    COALESCE(SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END), 0)::BIGINT as total_refunds,
+    COUNT(*) as transaction_count
+FROM giki_wallet.ledger
+WHERE wallet_id = $1
+  AND created_at >= sqlc.arg('start_date')
+  AND created_at <= sqlc.arg('end_date');
