@@ -1,0 +1,15 @@
+{{template "base" .}}
+
+{{define "body"}}
+<h2>Account Approved!</h2>
+<p>Asalam-o-Alaikum <strong>{{.Name}}</strong>,</p>
+<p>Good news! Your GIKI Employee account has been verified and approved by the administration.</p>
+<p>Please click the button below to verify your email and activate your account.</p>
+
+<div style="text-align: center;">
+    <a href="{{.Link}}" class="button">Verify My Account</a>
+</div>
+
+<p>Or copy this link:<br><small>{{.Link}}</small></p>
+<p>This link expires in 48 hours.</p>
+{{end}}
