@@ -71,13 +71,15 @@ interface TransportBookingCardProps {
     allTrips: Trip[];
     onBook?: (selection: BookingSelection) => void;
     loading?: boolean;
+    quota?: { outbound: { remaining: number }; inbound: { remaining: number } } | null;
 }
 
 export const TransportBookingCard = ({
     direction,
     allTrips,
     onBook,
-    loading = false
+    loading = false,
+    quota
 }: TransportBookingCardProps) => {
     const navigate = useNavigate();
     const { user } = useAuthStore();
@@ -255,7 +257,23 @@ export const TransportBookingCard = ({
 
     const isFull = currentTrip ? (currentTrip.available_seats <= 0 || currentTrip.status === 'FULL') : false;
     const isScheduled = currentTrip?.status === 'SCHEDULED';
-    const maxTickets = Math.min(3, currentTrip?.available_seats || 0);
+
+    // Max Tickets Logic:
+    // 1. Hard Role Limit (Student=1, Employee=3 via TicketSelect which handles role check too, but let's be safe)
+    // 2. Bus Capacity (available_seats)
+    // 3. Quota Remaining (Dynamic)
+    const directionKey = direction === 'OUTBOUND' ? 'outbound' : 'inbound';
+    const quotaRemaining = quota ? quota[directionKey].remaining : 3; // Default to 3 if loading? Or maybe 0?
+
+    // We act conservative. If no quota loaded, assume max possible (wait for hydration? or let TicketSelect cap it?)
+    // Actually, store initializes as null. Let's default to full allowance if API hasn't loaded to avoid flickering '0'.
+
+    const maxTickets = Math.min(
+        3,
+        currentTrip?.available_seats || 0,
+        quotaRemaining
+    );
+
     const hasCompleteSelection = !!(selectedRouteId && selectedTripId && selectedStopId && currentTrip);
 
     // Labels

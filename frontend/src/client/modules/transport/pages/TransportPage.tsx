@@ -169,6 +169,7 @@ export const TransportPage = () => {
                     onDirectionChange={setDirection}
                     isRoundTrip={isRoundTrip}
                     onRoundTripChange={setRoundTrip}
+                    quota={useTransportStore.getState().quota}
                 />
 
                 <div className="space-y-4">
@@ -180,6 +181,7 @@ export const TransportPage = () => {
                         allTrips={allTrips}
                         onBook={handleBook}
                         loading={tripsLoading}
+                        quota={useTransportStore.getState().quota}
                     />
                 </div>
             </div>
