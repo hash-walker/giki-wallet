@@ -1,27 +1,59 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
-import { ClientLayout } from '@/client/layout/ClientLayout';
-import { AdminLayout, TicketsPage as AdminTicketsPage, UsersPage, TransactionsPage, GatewayTransactionsPage, HistoryPage, CreateTripPage, TripsPage, WorkerStatusPage, SystemLogsPage, SettingsPage } from '@/admin';
-import { AdminProtectedRoute } from '@/admin/components/AdminProtectedRoute';
-import { HomePage } from '@/client/pages/HomePage';
-import { TransportPage } from '@/client/modules/transport/pages/TransportPage';
-import TopUpPage from '@/client/modules/wallet/pages/TopUpPage';
-import PaymentResultPage from '@/client/modules/wallet/pages/PaymentResultPage';
-
-import { TicketsPage } from '@/client/modules/transport/pages/TicketsPage';
-import BookingConfirmationPage from '@/client/modules/transport/pages/BookingConfirmationPage';
-import PassengerDetailsPage from '@/client/modules/transport/pages/PassengerDetailsPage';
-import { AccountPage } from '@/shared/modules/auth/pages/AccountPage';
 import { Toaster } from '@/shared/components/ui/sonner';
-import { AuthLayout, SignInPage, SignUpPage, VerifyEmailPage, ForgotPasswordPage, ResetPasswordPage, RequireAuth } from '@/shared/modules/auth';
 import { useAuthStore } from '@/shared/stores/authStore';
+
+// Layout components (Keep static as they are small and always needed)
+import { ClientLayout } from '@/client/layout/ClientLayout';
+import { AdminLayout } from '@/admin';
+import { AuthLayout, RequireAuth } from '@/shared/modules/auth';
+import { AdminProtectedRoute } from '@/admin/components/AdminProtectedRoute';
+
+// Admin Lazy loaded components
+const AdminTicketsPage = lazy(() => import('@/admin').then(m => ({ default: m.TicketsPage })));
+const UsersPage = lazy(() => import('@/admin').then(m => ({ default: m.UsersPage })));
+const TransactionsPage = lazy(() => import('@/admin').then(m => ({ default: m.TransactionsPage })));
+const GatewayTransactionsPage = lazy(() => import('@/admin').then(m => ({ default: m.GatewayTransactionsPage })));
+const HistoryPage = lazy(() => import('@/admin').then(m => ({ default: m.HistoryPage })));
+const CreateTripPage = lazy(() => import('@/admin').then(m => ({ default: m.CreateTripPage })));
+const TripsPage = lazy(() => import('@/admin').then(m => ({ default: m.TripsPage })));
+const WorkerStatusPage = lazy(() => import('@/admin').then(m => ({ default: m.WorkerStatusPage })));
+const SystemLogsPage = lazy(() => import('@/admin').then(m => ({ default: m.SystemLogsPage })));
+const SettingsPage = lazy(() => import('@/admin').then(m => ({ default: m.SettingsPage })));
+
+// Client Lazy loaded components
+const HomePage = lazy(() => import('@/client/pages/HomePage').then(m => ({ default: m.HomePage })));
+const TransportPage = lazy(() => import('@/client/modules/transport/pages/TransportPage').then(m => ({ default: m.TransportPage })));
+const TopUpPage = lazy(() => import('@/client/modules/wallet/pages/TopUpPage'));
+const PaymentResultPage = lazy(() => import('@/client/modules/wallet/pages/PaymentResultPage'));
+const TicketsPage = lazy(() => import('@/client/modules/transport/pages/TicketsPage').then(m => ({ default: m.TicketsPage })));
+const BookingConfirmationPage = lazy(() => import('@/client/modules/transport/pages/BookingConfirmationPage'));
+const PassengerDetailsPage = lazy(() => import('@/client/modules/transport/pages/PassengerDetailsPage'));
+
+// Shared Lazy loaded components
+const AccountPage = lazy(() => import('@/shared/modules/auth/pages/AccountPage').then(m => ({ default: m.AccountPage })));
+const SignInPage = lazy(() => import('@/shared/modules/auth').then(m => ({ default: m.SignInPage })));
+const SignUpPage = lazy(() => import('@/shared/modules/auth').then(m => ({ default: m.SignUpPage })));
+const VerifyEmailPage = lazy(() => import('@/shared/modules/auth').then(m => ({ default: m.VerifyEmailPage })));
+const ForgotPasswordPage = lazy(() => import('@/shared/modules/auth').then(m => ({ default: m.ForgotPasswordPage })));
+const ResetPasswordPage = lazy(() => import('@/shared/modules/auth').then(m => ({ default: m.ResetPasswordPage })));
+
+const SuspenseLayout = ({ children }: { children: React.ReactNode }) => (
+    <Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+    </div>}>
+        {children}
+    </Suspense>
+);
 
 const router = createBrowserRouter([
     {
         path: '/auth/sign-in',
         element: (
             <AuthLayout>
-                <SignInPage />
+                <SuspenseLayout>
+                    <SignInPage />
+                </SuspenseLayout>
             </AuthLayout>
         ),
     },
@@ -29,7 +61,9 @@ const router = createBrowserRouter([
         path: '/auth/sign-up',
         element: (
             <AuthLayout>
-                <SignUpPage />
+                <SuspenseLayout>
+                    <SignUpPage />
+                </SuspenseLayout>
             </AuthLayout>
         ),
     },
@@ -37,7 +71,9 @@ const router = createBrowserRouter([
         path: '/auth/verify',
         element: (
             <AuthLayout>
-                <VerifyEmailPage />
+                <SuspenseLayout>
+                    <VerifyEmailPage />
+                </SuspenseLayout>
             </AuthLayout>
         ),
     },
@@ -45,7 +81,9 @@ const router = createBrowserRouter([
         path: '/auth/forgot-password',
         element: (
             <AuthLayout>
-                <ForgotPasswordPage />
+                <SuspenseLayout>
+                    <ForgotPasswordPage />
+                </SuspenseLayout>
             </AuthLayout>
         ),
     },
@@ -53,7 +91,9 @@ const router = createBrowserRouter([
         path: '/auth/reset-password',
         element: (
             <AuthLayout>
-                <ResetPasswordPage />
+                <SuspenseLayout>
+                    <ResetPasswordPage />
+                </SuspenseLayout>
             </AuthLayout>
         ),
     },
@@ -61,7 +101,9 @@ const router = createBrowserRouter([
         path: '/reset-password',
         element: (
             <AuthLayout>
-                <ResetPasswordPage />
+                <SuspenseLayout>
+                    <ResetPasswordPage />
+                </SuspenseLayout>
             </AuthLayout>
         ),
     },
@@ -69,7 +111,9 @@ const router = createBrowserRouter([
         path: '/verify',
         element: (
             <AuthLayout>
-                <VerifyEmailPage />
+                <SuspenseLayout>
+                    <VerifyEmailPage />
+                </SuspenseLayout>
             </AuthLayout>
         ),
     },
@@ -77,7 +121,9 @@ const router = createBrowserRouter([
         path: '/admin/signin',
         element: (
             <AuthLayout>
-                <SignInPage />
+                <SuspenseLayout>
+                    <SignInPage />
+                </SuspenseLayout>
             </AuthLayout>
         ),
     },
@@ -85,7 +131,9 @@ const router = createBrowserRouter([
         path: '/',
         element: (
             <ClientLayout>
-                <HomePage />
+                <SuspenseLayout>
+                    <HomePage />
+                </SuspenseLayout>
             </ClientLayout>
         ),
     },
@@ -99,15 +147,15 @@ const router = createBrowserRouter([
         children: [
             {
                 index: true,
-                element: <TransportPage />,
+                element: <SuspenseLayout><TransportPage /></SuspenseLayout>,
             },
             {
                 path: 'confirm',
-                element: <BookingConfirmationPage />,
+                element: <SuspenseLayout><BookingConfirmationPage /></SuspenseLayout>,
             },
             {
                 path: 'passengers',
-                element: <PassengerDetailsPage />,
+                element: <SuspenseLayout><PassengerDetailsPage /></SuspenseLayout>,
             },
         ],
     },
@@ -121,7 +169,7 @@ const router = createBrowserRouter([
         children: [
             {
                 index: true,
-                element: <TopUpPage />,
+                element: <SuspenseLayout><TopUpPage /></SuspenseLayout>,
             },
         ],
     },
@@ -133,10 +181,10 @@ const router = createBrowserRouter([
             </ClientLayout>
         ),
         children: [
-            { path: 'success', element: <PaymentResultPage /> },
-            { path: 'failed', element: <PaymentResultPage /> },
-            { path: 'error', element: <PaymentResultPage /> },
-            { path: 'pending', element: <PaymentResultPage /> },
+            { path: 'success', element: <SuspenseLayout><PaymentResultPage /></SuspenseLayout> },
+            { path: 'failed', element: <SuspenseLayout><PaymentResultPage /></SuspenseLayout> },
+            { path: 'error', element: <SuspenseLayout><PaymentResultPage /></SuspenseLayout> },
+            { path: 'pending', element: <SuspenseLayout><PaymentResultPage /></SuspenseLayout> },
         ],
     },
     {
@@ -149,7 +197,7 @@ const router = createBrowserRouter([
         children: [
             {
                 index: true,
-                element: <TicketsPage />,
+                element: <SuspenseLayout><TicketsPage /></SuspenseLayout>,
             },
         ],
     },
@@ -163,7 +211,7 @@ const router = createBrowserRouter([
         children: [
             {
                 index: true,
-                element: <AccountPage />,
+                element: <SuspenseLayout><AccountPage /></SuspenseLayout>,
             },
         ],
     },
@@ -181,44 +229,44 @@ const router = createBrowserRouter([
             },
             {
                 path: '/admin/trips',
-                element: <TripsPage />,
+                element: <SuspenseLayout><TripsPage /></SuspenseLayout>,
             },
             {
                 path: '/admin/tickets',
-                element: <AdminTicketsPage />,
+                element: <SuspenseLayout><AdminTicketsPage /></SuspenseLayout>,
             },
 
             {
                 path: '/admin/users',
-                element: <UsersPage />,
+                element: <SuspenseLayout><UsersPage /></SuspenseLayout>,
             },
             {
                 path: '/admin/transactions',
-                element: <TransactionsPage />,
+                element: <SuspenseLayout><TransactionsPage /></SuspenseLayout>,
             },
             {
                 path: '/admin/gateway-transactions',
-                element: <GatewayTransactionsPage />,
+                element: <SuspenseLayout><GatewayTransactionsPage /></SuspenseLayout>,
             },
             {
                 path: '/admin/history',
-                element: <HistoryPage />,
+                element: <SuspenseLayout><HistoryPage /></SuspenseLayout>,
             },
             {
                 path: '/admin/trips/new',
-                element: <CreateTripPage />,
+                element: <SuspenseLayout><CreateTripPage /></SuspenseLayout>,
             },
             {
                 path: '/admin/system',
-                element: <WorkerStatusPage />,
+                element: <SuspenseLayout><WorkerStatusPage /></SuspenseLayout>,
             },
             {
                 path: '/admin/logs',
-                element: <SystemLogsPage />,
+                element: <SuspenseLayout><SystemLogsPage /></SuspenseLayout>,
             },
             {
                 path: '/admin/settings',
-                element: <SettingsPage />,
+                element: <SuspenseLayout><SettingsPage /></SuspenseLayout>,
             },
         ],
     },

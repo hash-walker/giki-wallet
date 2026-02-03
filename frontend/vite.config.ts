@@ -18,5 +18,21 @@ export default defineConfig({
             '/admin': 'http://localhost:8080',
             '/booking': 'http://localhost:8080',
         }
+    },
+    build: {
+        chunkSizeWarningLimit: 1000,
+        rollupOptions: {
+            output: {
+                manualChunks(id) {
+                    if (id.includes('node_modules')) {
+                        if (id.includes('react')) return 'vendor-react';
+                        if (id.includes('lucide-react')) return 'vendor-icons';
+                        if (id.includes('axios')) return 'vendor-utils';
+                        if (id.includes('zustand')) return 'vendor-store';
+                        return 'vendor';
+                    }
+                }
+            }
+        }
     }
 })

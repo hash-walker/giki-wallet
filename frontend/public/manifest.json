@@ -1,0 +1,15 @@
+{
+    "short_name": "GIKI Wallet",
+    "name": "GIKI Wallet",
+    "icons": [
+        {
+            "src": "logo.svg",
+            "type": "image/svg+xml",
+            "sizes": "any"
+        }
+    ],
+    "start_url": ".",
+    "display": "standalone",
+    "theme_color": "#2563EB",
+    "background_color": "#ffffff"
+}
