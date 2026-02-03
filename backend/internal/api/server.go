@@ -110,6 +110,7 @@ func (s *Server) MountRoutes() {
 
 		r.Get("/trips", s.Transport.HandleWeeklyTrips)
 		r.Post("/trips", s.Transport.CreateTrip)
+		r.Put("/trips/{trip_id}", s.Transport.UpdateTrip)
 		r.Delete("/trips/{trip_id}", s.Transport.DeleteTrip)
 		r.Patch("/trips/{id}/status", s.Transport.UpdateTripManualStatus)
 		r.Patch("/trips/batch-status", s.Transport.BatchUpdateTripManualStatus)

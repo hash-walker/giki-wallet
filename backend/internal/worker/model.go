@@ -38,3 +38,12 @@ type TicketConfirmedPayload struct {
 	TotalPrice int            `json:"total_price"`
 	Tickets    []TicketDetail `json:"tickets"`
 }
+
+type TicketCancelledPayload struct {
+	Email        string `json:"email"`
+	UserName     string `json:"user_name"`
+	TicketCode   string `json:"ticket_code"`
+	RouteName    string `json:"route_name"`
+	RefundAmount int    `json:"refund_amount"`
+	Reason       string `json:"reason"`
+}

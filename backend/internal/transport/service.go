@@ -21,6 +21,7 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/wallet"
 	"github.com/hash-walker/giki-wallet/internal/worker"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -102,8 +103,11 @@ func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.U
 		return uuid.Nil, commonerrors.ErrInvalidInput
 	}
 
-	var tripID uuid.UUID
+	if req.BookingOpenOffsetHours <= req.BookingCloseOffsetHours {
+		return uuid.Nil, commonerrors.New(commonerrors.ErrInvalidInput.Code, commonerrors.ErrInvalidInput.StatusCode, "booking open offset must be greater than close offset")
+	}
 
+	var tripID uuid.UUID
 	err := common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
 		qtx := s.q.WithTx(tx)
 
@@ -147,6 +151,44 @@ func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.U
 	return tripID, nil
 }
 
+func (s *Service) UpdateTrip(ctx context.Context, tripID uuid.UUID, req CreateTripRequest) error {
+	if req.TotalCapacity <= 0 {
+		return commonerrors.ErrInvalidInput
+	}
+	if req.BasePrice < 0 {
+		return commonerrors.ErrInvalidInput
+	}
+	if req.BookingOpenOffsetHours <= req.BookingCloseOffsetHours {
+		return commonerrors.New(commonerrors.ErrInvalidInput.Code, commonerrors.ErrInvalidInput.StatusCode, "booking open offset must be greater than close offset")
+	}
+
+	// Check if new capacity is valid against sold tickets
+	soldCount, err := s.q.GetTripBookingCount(ctx, tripID)
+	if err != nil {
+		return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	if int64(req.TotalCapacity) < soldCount {
+		return commonerrors.New(commonerrors.ErrConflict.Code, commonerrors.ErrConflict.StatusCode, fmt.Sprintf("cannot reduce capacity below sold tickets count (%d)", soldCount))
+	}
+
+	err = s.q.UpdateTrip(ctx, transport_db.UpdateTripParams{
+		ID:                      tripID,
+		DepartureTime:           req.DepartureTime,
+		BookingOpenOffsetHours:  req.BookingOpenOffsetHours,
+		BookingCloseOffsetHours: req.BookingCloseOffsetHours,
+		TotalCapacity:           int32(req.TotalCapacity),
+		BasePrice:               common.AmountToLowestUnit(req.BasePrice),
+		BusType:                 req.BusType,
+	})
+
+	if err != nil {
+		return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	return nil
+}
+
 func (s *Service) DeleteTrip(ctx context.Context, tripID uuid.UUID) error {
 	count, err := s.q.GetTripBookingCount(ctx, tripID)
 	if err != nil {
@@ -157,7 +199,14 @@ func (s *Service) DeleteTrip(ctx context.Context, tripID uuid.UUID) error {
 		return ErrTripHasBookings
 	}
 
-	return s.q.DeleteTrip(ctx, tripID)
+	if err := s.q.DeleteTrip(ctx, tripID); err != nil {
+		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
+			return commonerrors.New(commonerrors.ErrConflict.Code, commonerrors.ErrConflict.StatusCode, "Cannot delete trip: dependent records exist (e.g. holds/stops). Please cancel instead.")
+		}
+		return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	return nil
 }
 
 // =============================================================================
@@ -835,6 +884,18 @@ func (s *Service) CancelTrip(ctx context.Context, tripID uuid.UUID) error {
 			)
 			if err != nil {
 				return commonerrors.Wrap(ErrRefundFailed, err)
+			}
+
+			userEmailInfo, err := s.q.GetUserEmailAndName(ctx, ticket.UserID)
+			if err == nil {
+				_ = s.worker.Enqueue(ctx, "SEND_TICKET_CANCELLED", worker.TicketCancelledPayload{
+					Email:        userEmailInfo.Email,
+					UserName:     userEmailInfo.Name,
+					TicketCode:   ticket.TicketCode,
+					RouteName:    ticket.RouteName,
+					RefundAmount: int(ticket.BasePrice),
+					Reason:       "Administrative Cancellation",
+				})
 			}
 		}
 

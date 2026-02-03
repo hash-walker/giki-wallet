@@ -1,0 +1,31 @@
+{{ extends "base.html" }}
+
+{{ block "content" }}
+<div class="email-container">
+    <div class="header">
+        <h1>Trip Cancelled</h1>
+    </div>
+    <div class="content">
+        <p>Dear {{ .UserName }},</p>
+        <p>We regret to inform you that your trip has been cancelled by the administration.</p>
+
+        <div class="details-box"
+            style="background-color: #fff5f5; border: 1px solid #fed7d7; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <p><strong>Route:</strong> {{ .RouteName }}</p>
+            <p><strong>Ticket Code:</strong> {{ .TicketCode }}</p>
+            {{ if .Reason }}
+            <p><strong>Reason:</strong> {{ .Reason }}</p>
+            {{ end }}
+        </div>
+
+        {{ if gt .RefundAmount 0 }}
+        <p>A full refund of <strong>PKR {{ .RefundAmount }}</strong> has been credited to your GIKI Wallet.</p>
+        {{ end }}
+
+        <p>We apologize for any inconvenience caused.</p>
+    </div>
+    <div class="footer">
+        <p>&copy; 2024 GIKI Transport Service. All rights reserved.</p>
+    </div>
+</div>
+{{ end }}

@@ -110,6 +110,8 @@ func (w *JobWorker) processNextJob(ctx context.Context) {
 		processErr = w.handleEmployeeRejected(job.Payload)
 	case "SEND_TICKET_CONFIRMATION":
 		processErr = w.handleTicketConfirmation(job.Payload)
+	case "SEND_TICKET_CANCELLED":
+		processErr = w.handleTicketCancelled(job.Payload)
 	default:
 		log.Printf("Unknown job type: %s", job.JobType)
 		processErr = fmt.Errorf("unknown job type")
@@ -170,4 +172,13 @@ func (w *JobWorker) handleTicketConfirmation(payload json.RawMessage) error {
 	}
 
 	return w.mailer.SendTemplate(data.Email, "Booking Confirmation", "ticket_confirmed.html", data)
+}
+
+func (w *JobWorker) handleTicketCancelled(payload json.RawMessage) error {
+	var data TicketCancelledPayload
+	if err := json.Unmarshal(payload, &data); err != nil {
+		return err
+	}
+
+	return w.mailer.SendTemplate(data.Email, "Trip Cancellation Notice", "ticket_cancelled.html", data)
 }

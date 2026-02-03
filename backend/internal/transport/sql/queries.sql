@@ -419,6 +419,7 @@ WHERE id = ANY($1::uuid[]);
 SELECT 
     t.id as ticket_id,
     t.user_id,
+    t.ticket_code,
     t.passenger_name,
     tr.base_price,
     r.name as route_name

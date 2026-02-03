@@ -116,6 +116,31 @@ func (h *Handler) DeleteTrip(w http.ResponseWriter, r *http.Request) {
 	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"status": "deleted"}, requestID)
 }
 
+func (h *Handler) UpdateTrip(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	tripIDParam := chi.URLParam(r, "trip_id")
+	tripID, err := uuid.Parse(tripIDParam)
+	if err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidInput, err), requestID)
+		return
+	}
+
+	var req CreateTripRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidJSON, err), requestID)
+		return
+	}
+
+	err = h.service.UpdateTrip(r.Context(), tripID, req)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"status": "updated"}, requestID)
+}
+
 func (h *Handler) AdminGetRevenueTransactions(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
 
