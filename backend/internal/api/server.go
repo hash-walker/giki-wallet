@@ -76,6 +76,9 @@ func (s *Server) MountRoutes() {
 	r.Post("/auth/refresh", s.Auth.RefreshToken)
 	r.Post("/auth/signout", s.Auth.Logout)
 	r.Get("/auth/verify", s.Auth.VerifyEmail)
+	r.With(middleware.RateLimit(1, 3)).Post("/auth/forgot-password", s.Auth.ForgotPassword)
+	r.With(middleware.RateLimit(1, 3)).Post("/auth/reset-password", s.Auth.ResetPassword)
+	r.With(s.Auth.Authenticate).Get("/auth/me", s.Auth.Me)
 	r.With(s.Auth.Authenticate).Get("/auth/me", s.Auth.Me)
 
 	r.Route("/payment", func(r chi.Router) {

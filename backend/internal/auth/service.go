@@ -3,9 +3,12 @@ package auth
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -17,6 +20,7 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/common"
 	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
 	"github.com/hash-walker/giki-wallet/internal/user/user_db"
+	"github.com/hash-walker/giki-wallet/internal/worker"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -27,14 +31,16 @@ type Service struct {
 	userQ     *user_db.Queries
 	authQ     *auth.Queries
 	dbPool    *pgxpool.Pool
+	jobs      *worker.JobWorker
 	jwtSecret string
 }
 
-func NewService(dbPool *pgxpool.Pool, jwtSecret string) *Service {
+func NewService(dbPool *pgxpool.Pool, jwtSecret string, jobs *worker.JobWorker) *Service {
 	return &Service{
 		authQ:     auth.New(dbPool),
 		userQ:     user_db.New(dbPool),
 		dbPool:    dbPool,
+		jobs:      jobs,
 		jwtSecret: jwtSecret,
 	}
 }
@@ -103,14 +109,11 @@ func (s *Service) VerifyEmailAndIssueTokens(ctx context.Context, token string) (
 
 		userQ := s.userQ.WithTx(tx)
 
-		// 4. Mark user as verified
 		_, err = userQ.UpdateUserVerification(ctx, u.UserID)
 		if err != nil {
 			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
 		}
 
-		// 5. Verification successful, issue response
-		// Re-fetch full user for token issuance
 		user, err := userQ.GetUserAuthByID(ctx, u.UserID)
 		if err != nil {
 			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
@@ -292,7 +295,6 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*Token
 			return ErrRefreshTokenExpired
 		}
 
-		// 3. Get User
 		user, err := s.userQ.WithTx(tx).GetUserAuthByID(ctx, rt.UserID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -332,4 +334,121 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*Token
 func sha256Hex(s string) string {
 	sum := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(sum[:])
+}
+
+func (s *Service) RequestPasswordReset(ctx context.Context, email string) error {
+	// 1. Check if user exists and is active
+	user, err := s.userQ.GetUserAuthByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Fail silently to prevent account enumeration
+			return nil
+		}
+		return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	if !user.IsActive {
+		return nil // Non-active users can't reset password
+	}
+
+	// 2. Generate secure token
+	token, err := generateBase64Token(32)
+	if err != nil {
+		return commonerrors.Wrap(commonerrors.ErrInternal, err)
+	}
+
+	tokenHash := sha256Hex(token)
+	expiresAt := time.Now().UTC().Add(1 * time.Hour)
+
+	// 3. Save hashed token to DB
+	_, err = s.authQ.CreateAccessToken(ctx, auth.CreateAccessTokenParams{
+		TokenHash: tokenHash,
+		UserID:    user.ID,
+		Type:      "PASSWORD_RESET",
+		ExpiresAt: expiresAt,
+	})
+	if err != nil {
+		return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	// 4. Enqueue Email Job
+	forgotBase := os.Getenv("FRONTEND_FORGOT_URL")
+	if forgotBase == "" {
+		forgotBase = "https://giktransport.giki.edu.pk/reset-password"
+	}
+
+	_ = s.jobs.Enqueue(ctx, "SEND_PASSWORD_RESET_EMAIL", worker.PasswordResetPayload{
+		Email: user.Email,
+		Name:  user.Name,
+		Link:  fmt.Sprintf("%s?token=%s", forgotBase, token),
+	})
+
+	return nil
+}
+
+func (s *Service) ResetPassword(ctx context.Context, token, newPassword string) error {
+	tokenHash := sha256Hex(token)
+
+	err := common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
+		authQ := s.authQ.WithTx(tx)
+		userQ := s.userQ.WithTx(tx)
+
+		// 1. Verify token
+		t, err := authQ.GetUserByTokenHash(ctx, tokenHash)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrInvalidVerificationToken
+			}
+			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
+
+		if t.Type != "PASSWORD_RESET" {
+			return ErrInvalidVerificationToken
+		}
+
+		if time.Now().UTC().After(t.ExpiresAt.UTC()) {
+			return ErrVerificationTokenExpired
+		}
+
+		// 2. Hash new password
+		hashedPassword, err := HashPassword(newPassword)
+		if err != nil {
+			return commonerrors.Wrap(commonerrors.ErrInternal, err)
+		}
+
+		// 3. Update user
+		_, err = userQ.UpdateUserPassword(ctx, user_db.UpdateUserPasswordParams{
+			ID:           t.UserID,
+			PasswordHash: hashedPassword,
+		})
+		if err != nil {
+			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
+
+		// 4. Delete token
+		err = authQ.DeleteAccessToken(ctx, tokenHash)
+		if err != nil {
+			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
+
+		return nil
+	})
+
+	return err
+}
+
+func generateBase64Token(n int) (string, error) {
+	b := make([]byte, n)
+	if _, err := io.ReadFull(rand.Reader, b); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
+}
+
+func HashPassword(password string) (string, error) {
+	hashPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hashPassword), nil
 }

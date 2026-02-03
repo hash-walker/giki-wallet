@@ -29,6 +29,12 @@ type AccountCreatedPayload struct {
 	Password string `json:"password"`
 }
 
+type PasswordResetPayload struct {
+	Email string `json:"email"`
+	Name  string `json:"name"`
+	Link  string `json:"link"`
+}
+
 type TicketDetail struct {
 	SerialNo      string `json:"serial_no"`
 	TicketCode    string `json:"ticket_code"`

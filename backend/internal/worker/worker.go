@@ -126,6 +126,8 @@ func (w *JobWorker) processNextJob(ctx context.Context) {
 		processErr = w.handleTicketCancelled(job.Payload)
 	case "SEND_ACCOUNT_CREATED_EMAIL":
 		processErr = w.handleAccountCreated(job.Payload)
+	case "SEND_PASSWORD_RESET_EMAIL":
+		processErr = w.handlePasswordReset(job.Payload)
 	default:
 		log.Printf("Unknown job type: %s", job.JobType)
 		processErr = fmt.Errorf("unknown job type")
@@ -204,6 +206,15 @@ func (w *JobWorker) handleAccountCreated(payload json.RawMessage) error {
 	}
 
 	return w.mailer.SendTemplate(data.Email, "Welcome to GIKI Transport", "account_created.html", data)
+}
+
+func (w *JobWorker) handlePasswordReset(payload json.RawMessage) error {
+	var data PasswordResetPayload
+	if err := json.Unmarshal(payload, &data); err != nil {
+		return err
+	}
+
+	return w.mailer.SendTemplate(data.Email, "Reset Your GIKI Password", "reset_password.html", data)
 }
 func (w *JobWorker) GetStatus(ctx context.Context) (map[string]interface{}, error) {
 	stats, err := w.q.GetJobStats(ctx)

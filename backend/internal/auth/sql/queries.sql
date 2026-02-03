@@ -24,3 +24,12 @@ UPDATE giki_wallet.refresh_tokens
 SET revoked_at = NOW(), updated_at = NOW()
 WHERE user_id = $1 AND revoked_at IS NULL;
 
+-- name: CreateAccessToken :one
+INSERT INTO giki_wallet.access_tokens(token_hash, user_id, type, expires_at)
+VALUES ($1, $2, $3, $4)
+RETURNING *;
+
+-- name: DeleteAccessToken :exec
+DELETE FROM giki_wallet.access_tokens
+WHERE token_hash = $1;
+

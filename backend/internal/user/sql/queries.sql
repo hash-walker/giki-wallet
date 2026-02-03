@@ -90,4 +90,8 @@ RETURNING id, name, email, phone_number, auth_provider, external_id, is_active, 
 DELETE FROM giki_wallet.users
 WHERE id = $1;
 
-
+-- name: UpdateUserPassword :one
+UPDATE giki_wallet.users
+SET password_hash = $2, updated_at = NOW()
+WHERE id = $1
+RETURNING id, name, email, phone_number, is_active, is_verified, user_type, created_at, updated_at;

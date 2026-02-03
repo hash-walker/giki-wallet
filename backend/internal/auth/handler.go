@@ -230,3 +230,43 @@ func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		Tokens: *tokenPair,
 	}), requestID)
 }
+
+func (h *Handler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+	var req struct {
+		Email string `json:"email"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidJSON, err), requestID)
+		return
+	}
+
+	if err := h.service.RequestPasswordReset(r.Context(), req.Email); err != nil {
+		// We still log this event for security monitoring
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"message": "If an account exists with that email, a password reset link has been sent."}, requestID)
+}
+
+func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+	var req struct {
+		Token    string `json:"token"`
+		Password string `json:"password"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidJSON, err), requestID)
+		return
+	}
+
+	if err := h.service.ResetPassword(r.Context(), req.Token, req.Password); err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"message": "Password has been reset successfully."}, requestID)
+}

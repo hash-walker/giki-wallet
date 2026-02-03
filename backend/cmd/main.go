@@ -79,7 +79,7 @@ func main() {
 	auditService := audit.NewService(pool)
 	userService := user.NewService(pool, newWorker)
 	userHandler := user.NewHandler(userService, auditService)
-	authService := auth.NewService(pool, cfg.Secrets.JWTSecret)
+	authService := auth.NewService(pool, cfg.Secrets.JWTSecret, newWorker)
 	authHandler := auth.NewHandler(authService, auditService)
 	auditHandler := audit.NewHandler(auditService)
 	walletService := wallet.NewService(pool, cfg.Secrets.LedgerSecret)

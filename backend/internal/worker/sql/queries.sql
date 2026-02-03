@@ -23,11 +23,11 @@ WHERE id = $1;
 
 -- name: FailJob :exec
 UPDATE giki_wallet.jobs
-SET status = 'FAILED',
+SET status = CASE WHEN retry_count < max_retries THEN 'PENDING'::text ELSE 'FAILED'::text END,
     last_error = $2,
     retry_count = retry_count + 1,
     run_at = CASE
-        WHEN retry_count < max_retries THEN NOW() + INTERVAL '1 minute' -- Retry logic
+        WHEN retry_count < max_retries THEN NOW() + INTERVAL '1 minute'
         ELSE run_at
     END,
     updated_at = NOW()
