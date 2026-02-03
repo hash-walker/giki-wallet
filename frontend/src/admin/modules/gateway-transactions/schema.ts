@@ -11,6 +11,9 @@ export const gatewayTransactionSchema = z.object({
     created_at: z.string(),
     updated_at: z.string(),
     bill_ref_id: z.string().optional().nullable(),
+    gateway_message: z.string().optional().nullable(),
+    gateway_status_code: z.string().optional().nullable(),
+
 });
 
 export const updateGatewayTransactionStatusSchema = z.object({

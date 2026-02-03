@@ -378,7 +378,7 @@ func (s *Service) enqueueAccountCreationJob(ctx context.Context, token string, r
 	case auth.RoleStudent:
 		verifyBase := os.Getenv("FRONTEND_VERIFY_URL")
 		if verifyBase == "" {
-			verifyBase = "https://giktransport@giki.edu.pk/verify"
+			verifyBase = "https://giktransport.giki.edu.pk/verify"
 		}
 		if token == "" {
 			return commonerrors.Wrap(commonerrors.ErrInternal, errors.New("missing verification token"))

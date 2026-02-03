@@ -179,10 +179,13 @@ func (h *Handler) ListGatewayTransactions(w http.ResponseWriter, r *http.Request
 			Amount:        fmt.Sprintf("%d", txn.Amount),
 			Status:        PaymentStatus(txn.Status),
 			PaymentMethod: PaymentMethod(txn.PaymentMethod),
-			CreatedAt:     txn.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:     txn.UpdatedAt.Format(time.RFC3339),
-			BillRefID:     txn.BillRefID,
+			CreatedAt:         txn.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:         txn.UpdatedAt.Format(time.RFC3339),
+			BillRefID:         txn.BillRefID,
+			GatewayMessage:    txn.GatewayMessage.String,
+			GatewayStatusCode: txn.GatewayStatusCode.String,
 		}
+
 	}
 
 	common.ResponseWithJSON(w, http.StatusOK, map[string]interface{}{

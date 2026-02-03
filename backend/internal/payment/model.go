@@ -121,9 +121,12 @@ type AdminGatewayTransaction struct {
 	Status        PaymentStatus `json:"status"`
 	PaymentMethod PaymentMethod `json:"payment_method"`
 	CreatedAt     string        `json:"created_at"`
-	UpdatedAt     string        `json:"updated_at"`
-	BillRefID     string        `json:"bill_ref_id,omitempty"`
+	UpdatedAt         string        `json:"updated_at"`
+	BillRefID         string        `json:"bill_ref_id,omitempty"`
+	GatewayMessage    string        `json:"gateway_message,omitempty"`
+	GatewayStatusCode string        `json:"gateway_status_code,omitempty"`
 }
+
 
 type UpdateGatewayStatusRequest struct {
 	Status PaymentStatus `json:"status"`

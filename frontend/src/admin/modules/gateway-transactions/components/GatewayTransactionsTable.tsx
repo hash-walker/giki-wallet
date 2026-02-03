@@ -37,9 +37,18 @@ export const GatewayTransactionsTable = ({
             </div>,
             <span key="method" className="text-sm capitalize">{txn.payment_method}</span>,
             <span key="amount" className="text-sm font-medium">
-                {parseInt(txn.amount).toLocaleString()} G-Bux
+                {(parseInt(txn.amount) / 100.0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} PKR
             </span>,
-            <StatusBadge key="status" status={txn.status} />,
+
+            <div key="status" className="flex flex-col">
+                <StatusBadge status={txn.status} />
+                {txn.gateway_message && (
+                    <span className="text-[10px] text-gray-400 mt-1 max-w-[150px] truncate" title={txn.gateway_message}>
+                        {txn.gateway_message}
+                    </span>
+                )}
+            </div>,
+
             <span key="date" className="text-sm text-gray-500">
                 {format(new Date(txn.created_at), 'MMM d, yyyy HH:mm')}
             </span>,
@@ -53,7 +62,7 @@ export const GatewayTransactionsTable = ({
                 >
                     <Eye className="w-4 h-4" />
                 </Button>
-                {txn.status !== 'COMPLETED' && (
+                {txn.status !== 'SUCCESS' && (
                     <Button
                         size="sm"
                         variant="ghost"
@@ -66,6 +75,7 @@ export const GatewayTransactionsTable = ({
                         Verify
                     </Button>
                 )}
+
             </div>,
         ],
     }));
@@ -81,11 +91,13 @@ export const GatewayTransactionsTable = ({
 
 const StatusBadge = ({ status }: { status: string }) => {
     const styles: Record<string, string> = {
+        SUCCESS: 'bg-green-100 text-green-800',
         COMPLETED: 'bg-green-100 text-green-800',
         PENDING: 'bg-yellow-100 text-yellow-800',
         FAILED: 'bg-red-100 text-red-800',
         UNKNOWN: 'bg-gray-100 text-gray-800',
     };
+
 
     return (
         <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status] || styles.UNKNOWN}`}>

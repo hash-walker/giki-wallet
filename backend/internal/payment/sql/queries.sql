@@ -4,7 +4,15 @@ VALUES ($1, $2,$3,$4, $5, $6, $7)
 RETURNING *;
 
 -- name: UpdateGatewayTransactionStatus :exec
-UPDATE giki_wallet.gateway_transactions SET status = $1 WHERE txn_ref_no = $2;
+UPDATE giki_wallet.gateway_transactions 
+SET status = sqlc.arg('status')::current_status, 
+    gateway_message = sqlc.narg('gateway_message'), 
+    gateway_status_code = sqlc.narg('gateway_status_code'),
+    updated_at = NOW()
+WHERE txn_ref_no = sqlc.arg('txn_ref_no');
+
+
+
 
 -- name: GetByIdempotencyKey :one
 
@@ -74,9 +82,13 @@ SELECT
     gt.created_at,
     gt.updated_at,
     gt.bill_ref_id,
+    gt.gateway_message,
+    gt.gateway_status_code,
+
     COUNT(*) OVER() as total_count,
-    SUM(gt.amount) OVER() as total_amount
+    SUM(CASE WHEN gt.status = 'SUCCESS' THEN gt.amount ELSE 0 END) OVER() as total_amount
 FROM giki_wallet.gateway_transactions gt
+
 JOIN giki_wallet.users u ON gt.user_id = u.id
 WHERE 
     (COALESCE(sqlc.narg('status')::text, '') = '' OR gt.status::text = sqlc.narg('status')::text)
@@ -98,9 +110,11 @@ LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: ForceUpdateGatewayTransactionStatus :one
 UPDATE giki_wallet.gateway_transactions
-SET status = $1
-WHERE txn_ref_no = $2
+SET status = sqlc.arg('status')::current_status
+WHERE txn_ref_no = sqlc.arg('txn_ref_no')
 RETURNING *;
+
+
 
 -- name: GetGatewayTransactionsForExport :many
 SELECT 
@@ -113,8 +127,14 @@ SELECT
     gt.payment_method,
     gt.created_at,
     gt.updated_at,
-    gt.bill_ref_id
+    gt.bill_ref_id,
+    gt.gateway_message,
+    gt.gateway_status_code,
+
+    COUNT(*) OVER() as total_count,
+    SUM(CASE WHEN gt.status = 'SUCCESS' THEN gt.amount ELSE 0 END) OVER() as total_amount
 FROM giki_wallet.gateway_transactions gt
+
 JOIN giki_wallet.users u ON gt.user_id = u.id
 WHERE 
     (COALESCE(sqlc.narg('status')::text, '') = '' OR gt.status::text = sqlc.narg('status')::text)
@@ -137,3 +157,21 @@ ORDER BY gt.created_at DESC;
 SELECT * FROM giki_wallet.payment_audit_log
 WHERE txn_ref_no = $1
 ORDER BY received_at DESC;
+
+-- name: GetGatewayTransactionByRefDetailed :one
+SELECT 
+    gt.txn_ref_no,
+    gt.user_id,
+    u.name as user_name,
+    u.email as user_email,
+    gt.amount,
+    gt.status,
+    gt.payment_method,
+    gt.created_at,
+    gt.updated_at,
+    gt.bill_ref_id,
+    gt.gateway_message,
+    gt.gateway_status_code
+FROM giki_wallet.gateway_transactions gt
+JOIN giki_wallet.users u ON gt.user_id = u.id
+WHERE gt.txn_ref_no = $1;

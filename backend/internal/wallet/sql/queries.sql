@@ -14,10 +14,16 @@ SELECT * FROM giki_wallet.wallets
 WHERE id = $1
     FOR NO KEY UPDATE;
 
+-- name: GetTransactionHeaderByTypeAndRef :one
+SELECT * FROM giki_wallet.transactions
+WHERE type = $1 AND reference_id = $2;
+
 -- name: CreateTransactionHeader :one
 INSERT INTO giki_wallet.transactions(type, reference_id, description)
 VALUES ($1, $2, $3)
 RETURNING id, created_at;
+
+
 
 -- name: CreateLedgerEntry :one
 

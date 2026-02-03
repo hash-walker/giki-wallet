@@ -120,17 +120,17 @@ const JazzCashPayment: React.FC<JazzCashPaymentProps> = ({
                                 </div>
                                 <div className="text-left">
                                     <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-0.5">
-                                        {status === 'initiating' ? 'Security Handshake' : 'Action Required'}
+                                        {status === 'initiating' ? 'Requesting' : 'Action Required'}
                                     </p>
                                     <p className="text-sm font-bold text-gray-900">
-                                        {status === 'initiating' ? 'Establishing Secure Tunnel...' : 'Check your phone now'}
+                                        {status === 'initiating' ? 'Sending Payment Request...' : 'Payment Request Sent'}
                                     </p>
                                 </div>
                             </div>
                             <p className="text-[11px] text-gray-500 mt-4 leading-relaxed font-medium pl-14">
                                 {status === 'initiating'
-                                    ? "We are verifying your account details via encrypted channel..."
-                                    : `A secure MPIN prompt has been sent to ${phoneNumber}. Please authorize RS ${amount}.`}
+                                    ? "We're sending a payment request to your JazzCash app. Please keep your phone ready."
+                                    : `A secure MPIN prompt has been sent to ${phoneNumber}. Please authorize RS ${amount} on your phone now.`}
                             </p>
                         </div>
 
@@ -138,7 +138,7 @@ const JazzCashPayment: React.FC<JazzCashPaymentProps> = ({
                             {status === 'initiating' ? (
                                 <>
                                     <Loader2 className="w-3 h-3 animate-spin" />
-                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] italic text-gray-400">Connecting...</span>
+                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] italic text-gray-400">Processing...</span>
                                 </>
                             ) : (
                                 <div className="px-3 py-1 bg-primary/10 rounded-full flex items-center gap-2">

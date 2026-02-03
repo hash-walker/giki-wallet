@@ -75,7 +75,8 @@ export const AuditLogModal = ({ txnRefNo, onClose }: AuditLogModalProps) => {
                 </div>
             ) : (
                 <div className="space-y-4">
-                    {logs.map((log) => (
+                    {(logs || []).map((log) => (
+
                         <div key={log.id} className="border rounded-lg p-4 bg-gray-50 text-sm">
                             <div className="flex justify-between items-start mb-2">
                                 <span className="font-semibold px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">

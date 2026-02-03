@@ -274,9 +274,12 @@ func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.
 	paymentStatus := GatewayStatusToPaymentStatus(callback.Status)
 
 	err = paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
-		Status:   payment.CurrentStatus(paymentStatus),
-		TxnRefNo: callback.TxnRefNo,
+		Status:            payment.CurrentStatus(paymentStatus),
+		TxnRefNo:          callback.TxnRefNo,
+		GatewayMessage:    pgtype.Text{String: callback.Message, Valid: true},
+		GatewayStatusCode: pgtype.Text{String: callback.ResponseCode, Valid: true},
 	})
+
 
 	if err != nil {
 		return nil, commonerrors.Wrap(ErrTransactionUpdate, err)
@@ -288,8 +291,12 @@ func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.
 	case PaymentStatusSuccess:
 		err = s.creditWalletFromPayment(ctx, tx, gatewayTxn.UserID, gatewayTxn.Amount, gatewayTxn.TxnRefNo)
 		if err != nil {
+			if errors.Is(err, ErrIdempotentSuccess) {
+				return MapCardCallbackToTopUpResult(gatewayTxn, callback), nil
+			}
 			return nil, err
 		}
+
 		s.MarkAuditProcessed(ctx, auditID)
 	}
 	if err != nil {
@@ -489,71 +496,28 @@ func (s *Service) checkTransactionStatus(
 	paymentStatus := GatewayStatusToPaymentStatus(inquiryResult.Status)
 
 	switch paymentStatus {
-	case PaymentStatusSuccess:
-
-		tx, err := s.dbPool.Begin(ctx)
-		if err != nil {
-			return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
-		}
-		defer tx.Rollback(ctx) // Will rollback if commit doesn't happen
-
-		paymentQ := s.q.WithTx(tx)
-
-		// Update status in DB
-		err = paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
-			Status:   payment.CurrentStatus(paymentStatus),
-			TxnRefNo: existing.TxnRefNo,
-		})
-		if err != nil {
-			return nil, commonerrors.Wrap(ErrTransactionUpdate, err)
-		}
-
-		// Credit wallet (must succeed or transaction rolls back)
-		// NOTE: Storing atomic units (Paisas) in DB. Read layer handles conversion.
-		err = s.creditWalletFromPayment(ctx, tx, existing.UserID, existing.Amount, existing.TxnRefNo)
-
-		if err != nil {
-			if errors.Is(err, ErrIdempotentSuccess) {
-				return MapInquiryToTopUpResult(existing, *inquiryResult), nil
+	case PaymentStatusSuccess, PaymentStatusFailed:
+		success, finalizeErr := s.finalizeTransaction(ctx, existing.TxnRefNo, inquiryResult)
+		if !success && paymentStatus == PaymentStatusSuccess {
+			if finalizeErr != nil {
+				err := commonerrors.Wrap(ErrTransactionUpdate, fmt.Errorf("failed to finalize success transaction: %w", finalizeErr))
+				err = err.WithDetails("internal_error", finalizeErr.Error())
+				return nil, err
 			}
-			return nil, err
 		}
 
-		if err := tx.Commit(ctx); err != nil {
-			return nil, commonerrors.Wrap(commonerrors.ErrTransactionCommit, err)
-		}
 
-		return MapInquiryToTopUpResult(existing, *inquiryResult), nil
-
-	case PaymentStatusFailed:
-		// Update DB status to FAILED
-		err = s.q.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
-			Status:   payment.CurrentStatus(PaymentStatusFailed),
-			TxnRefNo: existing.TxnRefNo,
-		})
-		if err != nil {
-			return nil, commonerrors.Wrap(ErrTransactionUpdate, err)
-		}
 
 		return MapInquiryToTopUpResult(existing, *inquiryResult), nil
 
 	case PaymentStatusPending, PaymentStatusUnknown:
-		// Check timeout
 		if time.Since(existing.CreatedAt) > 120*time.Second {
-			err := s.q.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
-				Status:   payment.CurrentStatus(PaymentStatusFailed),
-				TxnRefNo: existing.TxnRefNo,
-			})
-			if err != nil {
-				return nil, commonerrors.Wrap(ErrTransactionUpdate, err)
-			}
-
+			s.finalizeTransaction(ctx, existing.TxnRefNo, inquiryResult)
 			result := MapInquiryToTopUpResult(existing, *inquiryResult)
 			result.Status = PaymentStatusFailed
 			result.Message = "Transaction has timed out. Please try again."
 			return result, nil
 		}
-
 		return MapInquiryToTopUpResult(existing, *inquiryResult), nil
 
 	default:
@@ -610,9 +574,12 @@ func (s *Service) handlePollingTimeout(paymentQ *payment.Queries, txRefNo string
 	cleanupCtx := context.Background()
 
 	err := paymentQ.UpdateGatewayTransactionStatus(cleanupCtx, payment.UpdateGatewayTransactionStatusParams{
-		Status:   payment.CurrentStatus(PaymentStatusFailed),
-		TxnRefNo: txRefNo,
+		Status:            payment.CurrentStatus(PaymentStatusFailed),
+		TxnRefNo:          txRefNo,
+		GatewayMessage:    pgtype.Text{String: "Polling timeout reached", Valid: true},
+		GatewayStatusCode: pgtype.Text{String: "TIMEOUT", Valid: true},
 	})
+
 	if err != nil {
 		middleware.LogAppError(commonerrors.Wrap(ErrTransactionUpdate, fmt.Errorf("failed to update status on timeout: %w", err)), "polling-"+txRefNo)
 	}
@@ -638,45 +605,42 @@ func (s *Service) pollTransactionOnce(ctx context.Context, txRefNo string) bool 
 		return false
 	}
 
-	status := GatewayStatusToPaymentStatus(inquiryResult.Status)
-
-	// Only proceed to DB if status is terminal (Success/Failed)
-	if status != PaymentStatusSuccess && status != PaymentStatusFailed {
-		return false
-	}
-
 	// 3. Database Transaction Block
-	return s.finalizeTransaction(ctx, txRefNo, status)
+	done, _ := s.finalizeTransaction(ctx, txRefNo, inquiryResult)
+	return done
 }
 
-func (s *Service) finalizeTransaction(ctx context.Context, txRefNo string, status PaymentStatus) bool {
 
+func (s *Service) finalizeTransaction(ctx context.Context, txRefNo string, inquiry *gateway.InquiryResponse) (bool, error) {
+	status := GatewayStatusToPaymentStatus(inquiry.Status)
+	isTerminal := status == PaymentStatusSuccess || status == PaymentStatusFailed
+
+	// 1. PHASE 1: Update Status (PERSISTENT & INDEPENDENT)
+	// We want this to stick even if Phase 2 fails.
+	var existing payment.GikiWalletGatewayTransaction
 	err := common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
 		paymentQ := s.q.WithTx(tx)
 
-		// Update Status & Clear Polling (Common to both Success and Failure)
-		updateErr := paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
-			Status:   payment.CurrentStatus(status),
-			TxnRefNo: txRefNo,
-		})
+		var err error
+		existing, err = paymentQ.GetTransactionByTxnRefNo(ctx, txRefNo)
+		if err != nil {
+			return err
+		}
 
+		// Update Status & Clear Polling ONLY IF terminal
+		updateErr := paymentQ.UpdateGatewayTransactionStatus(ctx, payment.UpdateGatewayTransactionStatusParams{
+			Status:            payment.CurrentStatus(status),
+			TxnRefNo:          txRefNo,
+			GatewayMessage:    pgtype.Text{String: inquiry.Message, Valid: true},
+			GatewayStatusCode: pgtype.Text{String: inquiry.ResponseCode, Valid: true},
+		})
 		if updateErr != nil {
 			return updateErr
 		}
 
-		if cleaningErr := paymentQ.ClearPollingStatus(ctx, txRefNo); cleaningErr != nil {
-			return cleaningErr
-		}
-
-		if status == PaymentStatusSuccess {
-			gatewayTxn, err := paymentQ.GetTransactionByTxnRefNo(ctx, txRefNo)
-			if err != nil {
-				return err
-			}
-
-			if creditErr := s.creditWalletFromPayment(ctx, tx, gatewayTxn.UserID, gatewayTxn.Amount, gatewayTxn.TxnRefNo); creditErr != nil {
-				middleware.LogAppError(creditErr, "polling-credit-"+txRefNo)
-				return creditErr
+		if isTerminal {
+			if cleaningErr := paymentQ.ClearPollingStatus(ctx, txRefNo); cleaningErr != nil {
+				return cleaningErr
 			}
 		}
 
@@ -684,12 +648,61 @@ func (s *Service) finalizeTransaction(ctx context.Context, txRefNo string, statu
 	})
 
 	if err != nil {
-		middleware.LogAppError(fmt.Errorf("finalize transaction failed for %s: %w", txRefNo, err), "polling-finalizer")
-		return false
+		middleware.LogAppError(fmt.Errorf("status update failed for %s: %w", txRefNo, err), "finalizer-phase1")
+		return false, err
 	}
 
-	return true
+	// 2. PHASE 2: Credit Wallet (ONLY IF Success & Terminal)
+	// This runs in a SEPARATE transaction. If this fails (e.g. unique constraint), 
+	// it won't roll back the Status Update from Phase 1.
+	if isTerminal && status == PaymentStatusSuccess {
+		// SAFETY CHECK: Verify the transaction is actually SUCCESS in DB before crediting
+		creditErr := common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
+			paymentQ := s.q.WithTx(tx)
+			
+			// Re-fetch to ensure we have the latest status from Phase 1
+			currentTxn, fetchErr := paymentQ.GetTransactionByTxnRefNo(ctx, txRefNo)
+			if fetchErr != nil {
+				return fetchErr
+			}
+			
+			// CRITICAL SAFETY CHECK: Only credit if status is actually SUCCESS
+			if currentTxn.Status != payment.CurrentStatusSUCCESS {
+				middleware.LogAppError(
+					fmt.Errorf("DANGER: Attempted to credit wallet for transaction %s with status %s (not SUCCESS)", txRefNo, currentTxn.Status),
+					"wallet-credit-safety-check",
+				)
+				return fmt.Errorf("transaction status mismatch: expected SUCCESS but got %s", currentTxn.Status)
+			}
+
+			// Check for recovery logging inside the credit transaction
+			if existing.Status != payment.CurrentStatusSUCCESS {
+				middleware.LogAppError(fmt.Errorf("RECONCILIATION RECOVERY: Transaction %s recovered to SUCCESS from %s", txRefNo, existing.Status), "reconciliation-recovery")
+			}
+
+			if creditErr := s.creditWalletFromPayment(ctx, tx, existing.UserID, existing.Amount, existing.TxnRefNo); creditErr != nil {
+				// Don't treat idempotent success as an error
+				if errors.Is(creditErr, ErrIdempotentSuccess) {
+					return nil
+				}
+				return creditErr
+			}
+			return nil
+		})
+
+		if creditErr != nil {
+			middleware.LogAppError(fmt.Errorf("wallet credit failed for %s: %w", txRefNo, creditErr), "finalizer-phase2")
+			// We return true (it's terminal) but include the error 
+			// so the caller knows the credit failed.
+			return true, creditErr
+		}
+	}
+
+	return isTerminal, nil
 }
+
+
+
 
 // =============================================================================
 // HELPERS - Form Builder
@@ -698,41 +711,83 @@ func (s *Service) finalizeTransaction(ctx context.Context, txRefNo string, statu
 func (s *Service) buildAutoSubmitForm(fields gateway.JazzCashFields, jazzcashPostURL string) string {
 	html := fmt.Sprintf(`
 		<!DOCTYPE html>
-		<html>
+		<html lang="en">
 		<head>
 			<meta charset="UTF-8">
-			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 			<title>Secure Payment Redirect | GIKI Wallet</title>
 			<script src="https://cdn.tailwindcss.com"></script>
 			<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 			<style>
-				body { font-family: 'Inter', sans-serif; }
+				* {
+					margin: 0;
+					padding: 0;
+					box-sizing: border-box;
+				}
+				html, body {
+					width: 100%%;
+					height: 100%%;
+					font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+				}
+				body {
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					background: linear-gradient(135deg, #f5f7fa 0%%, #c3cfe2 100%%);
+					padding: 16px;
+				}
+				.payment-card {
+					animation: slideUp 0.6s ease-out;
+				}
+				@keyframes slideUp {
+					from {
+						opacity: 0;
+						transform: translateY(20px);
+					}
+					to {
+						opacity: 1;
+						transform: translateY(0);
+					}
+				}
+				.spinner {
+					animation: spin 2s linear infinite;
+				}
+				@keyframes spin {
+					from { transform: rotate(0deg); }
+					to { transform: rotate(360deg); }
+				}
 			</style>
 		</head>
-		<body class="bg-gray-50 flex items-center justify-center min-h-screen" onload="document.getElementById('payForm').submit()">
-			<div class="bg-white p-8 rounded-2xl shadow-xl max-w-sm w-full text-center border border-gray-100">
-				<div class="mb-6 flex justify-center">
-					<div class="relative">
-						<div class="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center animate-pulse">
-							<svg class="w-8 h-8 text-blue-600 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-							</svg>
-						</div>
+		<body onload="document.getElementById('payForm').submit()">
+			<div class="payment-card w-full max-w-md mx-auto bg-white rounded-3xl shadow-2xl p-8 border border-gray-100">
+				<!-- Spinner Icon -->
+				<div class="flex justify-center mb-8">
+					<div class="relative w-20 h-20 bg-gradient-to-br from-blue-50 to-blue-100 rounded-full flex items-center justify-center shadow-lg">
+						<svg class="spinner w-10 h-10 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+							<circle class="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"></circle>
+							<path class="opacity-100" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+						</svg>
 					</div>
 				</div>
-				
-				<h2 class="text-xl font-bold text-gray-900 mb-2">Securely Redirecting</h2>
-				<p class="text-gray-500 text-sm mb-8">Please wait while we transfer you to the JazzCash Payment Gateway...</p>
-				
-				<div class="flex items-center justify-center gap-2 text-xs text-gray-400 font-medium uppercase tracking-wider">
-					<svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-					</svg>
-					<span>256-bit SSL Encrypted</span>
+
+				<!-- Main Content -->
+				<div class="text-center">
+					<h1 class="text-2xl font-bold text-gray-900 mb-3">Securely Redirecting</h1>
+					<p class="text-gray-600 text-base leading-relaxed mb-8">
+						Please wait while we transfer you to the JazzCash Payment Gateway to complete your payment securely.
+					</p>
 				</div>
 
-				<form id="payForm" method="POST" action="%s" class="hidden">
+				<!-- Security Badge -->
+				<div class="flex items-center justify-center gap-2 mb-8 px-4 py-3 bg-green-50 rounded-lg border border-green-100">
+					<svg class="w-5 h-5 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+					</svg>
+					<span class="text-sm font-semibold text-green-800">256-bit SSL Encrypted</span>
+				</div>
+
+				<!-- Hidden Form -->
+				<form id="payForm" method="POST" action="%s" style="display: none;">
 					<input type="hidden" name="pp_Amount" value="%s">
 					<input type="hidden" name="pp_BillReference" value="%s">
 					<input type="hidden" name="pp_Description" value="%s">
@@ -748,15 +803,22 @@ func (s *Service) buildAutoSubmitForm(fields gateway.JazzCashFields, jazzcashPos
 					<input type="hidden" name="pp_Version" value="1.1">
 					<input type="hidden" name="pp_SecureHash" value="%s">
 				</form>
-				
+
+				<!-- Fallback for JavaScript Disabled -->
 				<noscript>
-					<div class="mt-4 p-4 bg-yellow-50 text-yellow-800 text-sm rounded-lg">
-						<p class="mb-2">JavaScript is disabled in your browser.</p>
-						<button type="submit" form="payForm" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors">
-							Click here to continue
+					<div class="mt-6 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl text-center">
+						<p class="text-yellow-900 font-semibold mb-4">JavaScript is disabled in your browser</p>
+						<button type="submit" form="payForm" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-200">
+							Click here to continue to payment
 						</button>
 					</div>
 				</noscript>
+
+				<!-- Loading Text -->
+				<div class="mt-6 text-center">
+					<p class="text-xs text-gray-500 font-medium">Redirecting in progress...</p>
+					<p class="text-xs text-gray-400 mt-1">Do not close this window</p>
+				</div>
 			</div>
 		</body>
 		</html>
@@ -800,27 +862,36 @@ func (s *Service) GetGatewayTransactions(ctx context.Context, params common.Gate
 }
 
 func (s *Service) VerifyTransaction(ctx context.Context, txnRefNo string) (*AdminGatewayTransaction, error) {
+	// 1. Get status from gateway & update DB (Phase 1 & 2 logic inside)
 	statusResult, err := s.GetTransactionStatus(ctx, txnRefNo)
 	if err != nil {
 		return nil, err
 	}
 
-	txn, err := s.q.GetTransactionByTxnRefNo(ctx, txnRefNo)
+	// 2. Fetch the DETAILED transaction (with user info) for the frontend
+	txn, err := s.q.GetGatewayTransactionByRefDetailed(ctx, txnRefNo)
 	if err != nil {
+		middleware.LogAppError(fmt.Errorf("VerifyTransaction failed to fetch detailed txn %s: %w", txnRefNo, err), "verify-detailed")
 		return nil, commonerrors.Wrap(ErrDatabaseQuery, err)
 	}
 
 	return &AdminGatewayTransaction{
-		TxnRefNo:      txn.TxnRefNo,
-		UserID:        txn.UserID,
-		Amount:        fmt.Sprintf("%d", txn.Amount),
-		Status:        statusResult.Status,
-		PaymentMethod: PaymentMethod(txn.PaymentMethod),
-		CreatedAt:     txn.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:     txn.UpdatedAt.Format(time.RFC3339),
-		BillRefID:     txn.BillRefID,
+		TxnRefNo:          txn.TxnRefNo,
+		UserID:            txn.UserID,
+		UserName:          txn.UserName,
+		UserEmail:         txn.UserEmail,
+		Amount:            fmt.Sprintf("%d", txn.Amount),
+		Status:            statusResult.Status,
+		PaymentMethod:     PaymentMethod(txn.PaymentMethod),
+		CreatedAt:         txn.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:         txn.UpdatedAt.Format(time.RFC3339),
+		BillRefID:         txn.BillRefID,
+		GatewayMessage:    txn.GatewayMessage.String,
+		GatewayStatusCode: txn.GatewayStatusCode.String,
 	}, nil
 }
+
+
 
 func (s *Service) GetLiabilityWalletBalance(ctx context.Context) (float64, error) {
 	return s.walletS.GetSystemWalletBalance(ctx, wallet.GikiWallet, wallet.SystemWalletLiability)
@@ -901,6 +972,9 @@ func (s *Service) GetTransactionAuditLogs(ctx context.Context, txnRefNo string) 
 	logs, err := s.q.GetAuditLogsByTxn(ctx, pgtype.Text{String: txnRefNo, Valid: true})
 	if err != nil {
 		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+	if logs == nil {
+		return []payment.GikiWalletPaymentAuditLog{}, nil
 	}
 	return logs, nil
 }
