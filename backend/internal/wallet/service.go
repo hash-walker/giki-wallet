@@ -48,6 +48,10 @@ func (s *Service) executeDoubleEntryTransaction(
 
 	walletQ := s.q.WithTx(tx)
 
+	if amount <= 0 {
+		return commonerrors.Wrap(commonerrors.ErrInvalidInput, fmt.Errorf("transaction amount must be positive"))
+	}
+
 	// lock both wallets (prevent race conditions)
 	senderWallet, err := walletQ.GetWalletForUpdate(ctx, senderWalletID)
 	if err != nil {

@@ -2,12 +2,13 @@ package common
 
 import (
 	"errors"
+	"math"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func AmountToLowestUnit(amount float64) int32 {
-	return int32(amount * 100)
+	return int32(math.Round(amount * 100))
 }
 
 func LowestUnitToAmount(paisa int32) float64 {
