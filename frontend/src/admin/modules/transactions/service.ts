@@ -63,7 +63,11 @@ export const getTransportTransactions = async (
         total_count: data.meta.total_records,
         page: data.meta.page,
         page_size: data.meta.page_size,
-        weekly_stats: data.meta.weekly_stats
+        weekly_stats: data.meta.weekly_stats ? {
+            total_income: data.meta.weekly_stats.total_income / 100,
+            total_refunds: data.meta.weekly_stats.total_refunds / 100,
+            transaction_count: data.meta.weekly_stats.transaction_count
+        } : { total_income: 0, total_refunds: 0, transaction_count: 0 }
     };
 };
 
