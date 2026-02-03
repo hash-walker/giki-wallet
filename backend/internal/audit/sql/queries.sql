@@ -11,3 +11,7 @@ LIMIT $1 OFFSET $2;
 
 -- name: CountSystemAuditLogs :one
 SELECT COUNT(*) FROM giki_wallet.system_audit_logs;
+
+-- name: CreateSystemAuditLog :exec
+INSERT INTO giki_wallet.system_audit_logs (actor_id, action, target_id, details, ip_address, user_agent, status, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8);

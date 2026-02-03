@@ -74,27 +74,32 @@ type SecurityEventRow struct {
 }
 
 func (s *Service) LogSecurityEvent(ctx context.Context, event Event) error {
-	query := `
-		INSERT INTO system_audit_logs (actor_id, action, target_id, details, ip_address, user_agent, status, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	`
-
 	detailsJSON, err := json.Marshal(event.Details)
 	if err != nil {
 		detailsJSON = []byte("{}")
 	}
 
-	_, err = s.db.Exec(ctx, query,
-		event.ActorID,
-		event.Action,
-		event.TargetID,
-		detailsJSON,
-		event.IPAddress,
-		event.UserAgent,
-		event.Status,
-		time.Now(),
-	)
-	return err
+	// Convert uuid.UUID pointers to pgtype.UUID
+	var actorID, targetID pgtype.UUID
+	if event.ActorID != nil {
+		bytes := [16]byte(*event.ActorID)
+		actorID = pgtype.UUID{Bytes: bytes, Valid: true}
+	}
+	if event.TargetID != nil {
+		bytes := [16]byte(*event.TargetID)
+		targetID = pgtype.UUID{Bytes: bytes, Valid: true}
+	}
+
+	return s.queries.CreateSystemAuditLog(ctx, audit_db.CreateSystemAuditLogParams{
+		ActorID:   actorID,
+		Action:    event.Action,
+		TargetID:  targetID,
+		Details:   detailsJSON,
+		IpAddress: event.IPAddress,
+		UserAgent: pgtype.Text{String: event.UserAgent, Valid: event.UserAgent != ""},
+		Status:    event.Status,
+		CreatedAt: pgtype.Timestamp{Time: time.Now(), Valid: true},
+	})
 }
 
 // ListSecurityEvents returns a paginated list of security logs with total count
