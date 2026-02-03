@@ -11,14 +11,31 @@ import { getErrorMessage } from '@/lib/errors';
 import { TopUpRequest } from '../types';
 import JazzCashPayment from '../components/JazzCashPayment';
 import { useWalletModuleStore } from '../store';
+import axios from '@/lib/axios';
+import { type APIResponse } from '@/lib/errors';
 
 type PaymentMethod = 'jazzcash' | 'card';
 
 const TopUpPage = () => {
     const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(false);
+    const [maxLimit, setMaxLimit] = useState<number>(800); // Default fallback
+
+    useEffect(() => {
+        const fetchLimit = async () => {
+            try {
+                const { data } = await axios.get<{ max_limit_paisa: number }>('/payment/limit');
+                setMaxLimit(data.max_limit_paisa / 100);
+            } catch (err) {
+                console.error("Failed to fetch top-up limit", err);
+            }
+        };
+        fetchLimit();
+    }, []);
 
     const {
+        balance,
+        fetchBalance,
         formData,
         setAmount,
         setMobileNumber,
@@ -26,6 +43,10 @@ const TopUpPage = () => {
         setMethod,
         resetFormData
     } = useWalletModuleStore();
+
+    useEffect(() => {
+        fetchBalance();
+    }, [fetchBalance]);
 
     // Initialize form data on page load
     useEffect(() => {
@@ -35,6 +56,12 @@ const TopUpPage = () => {
     const handleCardPayment = async () => {
         if (!formData.amount) {
             toast.error('Please enter an amount');
+            return;
+        }
+
+        const amount = parseFloat(formData.amount);
+        if (balance + amount > maxLimit) {
+            toast.error(`Top-up would exceed maximum allowed wallet balance of RS ${maxLimit}`);
             return;
         }
 
@@ -92,6 +119,9 @@ const TopUpPage = () => {
                             placeholder="Enter amount"
                             className="bg-gray-50 border-gray-200"
                         />
+                        <p className="text-xs text-gray-500 mt-1 ml-1">
+                            Maximum allowed balance: <span className="font-semibold text-blue-600">RS {maxLimit}</span>
+                        </p>
                     </div>
 
                     {formData.method === 'MWALLET' && (
@@ -125,6 +155,8 @@ const TopUpPage = () => {
                         amount={parseFloat(formData.amount) || 0}
                         phoneNumber={formData.mobile_number}
                         cnicLast6={formData.cnic_last_six}
+                        maxLimit={maxLimit}
+                        currentBalance={balance}
                     />
                 ) : (
                     <div className="space-y-6">

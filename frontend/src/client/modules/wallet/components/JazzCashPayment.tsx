@@ -9,6 +9,8 @@ interface JazzCashPaymentProps {
     cnicLast6: string;
     onSuccess?: () => void;
     onFailure?: (error: string) => void;
+    maxLimit?: number;
+    currentBalance?: number;
 }
 
 const JazzCashPayment: React.FC<JazzCashPaymentProps> = ({
@@ -16,7 +18,9 @@ const JazzCashPayment: React.FC<JazzCashPaymentProps> = ({
     phoneNumber,
     cnicLast6,
     onSuccess,
-    onFailure
+    onFailure,
+    maxLimit,
+    currentBalance
 }) => {
     const { status, timeLeft, errorMessage, initiatePayment, reset } = useJazzCashPayment(
         amount,
@@ -27,7 +31,7 @@ const JazzCashPayment: React.FC<JazzCashPaymentProps> = ({
     // Sync with parent callbacks
     React.useEffect(() => {
         if (status === 'success') {
-            toast.success(`RS ${amount.toLocaleString()} added to wallet!`);
+            toast.success(`G-Bux ${amount.toLocaleString()} added to wallet!`);
             if (onSuccess) onSuccess();
         }
         if (status === 'failed' && onFailure) onFailure(errorMessage || 'Unknown error');
@@ -159,7 +163,13 @@ const JazzCashPayment: React.FC<JazzCashPaymentProps> = ({
                         </div>
 
                         <button
-                            onClick={initiatePayment}
+                            onClick={() => {
+                                if (maxLimit && (currentBalance ?? 0) + amount > maxLimit) {
+                                    toast.error(`Top-up would exceed maximum allowed wallet balance of RS ${maxLimit}`);
+                                    return;
+                                }
+                                initiatePayment();
+                            }}
                             disabled={!amount || !phoneNumber}
                             className="w-full bg-gray-900 hover:bg-black disabled:bg-gray-400 text-white font-bold py-5 rounded-2xl shadow-xl shadow-gray-200 transition-all flex items-center justify-center gap-3 overflow-hidden group"
                         >
