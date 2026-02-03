@@ -64,7 +64,7 @@ func (s *Service) Login(ctx context.Context, req LoginParams) (*LoginResult, err
 }
 
 func (s *Service) GetUserByID(ctx context.Context, userID uuid.UUID) (user_db.GikiWalletUser, error) {
-	u, err := s.userQ.GetUserByID(ctx, userID)
+	u, err := s.userQ.GetUserAuthByID(ctx, userID)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -103,24 +103,28 @@ func (s *Service) VerifyEmailAndIssueTokens(ctx context.Context, token string) (
 
 		userQ := s.userQ.WithTx(tx)
 
-		updatedUser, err := userQ.UpdateUserVerification(ctx, u.UserID)
-
+		// 4. Mark user as verified
+		_, err = userQ.UpdateUserVerification(ctx, u.UserID)
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return ErrUserNotFound
-			}
+			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
+
+		// 5. Verification successful, issue response
+		// Re-fetch full user for token issuance
+		user, err := userQ.GetUserAuthByID(ctx, u.UserID)
+		if err != nil {
 			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
 		}
 
 		expireTime := time.Duration(3600) * time.Second
-		tokenPair, err := s.issueTokenPair(ctx, tx, updatedUser, expireTime)
+		tokenPair, err := s.issueTokenPair(ctx, tx, user, expireTime)
 
 		if err != nil {
 			return commonerrors.Wrap(ErrTokenCreation, err)
 		}
 
 		res = &LoginResult{
-			User:   updatedUser,
+			User:   user,
 			Tokens: tokenPair,
 		}
 
@@ -236,7 +240,7 @@ func (s *Service) checkUserAndPassword(ctx context.Context, tx pgx.Tx, email str
 
 	userQ := s.userQ.WithTx(tx)
 
-	user, err := userQ.GetUserByEmail(ctx, email)
+	user, err := userQ.GetUserAuthByEmail(ctx, email)
 
 	if err != nil {
 		return user_db.GikiWalletUser{}, err
@@ -279,10 +283,7 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*Token
 			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
 		}
 
-		// 2. Validate token
 		if rt.RevokedAt.Valid {
-			// Security alert: If a revoked token is reused, someone might be attempting a replay attack.
-			// We revoke ALL tokens for this user for maximum safety.
 			_ = authQ.RevokeAllRefreshTokensForUser(ctx, rt.UserID)
 			return ErrInvalidRefreshToken
 		}
@@ -292,7 +293,7 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*Token
 		}
 
 		// 3. Get User
-		user, err := s.userQ.WithTx(tx).GetUserByID(ctx, rt.UserID)
+		user, err := s.userQ.WithTx(tx).GetUserAuthByID(ctx, rt.UserID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return ErrUserNotFound

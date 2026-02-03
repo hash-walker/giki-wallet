@@ -54,6 +54,16 @@ func mapDBUserToUser(u userdb.GikiWalletUser) *User {
 	}
 }
 
+func mapCreateUserRowToUser(u userdb.CreateUserRow) *User {
+	return &User{
+		ID:        u.ID,
+		Name:      u.Name,
+		Email:     u.Email,
+		UserType:  u.UserType,
+		CreatedAt: u.CreatedAt,
+	}
+}
+
 type Student struct {
 	UserID        uuid.UUID   `json:"user_id"`
 	RegID         string      `json:"reg_id"`
@@ -135,6 +145,34 @@ type UsersListWithPagination struct {
 }
 
 func mapDBUserRowToAdminUser(row userdb.GikiWalletUser) AdminUser {
+	return AdminUser{
+		ID:          row.ID,
+		Name:        row.Name,
+		Email:       row.Email,
+		PhoneNumber: row.PhoneNumber,
+		IsActive:    row.IsActive,
+		IsVerified:  row.IsVerified,
+		UserType:    row.UserType,
+		CreatedAt:   row.CreatedAt,
+		UpdatedAt:   row.UpdatedAt,
+	}
+}
+
+func mapUpdateUserDetailsRowToAdminUser(row userdb.UpdateUserDetailsRow) AdminUser {
+	return AdminUser{
+		ID:          row.ID,
+		Name:        row.Name,
+		Email:       row.Email,
+		PhoneNumber: row.PhoneNumber,
+		IsActive:    row.IsActive,
+		IsVerified:  row.IsVerified,
+		UserType:    row.UserType,
+		CreatedAt:   row.CreatedAt,
+		UpdatedAt:   row.UpdatedAt,
+	}
+}
+
+func mapGetUserByIDRowToAdminUser(row userdb.GetUserByIDRow) AdminUser {
 	return AdminUser{
 		ID:          row.ID,
 		Name:        row.Name,

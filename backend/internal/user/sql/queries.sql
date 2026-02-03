@@ -1,28 +1,31 @@
 -- name: CreateUser :one
-
 INSERT INTO giki_wallet.users(name, email, phone_number, auth_provider, password_hash, password_algo, is_active, is_verified, user_type)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING *;
+RETURNING id, name, email, phone_number, auth_provider, external_id, is_active, is_verified, user_type, created_at, updated_at;
 
 -- name: CreateStudent :one
-
 INSERT INTO giki_wallet.student_profiles(user_id, reg_id, batch_year)
 VALUES ($1, $2, $3)
-RETURNING *;
+RETURNING user_id, reg_id, degree_program, batch_year;
 
 -- name: CreateEmployee :one
-
 INSERT INTO giki_wallet.employee_profiles(user_id)
 Values ($1)
-RETURNING *;
+RETURNING user_id, employee_id, designation, department;
 
 -- name: GetUserByEmail :one
+SELECT id, name, email, phone_number, auth_provider, external_id, is_active, is_verified, user_type, created_at, updated_at
+FROM giki_wallet.users
+WHERE giki_wallet.users.email = $1;
 
-SELECT * FROM giki_wallet.users
+-- name: GetUserAuthByEmail :one
+SELECT id, name, email, phone_number, auth_provider, external_id, password_hash, password_algo, is_active, is_verified, user_type, created_at, updated_at
+FROM giki_wallet.users
 WHERE giki_wallet.users.email = $1;
 
 -- name: GetUserByRegOrEmail :one
-SELECT * FROM giki_wallet.users as u
+SELECT u.id, u.name, u.email, u.phone_number, u.auth_provider, u.external_id, u.is_active, u.is_verified, u.user_type, u.created_at, u.updated_at
+FROM giki_wallet.users as u
 JOIN giki_wallet.student_profiles as s ON u.id = s.user_id
 WHERE u.email = $1 or s.reg_id = $2;
 
@@ -31,9 +34,12 @@ DELETE FROM giki_wallet.access_tokens
 WHERE user_id = $1;
 
 -- name: GetUserByID :one
+SELECT id, name, email, phone_number, auth_provider, external_id, is_active, is_verified, user_type, created_at, updated_at
+FROM giki_wallet.users
+WHERE id = $1;
 
-SELECT id, name, email, phone_number, auth_provider, external_id, password_hash, password_algo,
-       is_active, is_verified, user_type, created_at, updated_at
+-- name: GetUserAuthByID :one
+SELECT id, name, email, phone_number, auth_provider, external_id, password_hash, password_algo, is_active, is_verified, user_type, created_at, updated_at
 FROM giki_wallet.users
 WHERE id = $1;
 
@@ -41,8 +47,7 @@ WHERE id = $1;
 UPDATE giki_wallet.users
 SET is_verified = TRUE, is_active = TRUE, updated_at = NOW()
 WHERE id = $1
-RETURNING id, name, email, phone_number, auth_provider, external_id, password_hash, password_algo,
-    is_active, is_verified, user_type, created_at, updated_at;
+RETURNING id, name, email, phone_number, auth_provider, external_id, is_active, is_verified, user_type, created_at, updated_at;
 
 -- name: CreateAccessToken :exec
 INSERT INTO giki_wallet.access_tokens(token_hash, user_id, type, expires_at)
@@ -79,7 +84,7 @@ SET
     phone_number = COALESCE(NULLIF(sqlc.arg('phone_number')::text, ''), phone_number),
     updated_at = NOW()
 WHERE id = $1
-RETURNING *;
+RETURNING id, name, email, phone_number, auth_provider, external_id, is_active, is_verified, user_type, created_at, updated_at;
 
 -- name: DeleteUser :exec
 DELETE FROM giki_wallet.users

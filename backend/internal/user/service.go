@@ -59,7 +59,7 @@ func (s *Service) CreateUser(ctx context.Context, req RegisterRequest) (*User, e
 		return nil, commonerrors.Wrap(commonerrors.ErrInternal, err)
 	}
 
-	var user user_db.GikiWalletUser
+	var user user_db.CreateUserRow
 	var verificationToken string
 
 	err = common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
@@ -125,7 +125,7 @@ func (s *Service) CreateUser(ctx context.Context, req RegisterRequest) (*User, e
 
 	_ = s.enqueueAccountCreationJob(ctx, verificationToken, req)
 
-	return mapDBUserToUser(user), nil
+	return mapCreateUserRowToUser(user), nil
 }
 
 func (s *Service) CreateStudent(ctx context.Context, tx pgx.Tx, payload CreateStudentParams) (Student, error) {
@@ -442,7 +442,7 @@ func (s *Service) UpdateUser(ctx context.Context, userID uuid.UUID, req Register
 		return AdminUser{}, translateDBError(err)
 	}
 
-	return mapDBUserRowToAdminUser(row), nil
+	return mapUpdateUserDetailsRowToAdminUser(row), nil
 }
 
 func (s *Service) AdminCreateUser(ctx context.Context, req RegisterRequest) (*User, error) {
@@ -459,7 +459,7 @@ func (s *Service) AdminCreateUser(ctx context.Context, req RegisterRequest) (*Us
 		return nil, commonerrors.Wrap(commonerrors.ErrInternal, err)
 	}
 
-	var user user_db.GikiWalletUser
+	var user user_db.CreateUserRow
 
 	err = common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
 		userQ := s.userQ.WithTx(tx)
@@ -526,7 +526,7 @@ func (s *Service) AdminCreateUser(ctx context.Context, req RegisterRequest) (*Us
 		return nil, translateDBError(err)
 	}
 
-	return mapDBUserToUser(user), nil
+	return mapCreateUserRowToUser(user), nil
 }
 
 func GenerateRandomPassword(length int) string {
