@@ -6,6 +6,7 @@ import { AdminProtectedRoute } from '@/admin/components/AdminProtectedRoute';
 import { HomePage } from '@/client/pages/HomePage';
 import { TransportPage } from '@/client/modules/transport/pages/TransportPage';
 import TopUpPage from '@/client/modules/wallet/pages/TopUpPage';
+import PaymentResultPage from '@/client/modules/wallet/pages/PaymentResultPage';
 
 import { TicketsPage } from '@/client/modules/transport/pages/TicketsPage';
 import BookingConfirmationPage from '@/client/modules/transport/pages/BookingConfirmationPage';
@@ -98,6 +99,20 @@ const router = createBrowserRouter([
                 index: true,
                 element: <TopUpPage />,
             },
+        ],
+    },
+    {
+        path: '/payment',
+        element: (
+            <ClientLayout>
+                <RequireAuth />
+            </ClientLayout>
+        ),
+        children: [
+            { path: 'success', element: <PaymentResultPage /> },
+            { path: 'failed', element: <PaymentResultPage /> },
+            { path: 'error', element: <PaymentResultPage /> },
+            { path: 'pending', element: <PaymentResultPage /> },
         ],
     },
     {

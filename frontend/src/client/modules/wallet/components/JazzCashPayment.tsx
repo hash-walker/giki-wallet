@@ -1,5 +1,6 @@
 import React from 'react';
 import { Phone, CheckCircle2, XCircle, Loader2, Smartphone, ShieldCheck } from 'lucide-react';
+import { toast } from '@/lib/toast';
 import { useJazzCashPayment } from '../hooks/useJazzCashPayment';
 
 interface JazzCashPaymentProps {
@@ -25,9 +26,12 @@ const JazzCashPayment: React.FC<JazzCashPaymentProps> = ({
 
     // Sync with parent callbacks
     React.useEffect(() => {
-        if (status === 'success' && onSuccess) onSuccess();
+        if (status === 'success') {
+            toast.success(`RS ${amount.toLocaleString()} added to wallet!`);
+            if (onSuccess) onSuccess();
+        }
         if (status === 'failed' && onFailure) onFailure(errorMessage || 'Unknown error');
-    }, [status, onSuccess, onFailure, errorMessage]);
+    }, [status, onSuccess, onFailure, errorMessage, amount]);
 
     if (status === 'success') {
         return (

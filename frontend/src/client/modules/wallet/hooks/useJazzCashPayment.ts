@@ -16,6 +16,7 @@ export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast
         setTimeLeft,
         setTxnRefNo,
         setErrorMessage,
+        fetchBalance,
         resetPaymentState: reset
     } = useWalletModuleStore();
 
@@ -40,7 +41,8 @@ export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast
     const handleSuccess = useCallback(() => {
         clearAllTimers();
         setStatus('success');
-    }, [clearAllTimers, setStatus]);
+        fetchBalance(); // Refresh balance on success
+    }, [clearAllTimers, setStatus, fetchBalance]);
 
     const handleFailure = useCallback((msg: string) => {
         // Ignore abort errors
