@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parse } from 'date-fns';
 
 export const createTripSchema = z.object({
     routeId: z.string().uuid({ message: "Route selection is required" }),
@@ -20,6 +21,20 @@ export const createTripSchema = z.object({
 
     // Selected stops IDs
     selectedStopIds: z.array(z.string().uuid()).min(2, "A trip must have at least 2 stops (Origin & Destination)"),
+}).refine((data) => {
+    const closeDateTime = parse(data.bookingCloseTime, 'HH:mm', data.bookingCloseDate);
+    const now = new Date();
+    return closeDateTime > now;
+}, {
+    message: "Booking close time must be in the future",
+    path: ["bookingCloseTime"],
+}).refine((data) => {
+    const openDateTime = parse(data.bookingOpenTime, 'HH:mm', data.bookingOpenDate);
+    const closeDateTime = parse(data.bookingCloseTime, 'HH:mm', data.bookingCloseDate);
+    return openDateTime < closeDateTime;
+}, {
+    message: "Booking must open before it closes",
+    path: ["bookingOpenTime"],
 });
 
 export type CreateTripFormValues = z.infer<typeof createTripSchema>;

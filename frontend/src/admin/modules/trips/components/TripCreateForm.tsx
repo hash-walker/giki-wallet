@@ -159,14 +159,7 @@ export const TripCreateForm = ({ onSuccess }: { onSuccess?: () => void }) => {
 
             const source = editingTrip || duplicateTemplate;
             if (source) {
-                // If editing/duplicating, we need to load the template for the source route
-                // BUT we don't want to wipe the form with template defaults.
-                // We want to load the template (for the UI) and then fill the form with source values.
-
-                // Note: selectRoute updates the store 'template' state.
                 await selectRoute(source.route_id);
-
-                // Now get the fresh template from store (or we could have made selectRoute return it)
                 const currentTemplate = useTripCreateStore.getState().template;
 
                 applySourceTrip(source, currentTemplate, !!duplicateTemplate);
@@ -174,8 +167,7 @@ export const TripCreateForm = ({ onSuccess }: { onSuccess?: () => void }) => {
         };
 
         init();
-        // eslint-disable-next-line
-    }, []); // Run once on mount
+    }, []);
 
 
     const watchedCapacity = watch('totalCapacity');
@@ -183,13 +175,9 @@ export const TripCreateForm = ({ onSuccess }: { onSuccess?: () => void }) => {
     const hasBookings = soldTickets > 0;
 
     const handleRouteChange = async (routeId: string) => {
-        // Explicit Action: User changed the route.
-        // 1. Fetch new template
         await selectRoute(routeId);
         setValue('routeId', routeId);
 
-        // 2. Apply Template Defaults (Only if NOT editing an existing trip, logic check handled by context usually, 
-        //    but here if user changes route manually, they likely want defaults)
         const newTemplate = useTripCreateStore.getState().template;
         if (newTemplate) {
             applyTemplateRules(newTemplate);
@@ -208,14 +196,7 @@ export const TripCreateForm = ({ onSuccess }: { onSuccess?: () => void }) => {
         const openOffsetHours = Math.round(differenceInHours(departureDateTime, bookingOpenDateTime));
         const closeOffsetHours = Math.round(differenceInHours(departureDateTime, bookingCloseDateTime));
 
-        // Validation: Open Offset must be > Close Offset (e.g. 24h before > 1h before)
-        if (openOffsetHours <= closeOffsetHours) {
-            methods.setError('bookingOpenTime', {
-                type: 'manual',
-                message: 'Booking must open before it closes (check offsets)'
-            });
-            return;
-        }
+
 
         // Validation: Capacity cannot be less than sold tickets
         if (editingTrip) {
@@ -250,13 +231,10 @@ export const TripCreateForm = ({ onSuccess }: { onSuccess?: () => void }) => {
             const success = await createTrip(payload);
             if (success) {
                 if (duplicateTemplate) {
-                    // If duplicating, we might want to close the modal too?
-                    // Or keep it open? Let's assume close if in modal (onSuccess present)
                     onSuccess?.();
                     setDuplicateTemplate(null); // Clear duplicate state
                 }
                 reset();
-                // If it was a duplicate, we cleared template so it might reset to default.
             }
         }
     };
