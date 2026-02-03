@@ -77,14 +77,24 @@ export const SignInPage = () => {
                         {...register('email')}
                         error={errors.email?.message}
                     />
-                    <Input
-                        label="Password"
-                        type="password"
-                        placeholder="Enter your password"
-                        autoComplete="current-password"
-                        {...register('password')}
-                        error={errors.password?.message}
-                    />
+                    <div className="space-y-1">
+                        <Input
+                            label="Password"
+                            type="password"
+                            placeholder="Enter your password"
+                            autoComplete="current-password"
+                            {...register('password')}
+                            error={errors.password?.message}
+                        />
+                        <div className="text-right">
+                            <Link
+                                className="text-xs text-primary hover:underline font-medium"
+                                to="/auth/forgot-password"
+                            >
+                                Forgot password?
+                            </Link>
+                        </div>
+                    </div>
 
                     <Button className="w-full font-semibold" disabled={isSubmitting} type="submit">
                         {isSubmitting ? 'Signing in...' : 'Sign In'}

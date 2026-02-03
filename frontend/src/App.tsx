@@ -13,7 +13,7 @@ import BookingConfirmationPage from '@/client/modules/transport/pages/BookingCon
 import PassengerDetailsPage from '@/client/modules/transport/pages/PassengerDetailsPage';
 import { AccountPage } from '@/shared/modules/auth/pages/AccountPage';
 import { Toaster } from '@/shared/components/ui/sonner';
-import { AuthLayout, SignInPage, SignUpPage, VerifyEmailPage, RequireAuth } from '@/shared/modules/auth';
+import { AuthLayout, SignInPage, SignUpPage, VerifyEmailPage, ForgotPasswordPage, ResetPasswordPage, RequireAuth } from '@/shared/modules/auth';
 import { useAuthStore } from '@/shared/stores/authStore';
 
 const router = createBrowserRouter([
@@ -38,6 +38,30 @@ const router = createBrowserRouter([
         element: (
             <AuthLayout>
                 <VerifyEmailPage />
+            </AuthLayout>
+        ),
+    },
+    {
+        path: '/auth/forgot-password',
+        element: (
+            <AuthLayout>
+                <ForgotPasswordPage />
+            </AuthLayout>
+        ),
+    },
+    {
+        path: '/auth/reset-password',
+        element: (
+            <AuthLayout>
+                <ResetPasswordPage />
+            </AuthLayout>
+        ),
+    },
+    {
+        path: '/reset-password',
+        element: (
+            <AuthLayout>
+                <ResetPasswordPage />
             </AuthLayout>
         ),
     },

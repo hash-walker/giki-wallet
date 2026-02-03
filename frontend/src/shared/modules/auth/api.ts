@@ -59,3 +59,13 @@ export async function refreshToken(token: string) {
     const res = await apiClient.post<AuthResponse>('/auth/refresh', { refresh_token: token });
     return res.data;
 }
+
+export async function requestPasswordReset(email: string) {
+    const res = await apiClient.post<{ message: string }>('/auth/forgot-password', { email });
+    return res.data;
+}
+
+export async function resetPassword(payload: { token: string; password: string }) {
+    const res = await apiClient.post<{ message: string }>('/auth/reset-password', payload);
+    return res.data;
+}
