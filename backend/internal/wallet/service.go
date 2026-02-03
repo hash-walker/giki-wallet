@@ -357,6 +357,21 @@ func (s *Service) GetSystemWalletByName(ctx context.Context, walletName SystemWa
 	return sysWallet.ID, nil
 }
 
+func (s *Service) GetSystemWalletBalance(ctx context.Context, walletName SystemWalletName, walletType SystemWalletType) (float64, error) {
+	walletID, err := s.GetSystemWalletByName(ctx, walletName, walletType)
+	if err != nil {
+		return 0, err
+	}
+
+	balance, err := s.getWalletBalance(ctx, s.q, walletID)
+	if err != nil {
+		return 0, err
+	}
+
+	// storage is in cents/paisas, return main unit
+	return float64(balance) / 100.0, nil
+}
+
 func (s *Service) getWalletBalance(ctx context.Context, walletQ *wallet.Queries, walletID uuid.UUID) (int64, error) {
 
 	balance, err := walletQ.GetWalletBalanceSnapshot(ctx, walletID)

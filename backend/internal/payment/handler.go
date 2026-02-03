@@ -163,7 +163,7 @@ func (h *Handler) ListGatewayTransactions(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	txns, total, err := h.pService.GetGatewayTransactions(r.Context(), params)
+	txns, totalCount, totalAmount, err := h.pService.GetGatewayTransactions(r.Context(), params)
 	if err != nil {
 		middleware.HandleError(w, err, requestID)
 		return
@@ -186,10 +186,11 @@ func (h *Handler) ListGatewayTransactions(w http.ResponseWriter, r *http.Request
 	}
 
 	common.ResponseWithJSON(w, http.StatusOK, map[string]interface{}{
-		"data":        response,
-		"total_count": total,
-		"page":        params.Page,
-		"page_size":   params.PageSize,
+		"data":         response,
+		"total_count":  totalCount,
+		"total_amount": fmt.Sprintf("%d", totalAmount),
+		"page":         params.Page,
+		"page_size":    params.PageSize,
 	}, requestID)
 }
 
@@ -209,4 +210,92 @@ func (h *Handler) VerifyGatewayTransaction(w http.ResponseWriter, r *http.Reques
 	}
 
 	common.ResponseWithJSON(w, http.StatusOK, result, requestID)
+}
+
+func (h *Handler) GetLiabilityBalance(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	balance, err := h.pService.GetLiabilityWalletBalance(r.Context())
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, map[string]interface{}{
+		"balance":  balance,
+		"currency": "PKR",
+	}, requestID)
+}
+
+func (h *Handler) GetRevenueBalance(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	balance, err := h.pService.GetTransportRevenueWalletBalance(r.Context())
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, map[string]interface{}{
+		"balance":  balance,
+		"currency": "PKR",
+	}, requestID)
+}
+
+func (h *Handler) GetRevenuePeriodVolume(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	var params common.GatewayTransactionListParams
+	if err := params.Bind(r); err != nil {
+		appErr := commonerrors.New("INVALID_REQUEST", http.StatusBadRequest, err.Error())
+		middleware.HandleError(w, appErr, requestID)
+		return
+	}
+
+	volume, err := h.pService.GetTransportRevenuePeriodVolume(r.Context(), params.StartDate, params.EndDate)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, map[string]interface{}{
+		"volume":   volume,
+		"currency": "PKR",
+	}, requestID)
+}
+
+func (h *Handler) HandleExportGatewayTransactions(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	var params common.GatewayTransactionListParams
+	if err := params.Bind(r); err != nil {
+		appErr := commonerrors.New("INVALID_REQUEST", http.StatusBadRequest, err.Error())
+		middleware.HandleError(w, appErr, requestID)
+		return
+	}
+
+	csvData, err := h.pService.ExportGatewayTransactions(r.Context(), params)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	filename := fmt.Sprintf("gateway_transactions_%s.csv", time.Now().Format("20060102_1504"))
+
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	w.Write(csvData)
+}
+
+func (h *Handler) GetTransactionAuditLogs(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+	txnRefNo := chi.URLParam(r, "txnRefNo")
+
+	logs, err := h.pService.GetTransactionAuditLogs(r.Context(), txnRefNo)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, logs, requestID)
 }

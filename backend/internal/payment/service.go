@@ -1,7 +1,9 @@
 package payment
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -765,7 +767,7 @@ func (s *Service) buildAutoSubmitForm(fields gateway.JazzCashFields, jazzcashPos
 // ADMIN SERVICE METHODS
 // =============================================================================
 
-func (s *Service) GetGatewayTransactions(ctx context.Context, params common.GatewayTransactionListParams) ([]payment.GetGatewayTransactionsRow, int64, error) {
+func (s *Service) GetGatewayTransactions(ctx context.Context, params common.GatewayTransactionListParams) ([]payment.GetGatewayTransactionsRow, int64, int64, error) {
 	arg := payment.GetGatewayTransactionsParams{
 		Status:        pgtype.Text{String: params.Status, Valid: params.Status != ""},
 		PaymentMethod: pgtype.Text{String: params.PaymentMethod, Valid: params.PaymentMethod != ""},
@@ -779,15 +781,17 @@ func (s *Service) GetGatewayTransactions(ctx context.Context, params common.Gate
 	txns, err := s.q.GetGatewayTransactions(ctx, arg)
 	if err != nil {
 		middleware.LogAppError(fmt.Errorf("GetGatewayTransactions failed: %w; params: %+v", err, params), "payment-get-gateway-transactions")
-		return nil, 0, commonerrors.Wrap(ErrDatabaseQuery, err)
+		return nil, 0, 0, commonerrors.Wrap(ErrDatabaseQuery, err)
 	}
 
 	var total int64
+	var totalAmount int64
 	if len(txns) > 0 {
 		total = txns[0].TotalCount
+		totalAmount = txns[0].TotalAmount
 	}
 
-	return txns, total, nil
+	return txns, total, totalAmount, nil
 }
 
 func (s *Service) VerifyTransaction(ctx context.Context, txnRefNo string) (*AdminGatewayTransaction, error) {
@@ -811,4 +815,87 @@ func (s *Service) VerifyTransaction(ctx context.Context, txnRefNo string) (*Admi
 		UpdatedAt:     txn.UpdatedAt.Format(time.RFC3339),
 		BillRefID:     txn.BillRefID,
 	}, nil
+}
+
+func (s *Service) GetLiabilityWalletBalance(ctx context.Context) (float64, error) {
+	return s.walletS.GetSystemWalletBalance(ctx, wallet.GikiWallet, wallet.SystemWalletLiability)
+}
+
+func (s *Service) GetTransportRevenueWalletBalance(ctx context.Context) (float64, error) {
+	return s.walletS.GetSystemWalletBalance(ctx, wallet.TransportSystemWallet, wallet.SystemWalletRevenue)
+}
+
+func (s *Service) GetTransportRevenuePeriodVolume(ctx context.Context, startDate, endDate time.Time) (float64, error) {
+	stats, err := s.walletS.GetWeeklyStats(ctx, startDate, endDate)
+	if err != nil {
+		return 0, err
+	}
+
+	netRevenue := float64(stats.TotalIncome+stats.TotalRefunds) / 100.0
+	return netRevenue, nil
+}
+
+func (s *Service) ExportGatewayTransactions(ctx context.Context, params common.GatewayTransactionListParams) ([]byte, error) {
+	arg := payment.GetGatewayTransactionsForExportParams{
+		Status:        pgtype.Text{String: params.Status, Valid: params.Status != ""},
+		PaymentMethod: pgtype.Text{String: params.PaymentMethod, Valid: params.PaymentMethod != ""},
+		StartDate:     params.StartDate,
+		EndDate:       params.EndDate,
+		Search:        params.Search,
+	}
+
+	rows, err := s.q.GetGatewayTransactionsForExport(ctx, arg)
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+
+	buf := new(bytes.Buffer)
+	w := csv.NewWriter(buf)
+
+	// Header
+	if err := w.Write([]string{
+		"Transaction Ref",
+		"Bill Ref",
+		"User Name",
+		"User Email",
+		"Amount",
+		"Status",
+		"Method",
+		"Date",
+	}); err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrInternal, err)
+	}
+
+	// Rows
+	for _, row := range rows {
+		amount := float64(row.Amount) / 100.0
+
+		if err := w.Write([]string{
+			row.TxnRefNo,
+			row.BillRefID,
+			row.UserName,
+			row.UserEmail,
+			fmt.Sprintf("%.2f", amount),
+			string(row.Status),
+			string(row.PaymentMethod),
+			row.CreatedAt.Format(time.RFC3339),
+		}); err != nil {
+			return nil, commonerrors.Wrap(commonerrors.ErrInternal, err)
+		}
+	}
+
+	w.Flush()
+	if err := w.Error(); err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrInternal, err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (s *Service) GetTransactionAuditLogs(ctx context.Context, txnRefNo string) ([]payment.GikiWalletPaymentAuditLog, error) {
+	logs, err := s.q.GetAuditLogsByTxn(ctx, pgtype.Text{String: txnRefNo, Valid: true})
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrDatabase, err)
+	}
+	return logs, nil
 }

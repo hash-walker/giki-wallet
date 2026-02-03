@@ -135,9 +135,16 @@ func (s *Server) MountRoutes() {
 
 		r.Route("/transactions/gateway", func(r chi.Router) {
 			r.Get("/", s.Payment.ListGatewayTransactions)
+			r.Get("/export", s.Payment.HandleExportGatewayTransactions)
+			r.Get("/{txnRefNo}/logs", s.Payment.GetTransactionAuditLogs)
 			r.Post("/{txnRefNo}/verify", s.Payment.VerifyGatewayTransaction)
 		})
 
+		r.Route("/finance", func(r chi.Router) {
+			r.Get("/liability", s.Payment.GetLiabilityBalance)
+			r.Get("/revenue", s.Payment.GetRevenueBalance)
+			r.Get("/revenue/period", s.Payment.GetRevenuePeriodVolume)
+		})
 		r.Get("/finance/transactions", s.Wallet.GetAdminTransactions)
 	})
 }
