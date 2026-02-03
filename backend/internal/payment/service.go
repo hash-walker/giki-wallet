@@ -656,25 +656,7 @@ func (s *Service) finalizeTransaction(ctx context.Context, txRefNo string, inqui
 	// This runs in a SEPARATE transaction. If this fails (e.g. unique constraint), 
 	// it won't roll back the Status Update from Phase 1.
 	if isTerminal && status == PaymentStatusSuccess {
-		// SAFETY CHECK: Verify the transaction is actually SUCCESS in DB before crediting
 		creditErr := common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
-			paymentQ := s.q.WithTx(tx)
-			
-			// Re-fetch to ensure we have the latest status from Phase 1
-			currentTxn, fetchErr := paymentQ.GetTransactionByTxnRefNo(ctx, txRefNo)
-			if fetchErr != nil {
-				return fetchErr
-			}
-			
-			// CRITICAL SAFETY CHECK: Only credit if status is actually SUCCESS
-			if currentTxn.Status != payment.CurrentStatusSUCCESS {
-				middleware.LogAppError(
-					fmt.Errorf("DANGER: Attempted to credit wallet for transaction %s with status %s (not SUCCESS)", txRefNo, currentTxn.Status),
-					"wallet-credit-safety-check",
-				)
-				return fmt.Errorf("transaction status mismatch: expected SUCCESS but got %s", currentTxn.Status)
-			}
-
 			// Check for recovery logging inside the credit transaction
 			if existing.Status != payment.CurrentStatusSUCCESS {
 				middleware.LogAppError(fmt.Errorf("RECONCILIATION RECOVERY: Transaction %s recovered to SUCCESS from %s", txRefNo, existing.Status), "reconciliation-recovery")

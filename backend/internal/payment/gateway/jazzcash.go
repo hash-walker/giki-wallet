@@ -424,17 +424,29 @@ func (c *JazzCashClient) mapInquiryResponse(responseMap map[string]any) InquiryR
 		Raw: responseMap,
 	}
 
-	// Extract codes
 	apiCode, _ := responseMap["pp_ResponseCode"].(string)
 	resp.ResponseCode = apiCode
 
 	paymentCode, _ := responseMap["pp_PaymentResponseCode"].(string)
 	resp.PaymentResponseCode = paymentCode
 
-	// Use PaymentResponseCode for status (if available), otherwise fallback to ResponseCode
 	statusCode := paymentCode
 	if statusCode == "" {
-		statusCode = apiCode
+		if status, ok := responseMap["pp_Status"].(string); ok && status != "" {
+			// Map pp_Status to a code we can evaluate
+			switch status {
+			case "Completed":
+				statusCode = "121" // Completed transaction
+			case "Pending":
+				statusCode = "157" // Pending
+			case "Failed":
+				statusCode = "999" // Failed
+			}
+		}
+
+		if statusCode == "" {
+			statusCode = "" 
+		}
 	}
 
 	// Map to status
