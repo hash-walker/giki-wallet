@@ -324,7 +324,34 @@ export const useTransportStore = create<TransportState>((set, get) => ({
                 passenger_relation: h.passengerRelation as 'SELF' | 'SPOUSE' | 'CHILD' | 'PARENT' | 'GUEST'
             }));
 
+            // OPTIMISTIC UPDATE: Calculate counts to update quota locally
+            const { activeHolds, quota } = get();
+            const outboundCount = confirmations.filter(c =>
+                activeHolds.find(h => h.id === c.holdId)?.direction === 'OUTBOUND'
+            ).length;
+            const inboundCount = confirmations.filter(c =>
+                activeHolds.find(h => h.id === c.holdId)?.direction === 'INBOUND'
+            ).length;
+
             await confirmBatch({ confirmations: apiConfirmations });
+
+            if (quota) {
+                set({
+                    quota: {
+                        outbound: {
+                            ...quota.outbound,
+                            used: quota.outbound.used + outboundCount,
+                            remaining: Math.max(0, quota.outbound.remaining - outboundCount),
+                        },
+                        inbound: {
+                            ...quota.inbound,
+                            used: quota.inbound.used + inboundCount,
+                            remaining: Math.max(0, quota.inbound.remaining - inboundCount),
+                        }
+                    }
+                });
+            }
+
             await get().fetchData(false);
 
             toast.success('Booking confirmed!');

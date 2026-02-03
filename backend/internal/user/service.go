@@ -486,10 +486,15 @@ func (s *Service) AdminCreateUser(ctx context.Context, req RegisterRequest) (*Us
 
 		// Handle Profile Creation
 		if strings.ToUpper(req.UserType) == auth.RoleStudent {
+			batchYear := pgtype.Int4{Int32: 0, Valid: false}
+			if req.BatchYear > 0 {
+				batchYear = pgtype.Int4{Int32: req.BatchYear, Valid: true}
+			}
+
 			_, err := userQ.CreateStudent(ctx, user_db.CreateStudentParams{
 				UserID:    user.ID,
 				RegID:     req.RegID,
-				BatchYear: pgtype.Int4{Int32: 0, Valid: false}, // Default
+				BatchYear: batchYear,
 			})
 			if err != nil {
 				return err

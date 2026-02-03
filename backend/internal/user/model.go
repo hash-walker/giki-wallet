@@ -14,6 +14,7 @@ type RegisterRequest struct {
 	Email       string `json:"email"`
 	UserType    string `json:"user_type"`
 	RegID       string `json:"reg_id,omitempty"`      // For students
+	BatchYear   int32  `json:"batch_year,omitempty"`  // For students
 	EmployeeID  string `json:"employee_id,omitempty"` // For employees
 	Password    string `json:"password"`
 	PhoneNumber string `json:"phone_number"`

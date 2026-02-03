@@ -23,6 +23,8 @@ export const UserFormModal = ({
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [role, setRole] = useState('STUDENT');
+    const [regId, setRegId] = useState('');
+    const [batchYear, setBatchYear] = useState('');
     const [isActive, setIsActive] = useState(true);
 
     useEffect(() => {
@@ -32,11 +34,15 @@ export const UserFormModal = ({
             setPhone(user.phone_number || '');
             setRole(user.user_type);
             setIsActive(user.is_active);
+            setRegId(''); // We don't fetch profile details in the list usually, but can be added if needed
+            setBatchYear('');
         } else {
             setName('');
             setEmail('');
             setPhone('');
             setRole('STUDENT');
+            setRegId('');
+            setBatchYear('');
             setIsActive(true);
         }
     }, [user, isOpen]);
@@ -55,7 +61,12 @@ export const UserFormModal = ({
             phone_number: phone || undefined,
             user_type: role,
             is_active: isActive,
-        });
+            // Pass extra fields for student creation
+            ...(role === 'STUDENT' ? {
+                reg_id: regId,
+                batch_year: batchYear ? parseInt(batchYear) : undefined
+            } : {})
+        } as any);
     };
 
     return (
@@ -116,6 +127,26 @@ export const UserFormModal = ({
                         placeholder="Select role"
                     />
                 </div>
+
+                {role === 'STUDENT' && (
+                    <div className="grid grid-cols-2 gap-4">
+                        <Input
+                            label="Registration ID *"
+                            value={regId}
+                            onChange={(e) => setRegId(e.target.value)}
+                            placeholder="e.g. 2022001"
+                            required={!user}
+                        />
+                        <Input
+                            label="Batch Year *"
+                            type="number"
+                            value={batchYear}
+                            onChange={(e) => setBatchYear(e.target.value)}
+                            placeholder="e.g. 2022"
+                            required={!user}
+                        />
+                    </div>
+                )}
 
                 <div className="flex items-center gap-2">
                     <input

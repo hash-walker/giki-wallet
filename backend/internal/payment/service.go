@@ -281,14 +281,16 @@ func (s *Service) CompleteCardPayment(ctx context.Context, tx pgx.Tx, rForm url.
 		return nil, commonerrors.Wrap(ErrTransactionUpdate, err)
 	}
 
-	if paymentStatus == PaymentStatusSuccess {
+	switch paymentStatus {
+	case PaymentStatusFailed:
+		s.MarkAuditFailed(ctx, auditID, fmt.Sprintf("Gateway logic: %s (%s)", callback.Message, callback.ResponseCode))
+	case PaymentStatusSuccess:
 		err = s.creditWalletFromPayment(ctx, tx, gatewayTxn.UserID, gatewayTxn.Amount, gatewayTxn.TxnRefNo)
 		if err != nil {
 			return nil, err
 		}
+		s.MarkAuditProcessed(ctx, auditID)
 	}
-
-	err = paymentQ.MarkAuditProcessed(ctx, auditID)
 	if err != nil {
 		// Don't fail the whole operation for this
 	}
