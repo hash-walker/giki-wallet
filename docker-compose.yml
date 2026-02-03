@@ -72,6 +72,9 @@ services:
 
       - TOKEN_SECRET=${TOKEN_SECRET}
 
+      # Frontend App URL for payment redirects
+      - APP_URL=${APP_URL:-https://giktransport.giki.edu.pk}
+
       # JazzCash Payment Gateway Configuration
       - JAZZCASH_MERCHANT_ID=${JAZZCASH_MERCHANT_ID}
       - JAZZCASH_PASSWORD=${JAZZCASH_PASSWORD}
