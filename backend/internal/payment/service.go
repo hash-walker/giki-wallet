@@ -717,6 +717,7 @@ func (s *Service) buildAutoSubmitForm(fields gateway.JazzCashFields, jazzcashPos
 					justify-content: center;
 					background: linear-gradient(135deg, #f5f7fa 0%%, #c3cfe2 100%%);
 					padding: 16px;
+					min-height: 100vh;
 				}
 				.payment-card {
 					animation: slideUp 0.6s ease-out;
@@ -741,11 +742,11 @@ func (s *Service) buildAutoSubmitForm(fields gateway.JazzCashFields, jazzcashPos
 			</style>
 		</head>
 		<body onload="document.getElementById('payForm').submit()">
-			<div class="payment-card w-full max-w-md mx-auto bg-white rounded-3xl shadow-2xl p-8 border border-gray-100">
-				<!-- Spinner Icon -->
-				<div class="flex justify-center mb-8">
-					<div class="relative w-20 h-20 bg-gradient-to-br from-blue-50 to-blue-100 rounded-full flex items-center justify-center shadow-lg">
-						<svg class="spinner w-10 h-10 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+			<div class="payment-card max-w-sm mx-auto bg-white rounded-3xl shadow-lg p-8 border border-gray-100 w-full">
+				<!-- Spinner Icon - Smaller -->
+				<div class="flex justify-center mb-6">
+					<div class="relative w-16 h-16 bg-gradient-to-br from-blue-50 to-blue-100 rounded-full flex items-center justify-center">
+						<svg class="spinner w-8 h-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
 							<circle class="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"></circle>
 							<path class="opacity-100" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
 						</svg>
@@ -753,19 +754,19 @@ func (s *Service) buildAutoSubmitForm(fields gateway.JazzCashFields, jazzcashPos
 				</div>
 
 				<!-- Main Content -->
-				<div class="text-center">
-					<h1 class="text-2xl font-bold text-gray-900 mb-3">Securely Redirecting</h1>
-					<p class="text-gray-600 text-base leading-relaxed mb-8">
-						Please wait while we transfer you to the JazzCash Payment Gateway to complete your payment securely.
+				<div class="text-center mb-6">
+					<h1 class="text-2xl font-bold text-gray-900 mb-2">Redirecting to Payment</h1>
+					<p class="text-gray-600 text-sm leading-relaxed">
+						Securely transferring you to JazzCash Payment Gateway...
 					</p>
 				</div>
 
-				<!-- Security Badge -->
-				<div class="flex items-center justify-center gap-2 mb-8 px-4 py-3 bg-green-50 rounded-lg border border-green-100">
-					<svg class="w-5 h-5 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<!-- Security Badge - Compact -->
+				<div class="flex items-center justify-center gap-2 mb-6 px-3 py-2 bg-green-50 rounded-lg border border-green-100">
+					<svg class="w-4 h-4 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
 					</svg>
-					<span class="text-sm font-semibold text-green-800">256-bit SSL Encrypted</span>
+					<span class="text-xs font-semibold text-green-800">256-bit SSL Encrypted</span>
 				</div>
 
 				<!-- Hidden Form -->
@@ -788,17 +789,17 @@ func (s *Service) buildAutoSubmitForm(fields gateway.JazzCashFields, jazzcashPos
 
 				<!-- Fallback for JavaScript Disabled -->
 				<noscript>
-					<div class="mt-6 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl text-center">
-						<p class="text-yellow-900 font-semibold mb-4">JavaScript is disabled in your browser</p>
-						<button type="submit" form="payForm" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-200">
-							Click here to continue to payment
+					<div class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-center">
+						<p class="text-yellow-900 font-semibold text-sm mb-3">JavaScript is disabled in your browser</p>
+						<button type="submit" form="payForm" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-3 rounded-lg transition-colors text-sm">
+							Continue to Payment
 						</button>
 					</div>
 				</noscript>
 
 				<!-- Loading Text -->
-				<div class="mt-6 text-center">
-					<p class="text-xs text-gray-500 font-medium">Redirecting in progress...</p>
+				<div class="mt-4 text-center">
+					<p class="text-xs text-gray-500 font-medium">Please wait...</p>
 					<p class="text-xs text-gray-400 mt-1">Do not close this window</p>
 				</div>
 			</div>
