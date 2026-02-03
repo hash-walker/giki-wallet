@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { AdminNavbar } from '@/shared/components/layout';
-import { LayoutDashboard, Bus, Users, Settings, Clock, Receipt, Ticket, History } from 'lucide-react';
+import { LayoutDashboard, Bus, Users, Settings, Clock, Receipt, Ticket, History, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/shared/stores/authStore';
 import { toast } from '@/lib/toast';
@@ -19,6 +19,7 @@ const adminNavItems = [
     { path: '/admin/users', label: 'Users', icon: Users },
     { path: '/admin/transactions', label: 'Transactions', icon: Receipt },
     { path: '/admin/gateway-transactions', label: 'Gateway Txns', icon: Receipt },
+    { path: '/admin/logs', label: 'System Logs', icon: Shield },
     { path: '/admin/system', label: 'System Status', icon: Settings },
     // History
 
@@ -46,6 +47,7 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
                 '/admin/gateway-transactions',
                 '/admin/tickets',
                 '/admin/system',
+                '/admin/logs',
             ];
             return allowedPaths.includes(item.path);
         }

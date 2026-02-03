@@ -232,7 +232,7 @@ export const TripCreateForm = ({ onSuccess }: { onSuccess?: () => void }) => {
             if (success) {
                 if (duplicateTemplate) {
                     onSuccess?.();
-                    setDuplicateTemplate(null); // Clear duplicate state
+                    setDuplicateTemplate(null);
                 }
                 reset();
             }

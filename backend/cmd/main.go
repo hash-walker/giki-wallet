@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hash-walker/giki-wallet/internal/api"
+	"github.com/hash-walker/giki-wallet/internal/audit"
 	"github.com/hash-walker/giki-wallet/internal/auth"
 	"github.com/hash-walker/giki-wallet/internal/config"
 	"github.com/hash-walker/giki-wallet/internal/mailer"
@@ -75,18 +76,20 @@ func main() {
 	go newWorker.StartStatusTicker(ctx)
 
 	// Initialize Services with dependencies
+	auditService := audit.NewService(pool)
 	userService := user.NewService(pool, newWorker)
-	userHandler := user.NewHandler(userService)
+	userHandler := user.NewHandler(userService, auditService)
 	authService := auth.NewService(pool, cfg.Secrets.JWTSecret)
-	authHandler := auth.NewHandler(authService)
+	authHandler := auth.NewHandler(authService, auditService)
+	auditHandler := audit.NewHandler(auditService)
 	walletService := wallet.NewService(pool, cfg.Secrets.LedgerSecret)
 	walletHandler := wallet.NewHandler(walletService)
 	paymentService := payment.NewService(pool, jazzCashClient, walletService, inquiryRateLimiter, cfg.Server.AppURL)
 	paymentHandler := payment.NewHandler(paymentService, walletService)
 	transportService := transport.NewService(pool, walletService, newWorker)
-	transportHandler := transport.NewHandler(transportService)
+	transportHandler := transport.NewHandler(transportService, auditService)
 
-	srv := api.NewServer(userHandler, authHandler, paymentHandler, transportHandler, walletHandler, newWorker)
+	srv := api.NewServer(userHandler, authHandler, paymentHandler, transportHandler, walletHandler, newWorker, auditService, auditHandler)
 	srv.MountRoutes()
 
 	c := cors.New(cors.Options{

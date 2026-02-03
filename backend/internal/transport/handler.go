@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/hash-walker/giki-wallet/internal/audit"
 	"github.com/hash-walker/giki-wallet/internal/auth"
 	"github.com/hash-walker/giki-wallet/internal/common"
 	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
@@ -17,11 +19,13 @@ import (
 
 type Handler struct {
 	service *Service
+	audit   *audit.Service
 }
 
-func NewHandler(service *Service) *Handler {
+func NewHandler(service *Service, audit *audit.Service) *Handler {
 	return &Handler{
 		service: service,
+		audit:   audit,
 	}
 }
 
@@ -62,6 +66,8 @@ func (h *Handler) CreateTrip(w http.ResponseWriter, r *http.Request) {
 		middleware.HandleError(w, err, requestID)
 		return
 	}
+
+	h.logAdminAction(r.Context(), r, audit.ActionAdminCreateTrip, &tripID, map[string]interface{}{"route_id": req.RouteID, "departure": req.DepartureTime})
 
 	common.ResponseWithJSON(w, http.StatusCreated, CreateTripResponse{TripID: tripID}, requestID)
 }
@@ -113,6 +119,8 @@ func (h *Handler) DeleteTrip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.logAdminAction(r.Context(), r, audit.ActionAdminDeleteTrip, &tripID, nil)
+
 	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"status": "deleted"}, requestID)
 }
 
@@ -137,6 +145,8 @@ func (h *Handler) UpdateTrip(w http.ResponseWriter, r *http.Request) {
 		middleware.HandleError(w, err, requestID)
 		return
 	}
+
+	h.logAdminAction(r.Context(), r, audit.ActionAdminUpdateTrip, &tripID, map[string]interface{}{"action": "update_trip_details"})
 
 	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"status": "updated"}, requestID)
 }
@@ -448,6 +458,8 @@ func (h *Handler) UpdateTripManualStatus(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	h.logAdminAction(r.Context(), r, audit.ActionAdminUpdateTrip, &tripID, map[string]interface{}{"manual_status": req.ManualStatus})
+
 	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"message": "Trip status updated"}, requestID)
 }
 
@@ -478,6 +490,8 @@ func (h *Handler) BatchUpdateTripManualStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	h.logAdminAction(r.Context(), r, audit.ActionAdminUpdateTrip, nil, map[string]interface{}{"batch_update": "status", "count": len(tripIDs), "status": req.ManualStatus})
+
 	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"message": fmt.Sprintf("%d trips updated", len(tripIDs))}, requestID)
 }
 
@@ -496,5 +510,24 @@ func (h *Handler) CancelTrip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.logAdminAction(r.Context(), r, audit.ActionAdminCancelTrip, &tripID, map[string]interface{}{"action": "trip_cancellation_and_refund"})
+
 	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"message": "Trip cancelled and refunds processed"}, requestID)
+}
+
+// logAdminAction is a helper to centralize audit logging
+func (h *Handler) logAdminAction(ctx context.Context, r *http.Request, action string, targetID *uuid.UUID, details map[string]interface{}) {
+	ip := common.GetClientIP(r)
+	userAgent := r.UserAgent()
+	actorID, _ := auth.GetUserIDFromContext(ctx)
+
+	_ = h.audit.LogSecurityEvent(ctx, audit.Event{
+		ActorID:   &actorID,
+		Action:    action,
+		TargetID:  targetID,
+		IPAddress: ip,
+		UserAgent: userAgent,
+		Status:    audit.StatusSuccess,
+		Details:   details,
+	})
 }

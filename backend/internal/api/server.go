@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/hash-walker/giki-wallet/internal/audit"
 	"github.com/hash-walker/giki-wallet/internal/auth"
 	"github.com/hash-walker/giki-wallet/internal/common"
 	"github.com/hash-walker/giki-wallet/internal/middleware"
@@ -15,13 +16,15 @@ import (
 )
 
 type Server struct {
-	Router    *chi.Mux
-	User      *user.Handler
-	Auth      *auth.Handler
-	Payment   *payment.Handler
-	Transport *transport.Handler
-	Wallet    *wallet.Handler
-	Worker    *worker.JobWorker
+	Router       *chi.Mux
+	User         *user.Handler
+	Auth         *auth.Handler
+	Payment      *payment.Handler
+	Transport    *transport.Handler
+	Wallet       *wallet.Handler
+	Worker       *worker.JobWorker
+	Audit        *audit.Service
+	AuditHandler *audit.Handler
 }
 
 func NewServer(
@@ -31,15 +34,19 @@ func NewServer(
 	transportHandler *transport.Handler,
 	walletHandler *wallet.Handler,
 	jobWorker *worker.JobWorker,
+	auditService *audit.Service,
+	auditHandler *audit.Handler,
 ) *Server {
 	return &Server{
-		Router:    chi.NewRouter(),
-		User:      userHandler,
-		Auth:      authHandler,
-		Payment:   paymentHandler,
-		Transport: transportHandler,
-		Wallet:    walletHandler,
-		Worker:    jobWorker,
+		Router:       chi.NewRouter(),
+		User:         userHandler,
+		Auth:         authHandler,
+		Payment:      paymentHandler,
+		Transport:    transportHandler,
+		Wallet:       walletHandler,
+		Worker:       jobWorker,
+		Audit:        auditService,
+		AuditHandler: auditHandler,
 	}
 }
 
@@ -48,9 +55,10 @@ func (s *Server) MountRoutes() {
 	r := s.Router
 
 	// Global middleware stack (order matters!)
-	r.Use(middleware.RequestID)    // 1. Generate request ID
-	r.Use(middleware.Logger)       // 2. Log requests/responses
-	r.Use(middleware.ErrorHandler) // 3. Recover from panics
+	r.Use(middleware.RequestID)         // 1. Generate request ID
+	r.Use(middleware.Logger)            // 2. Log requests/responses
+	r.Use(middleware.ErrorHandler)      // 3. Recover from panics
+	r.Use(middleware.RateLimit(10, 20)) // 4. Global Rate Limit (10 req/s, 20 burst)
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -61,7 +69,10 @@ func (s *Server) MountRoutes() {
 	})
 
 	r.Post("/auth/register", s.User.HandlerRegister)
-	r.Post("/auth/signin", s.Auth.Login)
+
+	// Strict Rate Limit for Login: 1 req/s, 5 burst.
+	r.With(middleware.RateLimit(1, 5)).Post("/auth/signin", s.Auth.Login)
+
 	r.Post("/auth/refresh", s.Auth.RefreshToken)
 	r.Post("/auth/signout", s.Auth.Logout)
 	r.Get("/auth/verify", s.Auth.VerifyEmail)
@@ -152,6 +163,7 @@ func (s *Server) MountRoutes() {
 			r.Get("/revenue/period", s.Payment.GetRevenuePeriodVolume)
 		})
 		r.Get("/finance/transactions", s.Wallet.GetAdminTransactions)
+		r.Get("/audit-logs", s.AuditHandler.HandlerListSecurityEvents)
 
 		// Worker Status
 		r.Get("/worker/status", func(w http.ResponseWriter, r *http.Request) {

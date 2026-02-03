@@ -1,12 +1,15 @@
 package user
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/hash-walker/giki-wallet/internal/audit"
+	"github.com/hash-walker/giki-wallet/internal/auth"
 	"github.com/hash-walker/giki-wallet/internal/common"
 	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
 	"github.com/hash-walker/giki-wallet/internal/middleware"
@@ -14,11 +17,13 @@ import (
 
 type Handler struct {
 	service *Service
+	audit   *audit.Service
 }
 
-func NewHandler(service *Service) *Handler {
+func NewHandler(service *Service, audit *audit.Service) *Handler {
 	return &Handler{
 		service: service,
+		audit:   audit,
 	}
 }
 
@@ -170,6 +175,8 @@ func (h *Handler) HandlerAdminCreateUser(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	h.logAdminAction(r.Context(), r, audit.ActionAdminCreateUser, &user.ID, map[string]any{"email": user.Email, "role": user.UserType})
+
 	common.ResponseWithJSON(w, http.StatusCreated, user, requestID)
 }
 
@@ -195,6 +202,8 @@ func (h *Handler) HandlerUpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.logAdminAction(r.Context(), r, audit.ActionAdminUpdateUser, &user.ID, map[string]any{"changes": "profile_update"})
+
 	common.ResponseWithJSON(w, http.StatusOK, user, requestID)
 }
 
@@ -214,5 +223,24 @@ func (h *Handler) HandlerDeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.logAdminAction(r.Context(), r, audit.ActionAdminDeleteUser, &userID, nil)
+
 	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"message": "User deleted successfully"}, requestID)
+}
+
+// logAdminAction is a helper to centralize audit logging
+func (h *Handler) logAdminAction(ctx context.Context, r *http.Request, action string, targetID *uuid.UUID, details map[string]interface{}) {
+	ip := common.GetClientIP(r)
+	userAgent := r.UserAgent()
+	actorID, _ := auth.GetUserIDFromContext(ctx)
+
+	_ = h.audit.LogSecurityEvent(ctx, audit.Event{
+		ActorID:   &actorID,
+		Action:    action,
+		TargetID:  targetID,
+		IPAddress: ip,
+		UserAgent: userAgent,
+		Status:    audit.StatusSuccess,
+		Details:   details,
+	})
 }

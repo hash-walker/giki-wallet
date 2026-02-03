@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/hash-walker/giki-wallet/internal/audit"
 	"github.com/hash-walker/giki-wallet/internal/common"
 	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
 	"github.com/hash-walker/giki-wallet/internal/middleware"
@@ -15,11 +16,13 @@ import (
 
 type Handler struct {
 	service *Service
+	audit   *audit.Service
 }
 
-func NewHandler(service *Service) *Handler {
+func NewHandler(service *Service, audit *audit.Service) *Handler {
 	return &Handler{
 		service: service,
+		audit:   audit,
 	}
 }
 
@@ -96,20 +99,65 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Capture IP and User Agent
+	ip := common.GetClientIP(r)
+	userAgent := r.UserAgent()
+
+	// 1. Log Attempt
+	_ = h.audit.LogSecurityEvent(r.Context(), audit.Event{
+		Action:    audit.ActionLoginAttempt,
+		Details:   map[string]interface{}{"email": params.Email},
+		IPAddress: ip,
+		UserAgent: userAgent,
+		Status:    audit.StatusSuccess,
+	})
+
 	res, err := h.service.Login(r.Context(), params)
 
 	if err != nil {
+		// 2. Log Failure
+		_ = h.audit.LogSecurityEvent(r.Context(), audit.Event{
+			Action:    audit.ActionLoginFailure,
+			Details:   map[string]interface{}{"email": params.Email, "error": err.Error()},
+			IPAddress: ip,
+			UserAgent: userAgent,
+			Status:    audit.StatusFailure,
+		})
 		middleware.HandleError(w, err, requestID)
 		return
 	}
+
+	// 3. Log Success
+	_ = h.audit.LogSecurityEvent(r.Context(), audit.Event{
+		ActorID:   &res.User.ID,
+		Action:    audit.ActionLoginSuccess,
+		TargetID:  &res.User.ID,
+		IPAddress: ip,
+		UserAgent: userAgent,
+		Status:    audit.StatusSuccess,
+	})
 
 	response := ToLoginResponse(*res)
 	common.ResponseWithJSON(w, http.StatusOK, response, requestID)
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
-	// Stateless logout for Bearer-token auth; client just deletes token.
+	requestID := middleware.GetRequestID(r.Context())
+	userID, _ := GetUserIDFromContext(r.Context())
+	ip := common.GetClientIP(r)
+
+	if userID != uuid.Nil {
+		_ = h.audit.LogSecurityEvent(r.Context(), audit.Event{
+			ActorID:   &userID,
+			Action:    audit.ActionLogout,
+			IPAddress: ip,
+			UserAgent: r.UserAgent(),
+			Status:    audit.StatusSuccess,
+		})
+	}
+
 	w.WriteHeader(http.StatusNoContent)
+	_ = requestID
 }
 
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
