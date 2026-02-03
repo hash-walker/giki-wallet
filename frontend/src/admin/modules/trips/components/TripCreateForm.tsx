@@ -52,125 +52,148 @@ export const TripCreateForm = ({ onSuccess }: { onSuccess?: () => void }) => {
 
     const watchedBusType = watch('busType');
 
-    useEffect(() => {
-        // eslint-disable-next-line
-        fetchRoutes();
-    }, []);
+    // --- HELPERS ---
 
-    // 1. Template-based defaults (Only when Creating New from Scratch)
-    useEffect(() => {
-        if (template && !editingTrip && !duplicateTemplate) {
-            // Calculate default booking times from offset hours
-            const currentDate = methods.getValues('date') || new Date();
-            const currentTime = methods.getValues('time') || '08:00';
-            const departureDateTime = parse(currentTime, 'HH:mm', currentDate);
+    const applyTemplateRules = (tmpl: any) => {
+        if (!tmpl) return;
 
-            // Booking opens X hours before departure
-            const bookingOpenDateTime = addHours(departureDateTime, -template.rules.open_hours_before);
-            setValue('bookingOpenDate', bookingOpenDateTime);
-            setValue('bookingOpenTime', format(bookingOpenDateTime, 'HH:mm'));
+        // Calculate default booking times from offset hours
+        const currentDate = methods.getValues('date') || new Date();
+        const currentTime = methods.getValues('time') || '08:00';
+        const departureDateTime = parse(currentTime, 'HH:mm', currentDate);
 
-            // Booking closes X hours before departure
-            const bookingCloseDateTime = addHours(departureDateTime, -template.rules.close_hours_before);
-            setValue('bookingCloseDate', bookingCloseDateTime);
-            setValue('bookingCloseTime', format(bookingCloseDateTime, 'HH:mm'));
+        // Booking opens X hours before departure
+        const bookingOpenDateTime = addHours(departureDateTime, -tmpl.rules.open_hours_before);
+        setValue('bookingOpenDate', bookingOpenDateTime);
+        setValue('bookingOpenTime', format(bookingOpenDateTime, 'HH:mm'));
 
-            // Auto-detect direction
-            const stops = template.stops;
-            if (stops.length >= 2) {
-                const firstStop = stops[0].name.toUpperCase();
-                const lastStop = stops[stops.length - 1].name.toUpperCase();
+        // Booking closes X hours before departure
+        const bookingCloseDateTime = addHours(departureDateTime, -tmpl.rules.close_hours_before);
+        setValue('bookingCloseDate', bookingCloseDateTime);
+        setValue('bookingCloseTime', format(bookingCloseDateTime, 'HH:mm'));
 
-                if (firstStop.includes("GIKI")) {
-                    setValue('direction', 'OUTBOUND');
-                } else if (lastStop.includes("GIKI")) {
-                    setValue('direction', 'INBOUND');
-                } else {
-                    const name = template.route_name.toUpperCase();
-                    if (name.startsWith("GIKI")) {
-                        setValue('direction', 'OUTBOUND');
-                    } else {
-                        setValue('direction', 'INBOUND');
-                    }
-                }
-            } else {
+        // Auto-detect direction
+        const stops = tmpl.stops;
+        if (stops.length >= 2) {
+            const firstStop = stops[0].name.toUpperCase();
+            const lastStop = stops[stops.length - 1].name.toUpperCase();
+
+            if (firstStop.includes("GIKI")) {
                 setValue('direction', 'OUTBOUND');
-            }
-
-            // Auto-select active stops
-            const activeStopIds = template.stops
-                .filter(s => s.is_active)
-                .map(s => s.stop_id);
-            setValue('selectedStopIds', activeStopIds);
-        }
-    }, [template, editingTrip, duplicateTemplate, setValue, methods]);
-
-    // 2. Edit Mode / Duplicate Mode Population
-    useEffect(() => {
-        const sourceTrip = editingTrip || duplicateTemplate;
-        if (sourceTrip && template) {
-            // Pre-fill from existing trip
-            setValue('routeId', sourceTrip.route_id);
-            setValue('busType', sourceTrip.bus_type as any); // Cast for safety
-            setValue('basePrice', sourceTrip.base_price);
-            setValue('totalCapacity', sourceTrip.total_capacity);
-            setValue('direction', sourceTrip.direction as any);
-
-            // Stops
-            const stopIds = sourceTrip.stops.map(s => s.stop_id);
-            setValue('selectedStopIds', stopIds);
-
-            // Time & Dates
-            // If Duplicate: clear date/time (user must pick new)
-            // If Edit: use existing date/time
-            let departure: Date;
-            if (editingTrip) {
-                departure = new Date(sourceTrip.departure_time);
+            } else if (lastStop.includes("GIKI")) {
+                setValue('direction', 'INBOUND');
             } else {
-                // For duplicate, keep the time but set date to today/tomorrow? 
-                // Or just keep the source time and let user change date.
-                // Let's use current date but source time.
-                departure = new Date();
-                const sourceTime = new Date(sourceTrip.departure_time);
-                departure.setHours(sourceTime.getHours(), sourceTime.getMinutes());
+                const name = tmpl.route_name.toUpperCase();
+                if (name.startsWith("GIKI")) {
+                    setValue('direction', 'OUTBOUND');
+                } else {
+                    setValue('direction', 'INBOUND');
+                }
             }
-
-            setValue('date', departure);
-            setValue('time', format(departure, 'HH:mm'));
-
-            // Recalculate Booking Windows based on offsets in the TRIP (not template)
-            // Wait, TripResponse gives us computed Open/Close times? 
-            // Yes: BookingOpensAt, BookingClosesAt.
-            // But we need to reverse engineer them or just use them.
-            // Note: duplicateTemplate might refer to a past trip, so using its absolute booking dates is wrong.
-            // We should use the offsets. 
-            // Since we don't have offsets in TripResponse, we have to deduce them or use template rules.
-            // Actually, we can deduce: diff(Departure, BookingOpen) = Offset.
-
-            const sourceDeparture = new Date(sourceTrip.departure_time);
-            const sourceOpen = new Date(sourceTrip.booking_opens_at);
-            const sourceClose = new Date(sourceTrip.booking_closes_at);
-
-            const openOffset = differenceInHours(sourceDeparture, sourceOpen);
-            const closeOffset = differenceInHours(sourceDeparture, sourceClose);
-
-            const newOpen = addHours(departure, -openOffset);
-            const newClose = addHours(departure, -closeOffset);
-
-            setValue('bookingOpenDate', newOpen);
-            setValue('bookingOpenTime', format(newOpen, 'HH:mm'));
-            setValue('bookingCloseDate', newClose);
-            setValue('bookingCloseTime', format(newClose, 'HH:mm'));
+        } else {
+            setValue('direction', 'OUTBOUND');
         }
-    }, [editingTrip, duplicateTemplate, template, setValue]);
+
+        // Auto-select active stops
+        const activeStopIds = tmpl.stops
+            .filter((s: any) => s.is_active)
+            .map((s: any) => s.stop_id);
+        setValue('selectedStopIds', activeStopIds);
+    };
+
+    const applySourceTrip = (sourceTrip: any, tmpl: any, isDuplicate: boolean) => {
+        if (!sourceTrip || !tmpl) return;
+
+        // Pre-fill from existing trip
+        setValue('routeId', sourceTrip.route_id);
+        setValue('busType', sourceTrip.bus_type as any);
+        setValue('basePrice', sourceTrip.base_price);
+        setValue('totalCapacity', sourceTrip.total_capacity);
+        setValue('direction', sourceTrip.direction as any);
+
+        // Stops
+        const stopIds = sourceTrip.stops.map((s: any) => s.stop_id);
+        setValue('selectedStopIds', stopIds);
+
+        // Dates & Times
+        let departure: Date;
+        if (!isDuplicate) {
+            // Edit Mode
+            departure = new Date(sourceTrip.departure_time);
+        } else {
+            // Duplicate Mode: Use current date + source time
+            departure = new Date();
+            const sourceTime = new Date(sourceTrip.departure_time);
+            departure.setHours(sourceTime.getHours(), sourceTime.getMinutes());
+        }
+
+        setValue('date', departure);
+        setValue('time', format(departure, 'HH:mm'));
+
+        // Booking Windows (Deduced from Offsets)
+        // logic: New Departure - (Old Departure - Old Open)
+        const sourceDeparture = new Date(sourceTrip.departure_time);
+        const sourceOpen = new Date(sourceTrip.booking_opens_at);
+        const sourceClose = new Date(sourceTrip.booking_closes_at);
+
+        const openOffset = differenceInHours(sourceDeparture, sourceOpen);
+        const closeOffset = differenceInHours(sourceDeparture, sourceClose);
+
+        const newOpen = addHours(departure, -openOffset);
+        const newClose = addHours(departure, -closeOffset);
+
+        setValue('bookingOpenDate', newOpen);
+        setValue('bookingOpenTime', format(newOpen, 'HH:mm'));
+        setValue('bookingCloseDate', newClose);
+        setValue('bookingCloseTime', format(newClose, 'HH:mm'));
+    };
+
+
+    // --- EFFECTS ---
+
+    // 1. Initial Load & Edit/Duplicate Population
+    useEffect(() => {
+        const init = async () => {
+            // Load Routes first
+            await fetchRoutes();
+
+            const source = editingTrip || duplicateTemplate;
+            if (source) {
+                // If editing/duplicating, we need to load the template for the source route
+                // BUT we don't want to wipe the form with template defaults.
+                // We want to load the template (for the UI) and then fill the form with source values.
+
+                // Note: selectRoute updates the store 'template' state.
+                await selectRoute(source.route_id);
+
+                // Now get the fresh template from store (or we could have made selectRoute return it)
+                const currentTemplate = useTripCreateStore.getState().template;
+
+                applySourceTrip(source, currentTemplate, !!duplicateTemplate);
+            }
+        };
+
+        init();
+        // eslint-disable-next-line
+    }, []); // Run once on mount
+
 
     const watchedCapacity = watch('totalCapacity');
     const soldTickets = editingTrip ? (editingTrip.total_capacity - editingTrip.available_seats) : 0;
     const hasBookings = soldTickets > 0;
 
-    const handleRouteChange = (routeId: string) => {
-        selectRoute(routeId);
+    const handleRouteChange = async (routeId: string) => {
+        // Explicit Action: User changed the route.
+        // 1. Fetch new template
+        await selectRoute(routeId);
         setValue('routeId', routeId);
+
+        // 2. Apply Template Defaults (Only if NOT editing an existing trip, logic check handled by context usually, 
+        //    but here if user changes route manually, they likely want defaults)
+        const newTemplate = useTripCreateStore.getState().template;
+        if (newTemplate) {
+            applyTemplateRules(newTemplate);
+        }
     };
 
     const onSubmit = async (values: CreateTripFormValues) => {
