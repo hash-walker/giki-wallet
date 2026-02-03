@@ -765,28 +765,29 @@ func (s *Service) buildAutoSubmitForm(fields gateway.JazzCashFields, jazzcashPos
 // ADMIN SERVICE METHODS
 // =============================================================================
 
-func (s *Service) ListGatewayTransactions(ctx context.Context) ([]AdminGatewayTransaction, error) {
-	txns, err := s.q.ListGatewayTransactions(ctx)
-	if err != nil {
-		return nil, commonerrors.Wrap(ErrDatabaseQuery, err)
+func (s *Service) GetGatewayTransactions(ctx context.Context, params common.GatewayTransactionListParams) ([]payment.GetGatewayTransactionsRow, int64, error) {
+	arg := payment.GetGatewayTransactionsParams{
+		Status:        pgtype.Text{String: params.Status, Valid: params.Status != ""},
+		PaymentMethod: pgtype.Text{String: params.PaymentMethod, Valid: params.PaymentMethod != ""},
+		StartDate:     params.StartDate,
+		EndDate:       params.EndDate,
+		Search:        params.Search,
+		Limit:         int32(params.PageSize),
+		Offset:        int32((params.Page - 1) * params.PageSize),
 	}
 
-	result := make([]AdminGatewayTransaction, len(txns))
-	for i, txn := range txns {
-		result[i] = AdminGatewayTransaction{
-			TxnRefNo:      txn.TxnRefNo,
-			UserID:        txn.UserID,
-			UserName:      txn.UserName,
-			UserEmail:     txn.UserEmail,
-			Amount:        fmt.Sprintf("%d", txn.Amount),
-			Status:        PaymentStatus(txn.Status),
-			PaymentMethod: PaymentMethod(txn.PaymentMethod),
-			CreatedAt:     txn.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:     txn.UpdatedAt.Format(time.RFC3339),
-			BillRefID:     txn.BillRefID,
-		}
+	txns, err := s.q.GetGatewayTransactions(ctx, arg)
+	if err != nil {
+		middleware.LogAppError(fmt.Errorf("GetGatewayTransactions failed: %w; params: %+v", err, params), "payment-get-gateway-transactions")
+		return nil, 0, commonerrors.Wrap(ErrDatabaseQuery, err)
 	}
-	return result, nil
+
+	var total int64
+	if len(txns) > 0 {
+		total = txns[0].TotalCount
+	}
+
+	return txns, total, nil
 }
 
 func (s *Service) VerifyTransaction(ctx context.Context, txnRefNo string) (*AdminGatewayTransaction, error) {

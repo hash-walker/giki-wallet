@@ -62,7 +62,7 @@ WHERE processed = FALSE AND event_type = $1
 ORDER BY received_at
 LIMIT $2;
 
--- name: ListGatewayTransactions :many
+-- name: GetGatewayTransactions :many
 SELECT 
     gt.txn_ref_no,
     gt.user_id,
@@ -73,10 +73,27 @@ SELECT
     gt.payment_method,
     gt.created_at,
     gt.updated_at,
-    gt.bill_ref_id
+    gt.bill_ref_id,
+    COUNT(*) OVER() as total_count
 FROM giki_wallet.gateway_transactions gt
 JOIN giki_wallet.users u ON gt.user_id = u.id
-ORDER BY gt.created_at DESC;
+WHERE 
+    (COALESCE(sqlc.narg('status')::text, '') = '' OR gt.status::text = sqlc.narg('status')::text)
+    AND (
+        COALESCE(sqlc.narg('payment_method')::text, '') = '' OR 
+        gt.payment_method = sqlc.narg('payment_method')
+    )
+    AND gt.created_at >= sqlc.arg('start_date')
+    AND gt.created_at <= sqlc.arg('end_date')
+    AND (
+        sqlc.arg('search')::text = '' OR
+        gt.txn_ref_no ILIKE '%' || sqlc.arg('search')::text || '%' OR
+        gt.bill_ref_id ILIKE '%' || sqlc.arg('search')::text || '%' OR
+        u.name ILIKE '%' || sqlc.arg('search')::text || '%' OR
+        u.email ILIKE '%' || sqlc.arg('search')::text || '%'
+    )
+ORDER BY gt.created_at DESC
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: ForceUpdateGatewayTransactionStatus :one
 UPDATE giki_wallet.gateway_transactions

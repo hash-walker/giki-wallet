@@ -122,3 +122,24 @@ func (p *TransactionListParams) Bind(r *http.Request) error {
 	p.Search = r.URL.Query().Get("search")
 	return nil
 }
+
+type GatewayTransactionListParams struct {
+	PaginationParams
+	DateRangeParams
+	Search        string `json:"search"`
+	Status        string `json:"status"`
+	PaymentMethod string `json:"payment_method"`
+}
+
+func (p *GatewayTransactionListParams) Bind(r *http.Request) error {
+	if err := p.PaginationParams.Bind(r); err != nil {
+		return err
+	}
+	if err := p.DateRangeParams.Bind(r); err != nil {
+		return err
+	}
+	p.Search = r.URL.Query().Get("search")
+	p.Status = r.URL.Query().Get("status")
+	p.PaymentMethod = r.URL.Query().Get("payment_method")
+	return nil
+}

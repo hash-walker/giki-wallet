@@ -2,7 +2,9 @@ package payment
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/hash-walker/giki-wallet/internal/auth"
@@ -154,13 +156,41 @@ func (h *Handler) CheckStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ListGatewayTransactions(w http.ResponseWriter, r *http.Request) {
 	requestID := middleware.GetRequestID(r.Context())
 
-	txns, err := h.pService.ListGatewayTransactions(r.Context())
+	var params common.GatewayTransactionListParams
+	if err := params.Bind(r); err != nil {
+		appErr := commonerrors.New("INVALID_REQUEST", http.StatusBadRequest, err.Error())
+		middleware.HandleError(w, appErr, requestID)
+		return
+	}
+
+	txns, total, err := h.pService.GetGatewayTransactions(r.Context(), params)
 	if err != nil {
 		middleware.HandleError(w, err, requestID)
 		return
 	}
 
-	common.ResponseWithJSON(w, http.StatusOK, txns, requestID)
+	response := make([]AdminGatewayTransaction, len(txns))
+	for i, txn := range txns {
+		response[i] = AdminGatewayTransaction{
+			TxnRefNo:      txn.TxnRefNo,
+			UserID:        txn.UserID,
+			UserName:      txn.UserName,
+			UserEmail:     txn.UserEmail,
+			Amount:        fmt.Sprintf("%d", txn.Amount),
+			Status:        PaymentStatus(txn.Status),
+			PaymentMethod: PaymentMethod(txn.PaymentMethod),
+			CreatedAt:     txn.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:     txn.UpdatedAt.Format(time.RFC3339),
+			BillRefID:     txn.BillRefID,
+		}
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, map[string]interface{}{
+		"data":        response,
+		"total_count": total,
+		"page":        params.Page,
+		"page_size":   params.PageSize,
+	}, requestID)
 }
 
 func (h *Handler) VerifyGatewayTransaction(w http.ResponseWriter, r *http.Request) {
