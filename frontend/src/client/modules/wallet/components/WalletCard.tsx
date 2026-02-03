@@ -57,7 +57,7 @@ export const WalletCard = () => {
                     <Button
                         variant="outline"
                         onClick={() => setShowBalance(!showBalance)}
-                        className="w-12 h-12 p-0 border-white/20 hover:bg-white/10 text-white rounded-xl"
+                        className="w-12 h-12 p-0 border-white/20 bg-transparent hover:bg-white/10 text-white rounded-xl"
                     >
                         {showBalance ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                     </Button>
