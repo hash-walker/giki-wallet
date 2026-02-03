@@ -21,17 +21,15 @@ export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast
     const initiatePayment = async () => {
         if (isActive.current) return;
 
-        // Create new AbortController for this attempt
         abortControllerRef.current = new AbortController();
         isActive.current = true;
 
         reset();
-        
+
         // IMMEDIATELY show the "Payment Request Sent" state
         setStatus('processing');
 
         try {
-            // Get form data from store
             const request: TopUpRequest = {
                 idempotency_key: formData.idempotency_key,
                 amount: parseFloat(formData.amount),
