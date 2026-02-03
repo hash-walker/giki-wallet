@@ -30,7 +30,6 @@ export async function topUp(request: TopUpRequest & { timeout?: number }, signal
     // Validate request
     topUpRequestSchema.parse(data);
 
-    console.log(`Initiating topUp with timeout: ${timeout || 45000}ms`);
     const res = await apiClient.post<TopUpResult>('/payment/topup', data, {
         timeout: timeout || 45000,
         signal
@@ -41,8 +40,6 @@ export async function topUp(request: TopUpRequest & { timeout?: number }, signal
 }
 
 export async function getTransactionStatus(txnRefNo: string, signal?: AbortSignal) {
-    console.log("Transaction Status: ", txnRefNo);
     const res = await apiClient.get<TopUpResult>(`/payment/status/${txnRefNo}`, { signal });
-    console.log("Transaction Status: ", res.data);
     return topUpResultSchema.parse(res.data);
 }
