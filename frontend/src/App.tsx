@@ -1,49 +1,49 @@
-import { useEffect, lazy, Suspense } from 'react';
-import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
 import { Toaster } from '@/shared/components/ui/sonner';
 import { useAuthStore } from '@/shared/stores/authStore';
 
-// Layout components (Keep static as they are small and always needed)
+// Layout components
 import { ClientLayout } from '@/client/layout/ClientLayout';
-import { AdminLayout } from '@/admin';
-import { AuthLayout, RequireAuth } from '@/shared/modules/auth';
+import { AdminLayout } from '@/admin/layout/AdminLayout';
+import { AuthLayout } from '@/shared/modules/auth/layout/AuthLayout';
+import { RequireAuth } from '@/shared/modules/auth/components/RequireAuth';
 import { AdminProtectedRoute } from '@/admin/components/AdminProtectedRoute';
 
-// Admin Lazy loaded components
-const AdminTicketsPage = lazy(() => import('@/admin').then(m => ({ default: m.TicketsPage })));
-const UsersPage = lazy(() => import('@/admin').then(m => ({ default: m.UsersPage })));
-const TransactionsPage = lazy(() => import('@/admin').then(m => ({ default: m.TransactionsPage })));
-const GatewayTransactionsPage = lazy(() => import('@/admin').then(m => ({ default: m.GatewayTransactionsPage })));
-const HistoryPage = lazy(() => import('@/admin').then(m => ({ default: m.HistoryPage })));
-const CreateTripPage = lazy(() => import('@/admin').then(m => ({ default: m.CreateTripPage })));
-const TripsPage = lazy(() => import('@/admin').then(m => ({ default: m.TripsPage })));
-const WorkerStatusPage = lazy(() => import('@/admin').then(m => ({ default: m.WorkerStatusPage })));
-const SystemLogsPage = lazy(() => import('@/admin').then(m => ({ default: m.SystemLogsPage })));
-const SettingsPage = lazy(() => import('@/admin').then(m => ({ default: m.SettingsPage })));
+// Admin components
+import { TicketsPage as AdminTicketsPage } from '@/admin/modules/tickets/pages/TicketsPage';
+import { UsersPage } from '@/admin/modules/users/pages/UsersPage';
+import { TransactionsPage } from '@/admin/modules/transactions/pages/TransactionsPage';
+import { GatewayTransactionsPage } from '@/admin/modules/gateway-transactions/pages/GatewayTransactionsPage';
+import { HistoryPage } from '@/admin/modules/history/pages/HistoryPage';
+import { CreateTripPage } from '@/admin/modules/trips/pages/CreateTripPage';
+import { TripsPage } from '@/admin/modules/trips/pages/TripsPage';
+import { WorkerStatusPage } from '@/admin/modules/system/pages/WorkerStatusPage';
+import { SystemLogsPage } from '@/admin/modules/system/pages/SystemLogsPage';
+import { SettingsPage } from '@/admin/modules/settings/pages/SettingsPage';
 
-// Client Lazy loaded components
-const HomePage = lazy(() => import('@/client/pages/HomePage').then(m => ({ default: m.HomePage })));
-const TransportPage = lazy(() => import('@/client/modules/transport/pages/TransportPage').then(m => ({ default: m.TransportPage })));
-const TopUpPage = lazy(() => import('@/client/modules/wallet/pages/TopUpPage'));
-const PaymentResultPage = lazy(() => import('@/client/modules/wallet/pages/PaymentResultPage'));
-const TicketsPage = lazy(() => import('@/client/modules/transport/pages/TicketsPage').then(m => ({ default: m.TicketsPage })));
-const BookingConfirmationPage = lazy(() => import('@/client/modules/transport/pages/BookingConfirmationPage'));
-const PassengerDetailsPage = lazy(() => import('@/client/modules/transport/pages/PassengerDetailsPage'));
+// Client components
+import { HomePage } from '@/client/pages/HomePage';
+import { TransportPage } from '@/client/modules/transport/pages/TransportPage';
+import TopUpPage from '@/client/modules/wallet/pages/TopUpPage';
+import PaymentResultPage from '@/client/modules/wallet/pages/PaymentResultPage';
+import { TicketsPage } from '@/client/modules/transport/pages/TicketsPage';
+import BookingConfirmationPage from '@/client/modules/transport/pages/BookingConfirmationPage';
+import PassengerDetailsPage from '@/client/modules/transport/pages/PassengerDetailsPage';
 
-// Shared Lazy loaded components
-const AccountPage = lazy(() => import('@/shared/modules/auth/pages/AccountPage').then(m => ({ default: m.AccountPage })));
-const SignInPage = lazy(() => import('@/shared/modules/auth').then(m => ({ default: m.SignInPage })));
-const SignUpPage = lazy(() => import('@/shared/modules/auth').then(m => ({ default: m.SignUpPage })));
-const VerifyEmailPage = lazy(() => import('@/shared/modules/auth').then(m => ({ default: m.VerifyEmailPage })));
-const ForgotPasswordPage = lazy(() => import('@/shared/modules/auth').then(m => ({ default: m.ForgotPasswordPage })));
-const ResetPasswordPage = lazy(() => import('@/shared/modules/auth').then(m => ({ default: m.ResetPasswordPage })));
+// Shared components
+import { AccountPage } from '@/shared/modules/auth/pages/AccountPage';
+import { SignInPage } from '@/shared/modules/auth/pages/SignInPage';
+import { SignUpPage } from '@/shared/modules/auth/pages/SignUpPage';
+import { VerifyEmailPage } from '@/shared/modules/auth/pages/VerifyEmailPage';
+import { ForgotPasswordPage } from '@/shared/modules/auth/pages/ForgotPasswordPage';
+import { ResetPasswordPage } from '@/shared/modules/auth/pages/ResetPasswordPage';
 
-const SuspenseLayout = ({ children }: { children: React.ReactNode }) => (
-    <Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-    </div>}>
-        {children}
-    </Suspense>
+const LoadingSpinner = () => (
+    <div className="min-h-[100vh] flex flex-col items-center justify-center bg-gray-50">
+        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-gray-500 font-medium animate-pulse">Loading GIKI Wallet...</p>
+    </div>
 );
 
 const router = createBrowserRouter([
@@ -51,9 +51,7 @@ const router = createBrowserRouter([
         path: '/auth/sign-in',
         element: (
             <AuthLayout>
-                <SuspenseLayout>
-                    <SignInPage />
-                </SuspenseLayout>
+                <SignInPage />
             </AuthLayout>
         ),
     },
@@ -61,9 +59,7 @@ const router = createBrowserRouter([
         path: '/auth/sign-up',
         element: (
             <AuthLayout>
-                <SuspenseLayout>
-                    <SignUpPage />
-                </SuspenseLayout>
+                <SignUpPage />
             </AuthLayout>
         ),
     },
@@ -71,9 +67,7 @@ const router = createBrowserRouter([
         path: '/auth/verify',
         element: (
             <AuthLayout>
-                <SuspenseLayout>
-                    <VerifyEmailPage />
-                </SuspenseLayout>
+                <VerifyEmailPage />
             </AuthLayout>
         ),
     },
@@ -81,9 +75,7 @@ const router = createBrowserRouter([
         path: '/auth/forgot-password',
         element: (
             <AuthLayout>
-                <SuspenseLayout>
-                    <ForgotPasswordPage />
-                </SuspenseLayout>
+                <ForgotPasswordPage />
             </AuthLayout>
         ),
     },
@@ -91,9 +83,7 @@ const router = createBrowserRouter([
         path: '/auth/reset-password',
         element: (
             <AuthLayout>
-                <SuspenseLayout>
-                    <ResetPasswordPage />
-                </SuspenseLayout>
+                <ResetPasswordPage />
             </AuthLayout>
         ),
     },
@@ -101,9 +91,7 @@ const router = createBrowserRouter([
         path: '/reset-password',
         element: (
             <AuthLayout>
-                <SuspenseLayout>
-                    <ResetPasswordPage />
-                </SuspenseLayout>
+                <ResetPasswordPage />
             </AuthLayout>
         ),
     },
@@ -111,9 +99,7 @@ const router = createBrowserRouter([
         path: '/verify',
         element: (
             <AuthLayout>
-                <SuspenseLayout>
-                    <VerifyEmailPage />
-                </SuspenseLayout>
+                <VerifyEmailPage />
             </AuthLayout>
         ),
     },
@@ -121,9 +107,7 @@ const router = createBrowserRouter([
         path: '/admin/signin',
         element: (
             <AuthLayout>
-                <SuspenseLayout>
-                    <SignInPage />
-                </SuspenseLayout>
+                <SignInPage />
             </AuthLayout>
         ),
     },
@@ -131,9 +115,7 @@ const router = createBrowserRouter([
         path: '/',
         element: (
             <ClientLayout>
-                <SuspenseLayout>
-                    <HomePage />
-                </SuspenseLayout>
+                <HomePage />
             </ClientLayout>
         ),
     },
@@ -147,15 +129,15 @@ const router = createBrowserRouter([
         children: [
             {
                 index: true,
-                element: <SuspenseLayout><TransportPage /></SuspenseLayout>,
+                element: <TransportPage />,
             },
             {
                 path: 'confirm',
-                element: <SuspenseLayout><BookingConfirmationPage /></SuspenseLayout>,
+                element: <BookingConfirmationPage />,
             },
             {
                 path: 'passengers',
-                element: <SuspenseLayout><PassengerDetailsPage /></SuspenseLayout>,
+                element: <PassengerDetailsPage />,
             },
         ],
     },
@@ -169,7 +151,7 @@ const router = createBrowserRouter([
         children: [
             {
                 index: true,
-                element: <SuspenseLayout><TopUpPage /></SuspenseLayout>,
+                element: <TopUpPage />,
             },
         ],
     },
@@ -181,10 +163,10 @@ const router = createBrowserRouter([
             </ClientLayout>
         ),
         children: [
-            { path: 'success', element: <SuspenseLayout><PaymentResultPage /></SuspenseLayout> },
-            { path: 'failed', element: <SuspenseLayout><PaymentResultPage /></SuspenseLayout> },
-            { path: 'error', element: <SuspenseLayout><PaymentResultPage /></SuspenseLayout> },
-            { path: 'pending', element: <SuspenseLayout><PaymentResultPage /></SuspenseLayout> },
+            { path: 'success', element: <PaymentResultPage /> },
+            { path: 'failed', element: <PaymentResultPage /> },
+            { path: 'error', element: <PaymentResultPage /> },
+            { path: 'pending', element: <PaymentResultPage /> },
         ],
     },
     {
@@ -197,7 +179,7 @@ const router = createBrowserRouter([
         children: [
             {
                 index: true,
-                element: <SuspenseLayout><TicketsPage /></SuspenseLayout>,
+                element: <TicketsPage />,
             },
         ],
     },
@@ -211,7 +193,7 @@ const router = createBrowserRouter([
         children: [
             {
                 index: true,
-                element: <SuspenseLayout><AccountPage /></SuspenseLayout>,
+                element: <AccountPage />,
             },
         ],
     },
@@ -229,44 +211,44 @@ const router = createBrowserRouter([
             },
             {
                 path: '/admin/trips',
-                element: <SuspenseLayout><TripsPage /></SuspenseLayout>,
+                element: <TripsPage />,
             },
             {
                 path: '/admin/tickets',
-                element: <SuspenseLayout><AdminTicketsPage /></SuspenseLayout>,
+                element: <AdminTicketsPage />,
             },
 
             {
                 path: '/admin/users',
-                element: <SuspenseLayout><UsersPage /></SuspenseLayout>,
+                element: <UsersPage />,
             },
             {
                 path: '/admin/transactions',
-                element: <SuspenseLayout><TransactionsPage /></SuspenseLayout>,
+                element: <TransactionsPage />,
             },
             {
                 path: '/admin/gateway-transactions',
-                element: <SuspenseLayout><GatewayTransactionsPage /></SuspenseLayout>,
+                element: <GatewayTransactionsPage />,
             },
             {
                 path: '/admin/history',
-                element: <SuspenseLayout><HistoryPage /></SuspenseLayout>,
+                element: <HistoryPage />,
             },
             {
                 path: '/admin/trips/new',
-                element: <SuspenseLayout><CreateTripPage /></SuspenseLayout>,
+                element: <CreateTripPage />,
             },
             {
                 path: '/admin/system',
-                element: <SuspenseLayout><WorkerStatusPage /></SuspenseLayout>,
+                element: <WorkerStatusPage />,
             },
             {
                 path: '/admin/logs',
-                element: <SuspenseLayout><SystemLogsPage /></SuspenseLayout>,
+                element: <SystemLogsPage />,
             },
             {
                 path: '/admin/settings',
-                element: <SuspenseLayout><SettingsPage /></SuspenseLayout>,
+                element: <SettingsPage />,
             },
         ],
     },
@@ -277,11 +259,15 @@ const router = createBrowserRouter([
 ]);
 
 function App() {
-    const { loadMe } = useAuthStore();
+    const { loadMe, initialized } = useAuthStore();
 
     useEffect(() => {
         void loadMe();
     }, [loadMe]);
+
+    if (!initialized) {
+        return <LoadingSpinner />;
+    }
 
     return (
         <>

@@ -1,15 +1,31 @@
 {
     "short_name": "GIKI Wallet",
     "name": "GIKI Wallet",
+    "description": "Secure & Intelligent Payments for GIKI",
     "icons": [
         {
             "src": "logo.svg",
             "type": "image/svg+xml",
-            "sizes": "any"
+            "sizes": "any",
+            "purpose": "any"
+        },
+        {
+            "src": "icon.png",
+            "type": "image/png",
+            "sizes": "1024x1024",
+            "purpose": "any"
+        },
+        {
+            "src": "icon.png",
+            "type": "image/png",
+            "sizes": "1024x1024",
+            "purpose": "maskable"
         }
     ],
-    "start_url": ".",
+    "start_url": "/",
+    "scope": "/",
     "display": "standalone",
+    "orientation": "portrait",
     "theme_color": "#2563EB",
     "background_color": "#ffffff"
 }
