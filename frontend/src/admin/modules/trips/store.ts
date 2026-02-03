@@ -16,12 +16,22 @@ interface TripCreateState {
     isSubmitting: boolean;
     isDeletingTrip: boolean;
 
+    // Edit / Duplicate State
+    editingTrip: TripResponse | null;
+    duplicateTemplate: TripResponse | null;
+
     // Actions
     fetchRoutes: () => Promise<void>;
     fetchTrips: (startDate?: Date, endDate?: Date) => Promise<void>;
     selectRoute: (routeId: string) => Promise<void>;
     resetTemplate: () => void;
+
+    // Edit Actions
+    setEditingTrip: (trip: TripResponse | null) => void;
+    setDuplicateTemplate: (trip: TripResponse | null) => void;
+
     createTrip: (payload: any) => Promise<boolean>;
+    updateTrip: (tripId: string, payload: any) => Promise<boolean>;
     deleteTrip: (tripId: string) => Promise<boolean>;
     updateTripManualStatus: (tripId: string, manualStatus: string | null) => Promise<boolean>;
     batchUpdateTripManualStatus: (tripIds: string[], manualStatus: string) => Promise<boolean>;
@@ -32,11 +42,28 @@ export const useTripCreateStore = create<TripCreateState>((set, get) => ({
     routes: [],
     template: null,
     trips: [],
+    editingTrip: null,
+    duplicateTemplate: null,
     isLoadingRoutes: false,
     isLoadingTemplate: false,
     isLoadingTrips: false,
     isSubmitting: false,
     isDeletingTrip: false,
+
+    setEditingTrip: (trip) => {
+        set({ editingTrip: trip, duplicateTemplate: null });
+        if (trip) {
+            // Also fetch the template for this route so we have stops etc
+            get().selectRoute(trip.route_id);
+        }
+    },
+
+    setDuplicateTemplate: (trip) => {
+        set({ duplicateTemplate: trip, editingTrip: null });
+        if (trip) {
+            get().selectRoute(trip.route_id);
+        }
+    },
 
     fetchRoutes: async () => {
         set({ isLoadingRoutes: true });
@@ -89,9 +116,27 @@ export const useTripCreateStore = create<TripCreateState>((set, get) => ({
             toast.success("Trip created successfully!");
             get().fetchTrips(); // Refresh list after creation
             return true;
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            toast.error("Failed to create trip");
+            const message = error.response?.data?.message || "Failed to create trip";
+            toast.error(message);
+            return false;
+        } finally {
+            set({ isSubmitting: false });
+        }
+    },
+
+    updateTrip: async (tripId, payload) => {
+        set({ isSubmitting: true });
+        try {
+            await TripService.updateTrip(tripId, payload);
+            toast.success("Trip updated successfully!");
+            get().fetchTrips(); // Refresh list after update
+            return true;
+        } catch (error: any) {
+            console.error(error);
+            const message = error.response?.data?.message || "Failed to update trip";
+            toast.error(message);
             return false;
         } finally {
             set({ isSubmitting: false });
@@ -105,9 +150,10 @@ export const useTripCreateStore = create<TripCreateState>((set, get) => ({
             toast.success("Trip deleted successfully!");
             get().fetchTrips(); // Refresh list after deletion
             return true;
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            toast.error("Failed to delete trip");
+            const message = error.response?.data?.message || "Failed to delete trip";
+            toast.error(message);
             return false;
         } finally {
             set({ isDeletingTrip: false });
@@ -120,9 +166,10 @@ export const useTripCreateStore = create<TripCreateState>((set, get) => ({
             toast.success("Trip status updated!");
             get().fetchTrips(); // Refresh list
             return true;
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            toast.error("Failed to update trip status");
+            const message = error.response?.data?.message || "Failed to update trip status";
+            toast.error(message);
             return false;
         }
     },
@@ -133,9 +180,10 @@ export const useTripCreateStore = create<TripCreateState>((set, get) => ({
             toast.success(`${tripIds.length} trip(s) updated!`);
             get().fetchTrips(); // Refresh list
             return true;
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            toast.error("Failed to update trips");
+            const message = error.response?.data?.message || "Failed to update trips";
+            toast.error(message);
             return false;
         }
     },
@@ -146,9 +194,10 @@ export const useTripCreateStore = create<TripCreateState>((set, get) => ({
             toast.success("Trip cancelled and refunds processed!");
             get().fetchTrips(); // Refresh list
             return true;
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            toast.error("Failed to cancel trip");
+            const message = error.response?.data?.message || "Failed to cancel trip";
+            toast.error(message);
             return false;
         }
     },

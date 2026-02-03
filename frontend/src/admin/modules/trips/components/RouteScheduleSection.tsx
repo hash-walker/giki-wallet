@@ -11,13 +11,15 @@ interface RouteScheduleSectionProps {
     isLoadingRoutes: boolean;
     quickSlots?: QuickSlotItem[];
     onRouteSelect: (id: string) => void;
+    disabled?: boolean;
 }
 
 export const RouteScheduleSection = ({
     routes,
     isLoadingRoutes,
     quickSlots,
-    onRouteSelect
+    onRouteSelect,
+    disabled
 }: RouteScheduleSectionProps) => {
     const { control, setValue, watch, formState: { errors } } = useFormContext<CreateTripFormValues>();
 
@@ -53,6 +55,7 @@ export const RouteScheduleSection = ({
                             onRouteSelect(val);
                         }}
                         options={routes.map(r => ({ value: r.route_id, label: r.route_name }))}
+                        disabled={disabled}
                     />
                 )}
             />

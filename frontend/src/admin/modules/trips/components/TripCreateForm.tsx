@@ -11,15 +11,20 @@ import { CapacityPricingSection } from './CapacityPricingSection';
 import { StopsSelectionSection } from './StopsSelectionSection';
 import { BookingWindowSection } from './BookingWindowSection';
 
-export const TripCreateForm = () => {
+export const TripCreateForm = ({ onSuccess }: { onSuccess?: () => void }) => {
     const {
         routes,
         template,
+        editingTrip,
+        duplicateTemplate,
         isLoadingRoutes,
         isSubmitting,
         fetchRoutes,
         selectRoute,
-        createTrip
+        createTrip,
+        updateTrip,
+        setEditingTrip,
+        setDuplicateTemplate
     } = useTripCreateStore();
 
     const methods = useForm<CreateTripFormValues>({
@@ -41,17 +46,20 @@ export const TripCreateForm = () => {
     const {
         handleSubmit,
         setValue,
-        reset
+        reset,
+        watch
     } = methods;
+
+    const watchedBusType = watch('busType');
 
     useEffect(() => {
         // eslint-disable-next-line
         fetchRoutes();
-    }, []); // Run once on mount
+    }, []);
 
-    // When route template loads, update form defaults
+    // 1. Template-based defaults (Only when Creating New from Scratch)
     useEffect(() => {
-        if (template) {
+        if (template && !editingTrip && !duplicateTemplate) {
             // Calculate default booking times from offset hours
             const currentDate = methods.getValues('date') || new Date();
             const currentTime = methods.getValues('time') || '08:00';
@@ -78,7 +86,6 @@ export const TripCreateForm = () => {
                 } else if (lastStop.includes("GIKI")) {
                     setValue('direction', 'INBOUND');
                 } else {
-                    // Fallback to route name check
                     const name = template.route_name.toUpperCase();
                     if (name.startsWith("GIKI")) {
                         setValue('direction', 'OUTBOUND');
@@ -87,7 +94,7 @@ export const TripCreateForm = () => {
                     }
                 }
             } else {
-                setValue('direction', 'OUTBOUND'); // Default
+                setValue('direction', 'OUTBOUND');
             }
 
             // Auto-select active stops
@@ -96,7 +103,70 @@ export const TripCreateForm = () => {
                 .map(s => s.stop_id);
             setValue('selectedStopIds', activeStopIds);
         }
-    }, [template, setValue, methods]);
+    }, [template, editingTrip, duplicateTemplate, setValue, methods]);
+
+    // 2. Edit Mode / Duplicate Mode Population
+    useEffect(() => {
+        const sourceTrip = editingTrip || duplicateTemplate;
+        if (sourceTrip && template) {
+            // Pre-fill from existing trip
+            setValue('routeId', sourceTrip.route_id);
+            setValue('busType', sourceTrip.bus_type as any); // Cast for safety
+            setValue('basePrice', sourceTrip.base_price);
+            setValue('totalCapacity', sourceTrip.total_capacity);
+            setValue('direction', sourceTrip.direction as any);
+
+            // Stops
+            const stopIds = sourceTrip.stops.map(s => s.stop_id);
+            setValue('selectedStopIds', stopIds);
+
+            // Time & Dates
+            // If Duplicate: clear date/time (user must pick new)
+            // If Edit: use existing date/time
+            let departure: Date;
+            if (editingTrip) {
+                departure = new Date(sourceTrip.departure_time);
+            } else {
+                // For duplicate, keep the time but set date to today/tomorrow? 
+                // Or just keep the source time and let user change date.
+                // Let's use current date but source time.
+                departure = new Date();
+                const sourceTime = new Date(sourceTrip.departure_time);
+                departure.setHours(sourceTime.getHours(), sourceTime.getMinutes());
+            }
+
+            setValue('date', departure);
+            setValue('time', format(departure, 'HH:mm'));
+
+            // Recalculate Booking Windows based on offsets in the TRIP (not template)
+            // Wait, TripResponse gives us computed Open/Close times? 
+            // Yes: BookingOpensAt, BookingClosesAt.
+            // But we need to reverse engineer them or just use them.
+            // Note: duplicateTemplate might refer to a past trip, so using its absolute booking dates is wrong.
+            // We should use the offsets. 
+            // Since we don't have offsets in TripResponse, we have to deduce them or use template rules.
+            // Actually, we can deduce: diff(Departure, BookingOpen) = Offset.
+
+            const sourceDeparture = new Date(sourceTrip.departure_time);
+            const sourceOpen = new Date(sourceTrip.booking_opens_at);
+            const sourceClose = new Date(sourceTrip.booking_closes_at);
+
+            const openOffset = differenceInHours(sourceDeparture, sourceOpen);
+            const closeOffset = differenceInHours(sourceDeparture, sourceClose);
+
+            const newOpen = addHours(departure, -openOffset);
+            const newClose = addHours(departure, -closeOffset);
+
+            setValue('bookingOpenDate', newOpen);
+            setValue('bookingOpenTime', format(newOpen, 'HH:mm'));
+            setValue('bookingCloseDate', newClose);
+            setValue('bookingCloseTime', format(newClose, 'HH:mm'));
+        }
+    }, [editingTrip, duplicateTemplate, template, setValue]);
+
+    const watchedCapacity = watch('totalCapacity');
+    const soldTickets = editingTrip ? (editingTrip.total_capacity - editingTrip.available_seats) : 0;
+    const hasBookings = soldTickets > 0;
 
     const handleRouteChange = (routeId: string) => {
         selectRoute(routeId);
@@ -115,6 +185,27 @@ export const TripCreateForm = () => {
         const openOffsetHours = Math.round(differenceInHours(departureDateTime, bookingOpenDateTime));
         const closeOffsetHours = Math.round(differenceInHours(departureDateTime, bookingCloseDateTime));
 
+        // Validation: Open Offset must be > Close Offset (e.g. 24h before > 1h before)
+        if (openOffsetHours <= closeOffsetHours) {
+            methods.setError('bookingOpenTime', {
+                type: 'manual',
+                message: 'Booking must open before it closes (check offsets)'
+            });
+            return;
+        }
+
+        // Validation: Capacity cannot be less than sold tickets
+        if (editingTrip) {
+            const sold = editingTrip.total_capacity - editingTrip.available_seats;
+            if (values.totalCapacity < sold) {
+                methods.setError('totalCapacity', {
+                    type: 'manual',
+                    message: `Capacity cannot be less than sold tickets (${sold})`
+                });
+                return;
+            }
+        }
+
         const payload = {
             route_id: values.routeId,
             departure_time: departureDateTime.toISOString(),
@@ -127,9 +218,23 @@ export const TripCreateForm = () => {
             stops: values.selectedStopIds.map(id => ({ stop_id: id }))
         };
 
-        const success = await createTrip(payload);
-        if (success) {
-            reset();
+        if (editingTrip) {
+            const success = await updateTrip(editingTrip.id, payload);
+            if (success) {
+                onSuccess?.();
+            }
+        } else {
+            const success = await createTrip(payload);
+            if (success) {
+                if (duplicateTemplate) {
+                    // If duplicating, we might want to close the modal too?
+                    // Or keep it open? Let's assume close if in modal (onSuccess present)
+                    onSuccess?.();
+                    setDuplicateTemplate(null); // Clear duplicate state
+                }
+                reset();
+                // If it was a duplicate, we cleared template so it might reset to default.
+            }
         }
     };
 
@@ -145,7 +250,13 @@ export const TripCreateForm = () => {
                             isLoadingRoutes={isLoadingRoutes}
                             quickSlots={template?.quick_slots}
                             onRouteSelect={handleRouteChange}
+                            disabled={hasBookings && !!editingTrip} // Lock route if bookings exist
                         />
+                        {hasBookings && !!editingTrip && (
+                            <div className="bg-yellow-50 p-3 rounded-md border border-yellow-200 text-xs text-yellow-800 flex items-start">
+                                <span className="font-bold mr-1">Note:</span> Route cannot be changed because tickets have already been sold.
+                            </div>
+                        )}
                     </div>
 
                     {/* --- RIGHT COLUMN: Booking Window, Capacity & Stops --- */}
@@ -175,16 +286,28 @@ export const TripCreateForm = () => {
                                         <p className="text-xs text-red-500 mt-1">{methods.formState.errors.busType.message}</p>
                                     )}
                                 </div>
-                                <CapacityPricingSection />
+                                <div>
+                                    <CapacityPricingSection />
+                                    {watchedCapacity < soldTickets && (
+                                        <p className="text-red-600 text-xs mt-1 font-medium animate-pulse">
+                                            ⚠️ Warning: Capacity ({watchedCapacity}) is less than sold tickets ({soldTickets}).
+                                        </p>
+                                    )}
+                                </div>
                                 <StopsSelectionSection stops={template.stops} />
                             </>
                         )}
                     </div>
                 </div>
 
-                <div className="flex justify-end pt-6 border-t">
+                <div className="flex justify-end pt-6 border-t gap-3">
+                    {onSuccess && (
+                        <Button type="button" variant="ghost" onClick={onSuccess}>
+                            Cancel
+                        </Button>
+                    )}
                     <Button type="submit" disabled={isSubmitting || !template} size="lg">
-                        {isSubmitting ? "Creating Trip..." : "Create Trip"}
+                        {isSubmitting ? (editingTrip ? "Updating..." : "Creating...") : (editingTrip ? "Update Trip" : "Create Trip")}
                     </Button>
                 </div>
             </form>

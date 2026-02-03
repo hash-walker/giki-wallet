@@ -22,6 +22,7 @@ import { useTripCreateStore } from '../store';
 import { cn } from '@/lib/utils';
 import { TripResponse } from '../types';
 import { DeleteTripModal } from '../components/DeleteTripModal';
+import { EditTripModal } from '../components/EditTripModal';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -51,7 +52,9 @@ export const TripsPage = () => {
         isDeletingTrip,
         updateTripManualStatus,
         batchUpdateTripManualStatus,
-        cancelTrip
+        cancelTrip,
+        setEditingTrip,
+        setDuplicateTemplate
     } = useTripCreateStore();
 
     const [currentWeek, setCurrentWeek] = useState(new Date());
@@ -375,7 +378,7 @@ export const TripsPage = () => {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-gray-700 font-bold">
-                                                <span className="text-[10px] text-gray-400 mr-1 font-normal underline decoration-primary/30">UGX</span>
+                                                <span className="text-[10px] text-gray-400 mr-1 font-normal underline decoration-primary/30">G-BUX</span>
                                                 {trip.base_price.toLocaleString()}
                                             </td>
                                             <td className="px-6 py-4 text-gray-600 text-xs">
@@ -393,11 +396,21 @@ export const TripsPage = () => {
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end" className="w-56 p-1.5 shadow-xl border-gray-200">
                                                         <DropdownMenuItem
-                                                            onClick={() => navigate(`/admin/trips/${trip.id}/edit`)}
+                                                            onClick={() => setEditingTrip(trip)}
                                                             className="rounded-md"
                                                         >
                                                             <Pencil className="w-4 h-4 mr-3 text-gray-400" />
                                                             Edit Trip Schedule
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            onClick={() => {
+                                                                setDuplicateTemplate(trip);
+                                                                navigate('/admin/trips/new');
+                                                            }}
+                                                            className="rounded-md"
+                                                        >
+                                                            <Plus className="w-4 h-4 mr-3 text-gray-400" />
+                                                            Duplicate Trip
                                                         </DropdownMenuItem>
 
                                                         {!isCancelled && (
@@ -543,7 +556,7 @@ export const TripsPage = () => {
                     </div>
                 </Modal>
             )}
-
+            <EditTripModal />
         </div>
     );
 };

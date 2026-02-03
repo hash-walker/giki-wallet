@@ -19,6 +19,10 @@ export const TripService = {
         return data;
     },
 
+    updateTrip: async (tripId: string, payload: CreateTripRequest): Promise<void> => {
+        await apiClient.put(`/admin/trips/${tripId}`, payload);
+    },
+
     deleteTrip: async (tripId: string): Promise<void> => {
         await apiClient.delete(`/admin/trips/${tripId}`);
     },

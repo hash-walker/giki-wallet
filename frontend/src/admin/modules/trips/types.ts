@@ -50,8 +50,11 @@ export interface CreateTripResponse {
 
 export interface TripResponse {
     id: string; // Changed from trip_id to match backend
+    route_id: string; // Added to match backend
     route_name: string;
     departure_time: string; // ISO String
+    booking_opens_at: string; // ISO String
+    booking_closes_at: string; // ISO String
     status: string; // Changed from booking_status - OPEN, FULL, LOCKED, CLOSED, CANCELLED
     opens_at: string;
     available_seats: number;
