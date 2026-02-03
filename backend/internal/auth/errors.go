@@ -29,4 +29,8 @@ var (
 	// Verification Errors
 	ErrInvalidVerificationToken = errors.New("INVALID_VERIFICATION_TOKEN", http.StatusBadRequest, "Invalid verification token")
 	ErrVerificationTokenExpired = errors.New("VERIFICATION_TOKEN_EXPIRED", http.StatusBadRequest, "Verification token has expired")
+
+	// Refresh Errors
+	ErrInvalidRefreshToken = errors.New("INVALID_REFRESH_TOKEN", http.StatusUnauthorized, "Invalid refresh token, please sign in again")
+	ErrRefreshTokenExpired = errors.New("REFRESH_TOKEN_EXPIRED", http.StatusUnauthorized, "Your session has expired, please sign in again")
 )

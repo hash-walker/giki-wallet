@@ -18,6 +18,7 @@ import (
 	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
 	"github.com/hash-walker/giki-wallet/internal/user/user_db"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -262,6 +263,69 @@ func MakeRefreshToken() (string, error) {
 	refreshToken := hex.EncodeToString(key)
 
 	return refreshToken, nil
+}
+
+func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*TokenPairs, error) {
+	var result *TokenPairs
+
+	err := common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
+		authQ := s.authQ.WithTx(tx)
+
+		rt, err := authQ.GetRefreshTokenByHash(ctx, refreshToken)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrInvalidRefreshToken
+			}
+			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
+
+		// 2. Validate token
+		if rt.RevokedAt.Valid {
+			// Security alert: If a revoked token is reused, someone might be attempting a replay attack.
+			// We revoke ALL tokens for this user for maximum safety.
+			_ = authQ.RevokeAllRefreshTokensForUser(ctx, rt.UserID)
+			return ErrInvalidRefreshToken
+		}
+
+		if time.Now().After(rt.ExpiresAt.Time) {
+			return ErrRefreshTokenExpired
+		}
+
+		// 3. Get User
+		user, err := s.userQ.WithTx(tx).GetUserByID(ctx, rt.UserID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrUserNotFound
+			}
+			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
+
+		expireTime := time.Duration(3600) * time.Second
+		tokenPair, err := s.issueTokenPair(ctx, tx, user, expireTime)
+		if err != nil {
+			return err
+		}
+
+		err = authQ.ReplaceRefreshToken(ctx, auth.ReplaceRefreshTokenParams{
+			TokenHash: refreshToken,
+			ReplacedByToken: pgtype.Text{
+				String: tokenPair.RefreshToken,
+				Valid:  true,
+			},
+		})
+		if err != nil {
+			return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+		}
+
+		result = &tokenPair
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 func sha256Hex(s string) string {

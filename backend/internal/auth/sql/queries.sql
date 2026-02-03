@@ -10,6 +10,17 @@ SELECT user_id, type, expires_at
 FROM giki_wallet.access_tokens
 WHERE token_hash = $1;
 
--- name: CreateAccessToken :one
+-- name: GetRefreshTokenByHash :one
+SELECT * FROM giki_wallet.refresh_tokens
+WHERE token_hash = $1 LIMIT 1;
 
+-- name: ReplaceRefreshToken :exec
+UPDATE giki_wallet.refresh_tokens
+SET revoked_at = NOW(), replaced_by_token = $2, updated_at = NOW()
+WHERE token_hash = $1;
+
+-- name: RevokeAllRefreshTokensForUser :exec
+UPDATE giki_wallet.refresh_tokens
+SET revoked_at = NOW(), updated_at = NOW()
+WHERE user_id = $1 AND revoked_at IS NULL;
 

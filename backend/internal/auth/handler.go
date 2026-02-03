@@ -150,3 +150,35 @@ func (h *Handler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 
 	common.ResponseWithJSON(w, http.StatusOK, ToLoginResponse(*res), requestID)
 }
+func (h *Handler) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	var params struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+
+	if r.Body == nil {
+		middleware.HandleError(w, commonerrors.ErrMissingRequestBody, requestID)
+		return
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidJSON, err), requestID)
+		return
+	}
+
+	if params.RefreshToken == "" {
+		middleware.HandleError(w, commonerrors.ErrMissingField.WithDetails("fields", "refresh_token"), requestID)
+		return
+	}
+
+	tokenPair, err := h.service.RefreshToken(r.Context(), params.RefreshToken)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, ToLoginResponse(LoginResult{
+		Tokens: *tokenPair,
+	}), requestID)
+}

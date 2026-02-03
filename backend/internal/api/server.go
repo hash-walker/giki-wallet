@@ -62,6 +62,7 @@ func (s *Server) MountRoutes() {
 
 	r.Post("/auth/register", s.User.HandlerRegister)
 	r.Post("/auth/signin", s.Auth.Login)
+	r.Post("/auth/refresh", s.Auth.RefreshToken)
 	r.Post("/auth/signout", s.Auth.Logout)
 	r.Get("/auth/verify", s.Auth.VerifyEmail)
 	r.With(s.Auth.Authenticate).Get("/auth/me", s.Auth.Me)
