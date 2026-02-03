@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { User } from './schema';
 import { UserService } from './service';
 import { toast } from '@/lib/toast';
+import { AppError } from '@/lib/errors';
 
 interface UserState {
     // Data
@@ -176,8 +177,8 @@ export const useUserStore = create<UserState>((set, get) => ({
             toast.success('User deleted successfully');
         } catch (error) {
             console.error(error);
-            if (error instanceof Error && error.message.includes('USER_HAS_DATA')) {
-                toast.error('Cannot delete user: Associated data exists');
+            if (error instanceof AppError && error.code === 'USER_HAS_DATA') {
+                toast.error(error.message); // Backend message: "Cannot delete user: ..."
             } else {
                 toast.error('Failed to delete user');
             }
