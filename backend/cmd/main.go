@@ -82,7 +82,7 @@ func main() {
 	authHandler := auth.NewHandler(authService)
 	walletService := wallet.NewService(pool)
 	walletHandler := wallet.NewHandler(walletService)
-	paymentService := payment.NewService(pool, jazzCashClient, walletService, inquiryRateLimiter)
+	paymentService := payment.NewService(pool, jazzCashClient, walletService, inquiryRateLimiter, cfg.Server.AppURL)
 	paymentHandler := payment.NewHandler(paymentService, walletService)
 	transportService := transport.NewService(pool, walletService, newWorker)
 	transportHandler := transport.NewHandler(transportService)

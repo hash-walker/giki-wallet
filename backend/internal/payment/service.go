@@ -36,6 +36,7 @@ type Service struct {
 	dbPool        *pgxpool.Pool
 	gatewayClient gateway.Gateway
 	rateLimiter   *RateLimiter
+	AppURL        string
 }
 
 // RateLimiter limits concurrent API calls to external services
@@ -48,13 +49,14 @@ type RateLimiter struct {
 // =============================================================================
 
 // NewService creates a new payment service
-func NewService(dbPool *pgxpool.Pool, gatewayClient gateway.Gateway, walletS *wallet.Service, rateLimiter *RateLimiter) *Service {
+func NewService(dbPool *pgxpool.Pool, gatewayClient gateway.Gateway, walletS *wallet.Service, rateLimiter *RateLimiter, appURL string) *Service {
 	return &Service{
 		q:             payment.New(dbPool),
 		dbPool:        dbPool,
 		walletS:       walletS,
 		gatewayClient: gatewayClient,
 		rateLimiter:   rateLimiter,
+		AppURL:        appURL,
 	}
 }
 

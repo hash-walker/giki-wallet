@@ -103,7 +103,7 @@ func (h *Handler) CardCallBack(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrDatabase, err), requestID)
 		h.pService.MarkAuditFailed(r.Context(), auditID, err.Error())
-		http.Redirect(w, r, "/payment/pending", http.StatusSeeOther)
+		http.Redirect(w, r, h.pService.AppURL+"/payment/pending", http.StatusSeeOther)
 		return
 	}
 	defer tx.Rollback(r.Context())
@@ -113,21 +113,21 @@ func (h *Handler) CardCallBack(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		middleware.LogAppError(err, requestID)
 		h.pService.MarkAuditFailed(r.Context(), auditID, err.Error())
-		http.Redirect(w, r, "/payment/pending", http.StatusSeeOther)
+		http.Redirect(w, r, h.pService.AppURL+"/payment/pending", http.StatusSeeOther)
 		return
 	}
 
 	if err := tx.Commit(r.Context()); err != nil {
 		middleware.LogAppError(commonerrors.Wrap(commonerrors.ErrDatabase, err), requestID)
 		h.pService.MarkAuditFailed(r.Context(), auditID, err.Error())
-		http.Redirect(w, r, "/payment/error", http.StatusSeeOther)
+		http.Redirect(w, r, h.pService.AppURL+"/payment/error", http.StatusSeeOther)
 		return
 	}
 
 	if result.Status == PaymentStatusSuccess {
-		http.Redirect(w, r, "/payment/success?txn="+result.TxnRefNo, http.StatusSeeOther)
+		http.Redirect(w, r, h.pService.AppURL+"/payment/success?txn="+result.TxnRefNo, http.StatusSeeOther)
 	} else {
-		http.Redirect(w, r, "/payment/failed?txn="+result.TxnRefNo, http.StatusSeeOther)
+		http.Redirect(w, r, h.pService.AppURL+"/payment/failed?txn="+result.TxnRefNo, http.StatusSeeOther)
 	}
 }
 

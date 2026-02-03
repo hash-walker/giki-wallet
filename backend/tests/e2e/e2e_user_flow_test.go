@@ -84,7 +84,7 @@ func TestE2E_FullUserJourney(t *testing.T) {
 		cfg.Jazzcash.StatusInquiryURL,
 	)
 	rateLimiter := payment.NewRateLimiter(10)
-	paymentService := payment.NewService(testDBPool, jcClient, walletService, rateLimiter)
+	paymentService := payment.NewService(testDBPool, jcClient, walletService, rateLimiter, "http://localhost:3000")
 
 	transportService := transport.NewService(testDBPool, walletService)
 

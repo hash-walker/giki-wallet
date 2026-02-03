@@ -23,7 +23,8 @@ type DatabaseConfig struct {
 }
 
 type ServerConfig struct {
-	Port string
+	Port   string
+	AppURL string
 }
 
 type JazzcashConfig struct {
@@ -51,7 +52,8 @@ func LoadConfig() *Config {
 			DbURL: getRequiredEnv("DB_URL"),
 		},
 		Server: ServerConfig{
-			Port: getEnvWithDefault("PORT", "8080"),
+			Port:   getEnvWithDefault("PORT", "8080"),
+			AppURL: getEnvWithDefault("APP_URL", "http://localhost:3000"),
 		},
 		Jazzcash: JazzcashConfig{
 			MerchantID:       getRequiredEnv("JAZZCASH_MERCHANT_ID"),
