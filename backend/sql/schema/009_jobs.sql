@@ -23,6 +23,9 @@ CREATE TABLE giki_wallet.jobs (
 );
 
 CREATE INDEX idx_jobs_fetch ON giki_wallet.jobs(status, run_at);
+CREATE INDEX IF NOT EXISTS idx_jobs_job_type ON giki_wallet.jobs(job_type);
+CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON giki_wallet.jobs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_jobs_status_run_at_retry ON giki_wallet.jobs(status, run_at, retry_count);
 
 -- +goose down
 DROP TABLE giki_wallet.jobs;

@@ -30,6 +30,13 @@ CREATE TABLE giki_wallet.gateway_transactions (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS idx_gateway_txn_user_id ON giki_wallet.gateway_transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_gateway_txn_status ON giki_wallet.gateway_transactions(status);
+CREATE INDEX IF NOT EXISTS idx_gateway_txn_created ON giki_wallet.gateway_transactions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_gateway_txn_polling ON giki_wallet.gateway_transactions(is_polling, status);
+CREATE INDEX IF NOT EXISTS idx_gateway_txn_user_status_created ON giki_wallet.gateway_transactions(user_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_gateway_txn_bill_ref ON giki_wallet.gateway_transactions(bill_ref_id);
+
 -- +goose down
 
 DROP TABLE giki_wallet.gateway_transactions;

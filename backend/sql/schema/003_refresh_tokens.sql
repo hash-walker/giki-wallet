@@ -14,6 +14,12 @@ CREATE TABLE giki_wallet.refresh_tokens(
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON giki_wallet.refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires ON giki_wallet.refresh_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_revoked ON giki_wallet.refresh_tokens(revoked_at);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_expires ON giki_wallet.refresh_tokens(user_id, expires_at DESC);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_cleanup ON giki_wallet.refresh_tokens(revoked_at, expires_at) WHERE revoked_at IS NULL;
+
 -- +goose down
 
 DROP TABLE giki_wallet.refresh_tokens;

@@ -21,6 +21,26 @@ go.work
 # Environment variables
 .env
 .env.local
+.env.*.local
+
+# Secrets and certificates
+*.key
+*.pem
+*.key.txt
+*.crt
+*.crt.txt
+privkey.pem
+fullchain.pem
+cert.pem
+commercail.key.txt
+commercial.crt
+commercial.crt.*
+
+# Database dumps (old data - DO NOT COMMIT)
+db.sql
+schema.sql
+*.dump
+*.sql.bak
 
 # IDE
 .idea/

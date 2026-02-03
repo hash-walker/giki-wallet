@@ -38,6 +38,9 @@ CREATE INDEX idx_audit_unprocessed
 
 -- Index for debugging/correlation
 CREATE INDEX idx_audit_txn_ref ON giki_wallet.payment_audit_log(txn_ref_no);
+CREATE INDEX IF NOT EXISTS idx_audit_user_id ON giki_wallet.payment_audit_log(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_received_at ON giki_wallet.payment_audit_log(received_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_event_type ON giki_wallet.payment_audit_log(event_type);
 
 -- +goose Down
 

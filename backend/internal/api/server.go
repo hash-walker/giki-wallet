@@ -72,7 +72,7 @@ func (s *Server) MountRoutes() {
 		}
 	})
 
-	r.Post("/auth/register", s.User.HandlerRegister)
+	// r.Post("/auth/register", s.User.HandlerRegister)
 
 	// Strict Rate Limit for Login: 1 req/s, 5 burst.
 	r.With(middleware.RateLimit(1, 5)).Post("/auth/signin", s.Auth.Login)

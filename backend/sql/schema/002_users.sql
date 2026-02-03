@@ -47,6 +47,15 @@ CREATE TABLE giki_wallet.access_tokens (
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_created_at_desc ON giki_wallet.users(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_users_email ON giki_wallet.users(email);
+CREATE INDEX IF NOT EXISTS idx_users_phone ON giki_wallet.users(phone_number);
+CREATE INDEX IF NOT EXISTS idx_users_active ON giki_wallet.users(is_active);
+CREATE INDEX IF NOT EXISTS idx_users_auth_provider ON giki_wallet.users(auth_provider);
+CREATE INDEX IF NOT EXISTS idx_users_is_verified ON giki_wallet.users(is_verified);
+CREATE INDEX IF NOT EXISTS idx_users_user_type ON giki_wallet.users(user_type);
+CREATE INDEX IF NOT EXISTS idx_access_tokens_user_id ON giki_wallet.access_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_access_tokens_expires ON giki_wallet.access_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_access_tokens_user_expires ON giki_wallet.access_tokens(user_id, expires_at DESC);
 
 -- +goose down
 DROP TABLE giki_wallet.access_tokens;

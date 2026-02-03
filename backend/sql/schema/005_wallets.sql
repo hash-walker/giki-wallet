@@ -59,6 +59,12 @@ CREATE INDEX idx_ledger_txn_fk
 CREATE INDEX idx_transactions_date
     ON giki_wallet.transactions(created_at);
 
+CREATE INDEX IF NOT EXISTS idx_wallets_user_id ON giki_wallet.wallets(user_id);
+CREATE INDEX IF NOT EXISTS idx_wallets_status ON giki_wallet.wallets(status);
+CREATE INDEX IF NOT EXISTS idx_wallets_created_at ON giki_wallet.wallets(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ledger_balance ON giki_wallet.ledger(balance_after);
+CREATE INDEX IF NOT EXISTS idx_ledger_amount_balance ON giki_wallet.ledger(amount, balance_after);
+CREATE INDEX IF NOT EXISTS idx_transactions_type_created ON giki_wallet.transactions(type, created_at DESC);
 
 -- +goose Down
 DROP TABLE IF EXISTS giki_wallet.ledger;

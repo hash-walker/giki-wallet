@@ -151,7 +151,27 @@ ON giki_transport.trip (departure_time, status);
 CREATE INDEX IF NOT EXISTS idx_trip_status_updated
 ON giki_transport.trip (status, updated_at DESC);
 
-
+CREATE INDEX IF NOT EXISTS idx_trip_route_id ON giki_transport.trip(route_id);
+CREATE INDEX IF NOT EXISTS idx_trip_driver_id ON giki_transport.trip(driver_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_user_id ON giki_transport.tickets(user_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_trip_id ON giki_transport.tickets(trip_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_status ON giki_transport.tickets(status);
+CREATE INDEX IF NOT EXISTS idx_trip_stops_trip_id ON giki_transport.trip_stops(trip_id);
+CREATE INDEX IF NOT EXISTS idx_trip_stops_stop_id ON giki_transport.trip_stops(stop_id);
+CREATE INDEX IF NOT EXISTS idx_trip_holds_user_id ON giki_transport.trip_holds(user_id);
+CREATE INDEX IF NOT EXISTS idx_trip_holds_trip_id ON giki_transport.trip_holds(trip_id);
+CREATE INDEX IF NOT EXISTS idx_trip_holds_expires ON giki_transport.trip_holds(expires_at);
+CREATE INDEX IF NOT EXISTS idx_routes_active ON giki_transport.routes(is_active);
+CREATE INDEX IF NOT EXISTS idx_routes_origin_dest ON giki_transport.routes(origin_stop_id, destination_stop_id);
+CREATE INDEX IF NOT EXISTS idx_driver_active ON giki_transport.driver(is_active);
+CREATE INDEX IF NOT EXISTS idx_route_master_route_id ON giki_transport.route_master_stops(route_id);
+CREATE INDEX IF NOT EXISTS idx_route_weekly_route_id ON giki_transport.route_weekly_schedules(route_id);
+CREATE INDEX IF NOT EXISTS idx_stops_created_at ON giki_transport.stops(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_routes_created_at ON giki_transport.routes(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_trip_created_at ON giki_transport.trip(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tickets_booking_time ON giki_transport.tickets(booking_time DESC);
+CREATE INDEX IF NOT EXISTS idx_trip_holds_user_expires ON giki_transport.trip_holds(user_id, expires_at DESC);
+CREATE INDEX IF NOT EXISTS idx_driver_created_at ON giki_transport.driver(created_at DESC);
 
 -- +goose down
 DROP TABLE IF EXISTS giki_transport.quota_rules;

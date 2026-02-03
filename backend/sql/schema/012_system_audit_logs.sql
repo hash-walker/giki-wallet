@@ -14,6 +14,9 @@ CREATE TABLE giki_wallet.system_audit_logs (
 CREATE INDEX idx_audit_created_at ON giki_wallet.system_audit_logs(created_at);
 CREATE INDEX idx_audit_actor_id ON giki_wallet.system_audit_logs(actor_id);
 CREATE INDEX idx_audit_action ON giki_wallet.system_audit_logs(action);
+CREATE INDEX IF NOT EXISTS idx_audit_actor_action ON giki_wallet.system_audit_logs(actor_id, action, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_target_action ON giki_wallet.system_audit_logs(target_id, action, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_status ON giki_wallet.system_audit_logs(status);
 
 -- +goose Down
 DROP TABLE IF EXISTS giki_wallet.system_audit_logs;
