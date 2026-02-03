@@ -51,3 +51,18 @@ WHERE status = 'OPEN'
     NOW() >= (departure_time - (booking_close_offset_hours * INTERVAL '1 hour'))
         OR available_seats <= 0
 );
+-- name: GetJobStats :one
+SELECT
+    COUNT(*) FILTER (WHERE status = 'PENDING') as pending_count,
+    COUNT(*) FILTER (WHERE status = 'PROCESSING') as processing_count,
+    COUNT(*) FILTER (WHERE status = 'FAILED') as failed_count,
+    COUNT(*) FILTER (WHERE status = 'COMPLETED' AND updated_at > NOW() - INTERVAL '1 hour') as completed_last_hour
+FROM giki_wallet.jobs;
+
+-- name: PruneCompletedJobs :exec
+DELETE FROM giki_wallet.jobs
+WHERE status = 'COMPLETED' AND updated_at < NOW() - INTERVAL '7 days';
+
+-- name: PruneExpiredTokens :exec
+DELETE FROM giki_wallet.access_tokens
+WHERE expires_at < NOW() - INTERVAL '24 hours';

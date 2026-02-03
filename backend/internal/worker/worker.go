@@ -15,9 +15,10 @@ import (
 )
 
 type JobWorker struct {
-	q      *worker.Queries
-	dbPool *pgxpool.Pool
-	mailer *mailer.GraphSender
+	q             *worker.Queries
+	dbPool        *pgxpool.Pool
+	mailer        *mailer.GraphSender
+	lastHeartbeat time.Time
 }
 
 func NewWorker(dbPool *pgxpool.Pool, mailer *mailer.GraphSender) *JobWorker {
@@ -73,19 +74,30 @@ func (w *JobWorker) StartJobTicker(ctx context.Context, workerCount int) {
 
 func (w *JobWorker) StartStatusTicker(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Minute)
+	pruneTicker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
+	defer pruneTicker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			w.lastHeartbeat = time.Now()
 			if err := w.q.AutoOpenTrips(ctx); err != nil {
 				middleware.LogAppError(err, "Error opening trips")
 			}
 
 			if err := w.q.AutoCloseTrips(ctx); err != nil {
 				middleware.LogAppError(err, "Error closing trips")
+			}
+		case <-pruneTicker.C:
+			// Cleanup old data to maintain DB scale
+			if err := w.q.PruneCompletedJobs(ctx); err != nil {
+				middleware.LogAppError(err, "Error pruning jobs")
+			}
+			if err := w.q.PruneExpiredTokens(ctx); err != nil {
+				middleware.LogAppError(err, "Error pruning tokens")
 			}
 		}
 	}
@@ -192,4 +204,16 @@ func (w *JobWorker) handleAccountCreated(payload json.RawMessage) error {
 	}
 
 	return w.mailer.SendTemplate(data.Email, "Welcome to GIKI Transport", "account_created.html", data)
+}
+func (w *JobWorker) GetStatus(ctx context.Context) (map[string]interface{}, error) {
+	stats, err := w.q.GetJobStats(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
+		"last_heartbeat": w.lastHeartbeat,
+		"is_alive":       time.Since(w.lastHeartbeat) < 5*time.Minute,
+		"stats":          stats,
+	}, nil
 }

@@ -6,5 +6,6 @@ export { TransactionsPage } from './modules/transactions';
 export { HistoryPage } from './modules/history';
 export * from './modules/trips';
 export * from './modules/gateway-transactions';
+export { WorkerStatusPage } from './modules/system/pages/WorkerStatusPage';
 export type { User, UserRole } from './modules/users';
 
