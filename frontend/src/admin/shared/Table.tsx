@@ -22,19 +22,18 @@ export const Table = ({ headers, rows, emptyMessage, emptyAction }: TableProps) 
 
     return (
         <Card>
-            <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <div className="overflow-x-auto overflow-y-auto max-h-[70vh] -mx-4 sm:mx-0 rounded-lg">
                 <div className="inline-block min-w-full align-middle">
-                    <table className="w-full">
-                        <thead>
+                    <table className="w-full relative">
+                        <thead className="sticky top-0 z-10 bg-gray-50 shadow-sm">
                             <tr className="border-b border-gray-200">
                                 {headers.map((header, index) => (
                                     <th
                                         key={index}
-                                        className={`py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 whitespace-nowrap ${
-                                            header.align === 'right' ? 'text-right' :
-                                            header.align === 'center' ? 'text-center' :
-                                            'text-left'
-                                        }`}
+                                        className={`py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-gray-700 whitespace-nowrap bg-gray-50 ${header.align === 'right' ? 'text-right' :
+                                                header.align === 'center' ? 'text-center' :
+                                                    'text-left'
+                                            }`}
                                     >
                                         {header.content}
                                     </th>
@@ -50,11 +49,10 @@ export const Table = ({ headers, rows, emptyMessage, emptyAction }: TableProps) 
                                     {row.cells.map((cell, index) => (
                                         <td
                                             key={index}
-                                            className={`py-3 px-3 sm:px-4 whitespace-nowrap ${
-                                                headers[index]?.align === 'right' ? 'text-right' :
-                                                headers[index]?.align === 'center' ? 'text-center' :
-                                                'text-left'
-                                            }`}
+                                            className={`py-3 px-3 sm:px-4 whitespace-nowrap ${headers[index]?.align === 'right' ? 'text-right' :
+                                                    headers[index]?.align === 'center' ? 'text-center' :
+                                                        'text-left'
+                                                }`}
                                         >
                                             {cell}
                                         </td>

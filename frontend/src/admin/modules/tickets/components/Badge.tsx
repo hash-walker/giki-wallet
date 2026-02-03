@@ -6,12 +6,12 @@ export const Badge = ({ status }: BadgeProps) => {
     if (!status) return null;
 
     const styles: Record<string, string> = {
-        CONFIRMED: 'bg-green-100 text-green-800',
-        PENDING: 'bg-yellow-100 text-yellow-800',
-        CANCELLED: 'bg-red-100 text-red-800',
-        DELETED: 'bg-gray-100 text-gray-800',
-        Student: 'bg-blue-100 text-blue-800',
-        Employee: 'bg-purple-100 text-purple-800',
+        CONFIRMED: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20',
+        PENDING: 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20',
+        CANCELLED: 'bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-600/20',
+        DELETED: 'bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-500/10',
+        Student: 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-700/10',
+        Employee: 'bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-700/10',
     };
 
     const labels: Record<string, string> = {
@@ -23,7 +23,7 @@ export const Badge = ({ status }: BadgeProps) => {
         Employee: 'Employee',
     };
 
-    const style = styles[status] || 'bg-gray-100 text-gray-800';
+    const style = styles[status] || 'bg-gray-50 text-gray-600 ring-1 ring-inset ring-gray-500/10';
     const label = labels[status] || status;
 
     return (
