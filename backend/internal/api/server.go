@@ -7,6 +7,7 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/audit"
 	"github.com/hash-walker/giki-wallet/internal/auth"
 	"github.com/hash-walker/giki-wallet/internal/common"
+	"github.com/hash-walker/giki-wallet/internal/config_management"
 	"github.com/hash-walker/giki-wallet/internal/middleware"
 	"github.com/hash-walker/giki-wallet/internal/payment"
 	"github.com/hash-walker/giki-wallet/internal/transport"
@@ -25,6 +26,7 @@ type Server struct {
 	Worker       *worker.JobWorker
 	Audit        *audit.Service
 	AuditHandler *audit.Handler
+	Config       *config_management.Handler
 }
 
 func NewServer(
@@ -36,6 +38,7 @@ func NewServer(
 	jobWorker *worker.JobWorker,
 	auditService *audit.Service,
 	auditHandler *audit.Handler,
+	configHandler *config_management.Handler,
 ) *Server {
 	return &Server{
 		Router:       chi.NewRouter(),
@@ -47,6 +50,7 @@ func NewServer(
 		Worker:       jobWorker,
 		Audit:        auditService,
 		AuditHandler: auditHandler,
+		Config:       configHandler,
 	}
 }
 
@@ -86,6 +90,7 @@ func (s *Server) MountRoutes() {
 			r.Use(s.Auth.Authenticate)
 			r.Post("/topup", s.Payment.TopUp)
 			r.Get("/status/{txnRefNo}", s.Payment.CheckStatus)
+			r.Get("/limit", s.Config.GetMaxTopUpLimit)
 		})
 		// Make this public so window.location.assign can access it without headers
 		r.Get("/page/{txnRefNo}", s.Payment.CardPaymentPage)
@@ -177,6 +182,13 @@ func (s *Server) MountRoutes() {
 				return
 			}
 			common.ResponseWithJSON(w, http.StatusOK, status, requestID)
+		})
+
+		// System Configuration
+		r.Route("/settings", func(r chi.Router) {
+			r.Use(auth.RequireRole(auth.RoleSuperAdmin, auth.RoleTransportAdmin, auth.RoleFinanceAdmin))
+			r.Get("/", s.Config.ListConfigs)
+			r.Put("/{key}", s.Config.UpdateConfig)
 		})
 	})
 }

@@ -144,3 +144,24 @@ sql:
             go_type: "github.com/google/uuid.UUID"
           - db_type: "timestamp"
             go_type: "time.Time"
+
+  #   ------ Config Management Module -----
+  - engine: "postgresql"
+    queries: "internal/config_management/sql"
+    schema: "sql/schema"
+    gen:
+      go:
+        package: "config_db"
+        out: "internal/config_management/config_db"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_prepared_queries: false
+        emit_interface: true
+        emit_exact_table_names: false
+        overrides:
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "timestamp"
+            go_type: "time.Time"

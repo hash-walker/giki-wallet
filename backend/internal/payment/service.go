@@ -15,6 +15,7 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/common"
 	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
 	"github.com/hash-walker/giki-wallet/internal/config"
+	"github.com/hash-walker/giki-wallet/internal/config_management"
 	"github.com/hash-walker/giki-wallet/internal/payment/gateway"
 	payment "github.com/hash-walker/giki-wallet/internal/payment/payment_db"
 	"github.com/hash-walker/giki-wallet/internal/wallet"
@@ -36,6 +37,7 @@ type Service struct {
 	dbPool        *pgxpool.Pool
 	gatewayClient gateway.Gateway
 	rateLimiter   *RateLimiter
+	configS       *config_management.Service
 	AppURL        string
 }
 
@@ -49,13 +51,14 @@ type RateLimiter struct {
 // =============================================================================
 
 // NewService creates a new payment service
-func NewService(dbPool *pgxpool.Pool, gatewayClient gateway.Gateway, walletS *wallet.Service, rateLimiter *RateLimiter, appURL string) *Service {
+func NewService(dbPool *pgxpool.Pool, gatewayClient gateway.Gateway, walletS *wallet.Service, rateLimiter *RateLimiter, configS *config_management.Service, appURL string) *Service {
 	return &Service{
 		q:             payment.New(dbPool),
 		dbPool:        dbPool,
 		walletS:       walletS,
 		gatewayClient: gatewayClient,
 		rateLimiter:   rateLimiter,
+		configS:       configS,
 		AppURL:        appURL,
 	}
 }
@@ -106,10 +109,6 @@ func (s *Service) InitiatePayment(ctx context.Context, payload TopUpRequest) (*T
 		return nil, ErrUserIDNotFound
 	}
 
-	// ══════════════════════════════════════════════════════════════════════════=
-	// check for existing transaction (uses unique constraint)
-	// ═══════════════════════════════════════════════════════════════════════════
-
 	existingPayment, err := s.q.GetByIdempotencyKey(ctx, idempotencyKey)
 	if err == nil {
 		return s.handleExistingTransaction(ctx, existingPayment)
@@ -117,32 +116,34 @@ func (s *Service) InitiatePayment(ctx context.Context, payload TopUpRequest) (*T
 		return nil, commonerrors.Wrap(ErrDatabaseQuery, err)
 	}
 
-	// ═══════════════════════════════════════════════════════════════════════════
-	// check for existing pending transaction for this user
-	// ═══════════════════════════════════════════════════════════════════════════
 	transaction, err := s.q.GetPendingTransaction(ctx, userID)
 	if err == nil {
 		response, err := s.checkTransactionStatus(ctx, transaction)
 
 		if err != nil {
-			// Continue to create new transaction on error
 		} else if response.Status != PaymentStatusFailed {
 			return response, nil
 		}
 
-		// If status is FAILED, continue to create a new transaction
 	} else if !errors.Is(err, pgx.ErrNoRows) {
-		// Log removed, handled by caller if needed or ignored as implementation detail specific logic
 	}
-
-	// ═══════════════════════════════════════════════════════════════════════════
-	// create new transaction record
-	// ═══════════════════════════════════════════════════════════════════════════
 
 	amountPaisa := common.AmountToLowestUnit(payload.Amount)
 
 	if amountPaisa <= 0 {
 		return nil, commonerrors.Wrap(commonerrors.ErrInvalidInput, fmt.Errorf("amount must be greater than 0"))
+	}
+
+	maxLimit, err := s.configS.GetMaxTopUpAmount(ctx)
+	if err == nil {
+		balanceResp, balanceErr := s.walletS.GetUserBalance(ctx, userID)
+		if balanceErr == nil {
+			currentBalancePaisa := common.AmountToLowestUnit(balanceResp.Balance)
+			if int64(amountPaisa)+int64(currentBalancePaisa) > maxLimit {
+				limitRs := maxLimit / 100
+				return nil, commonerrors.Wrap(commonerrors.ErrInvalidInput, fmt.Errorf("top-up would exceed maximum allowed wallet balance of Rs. %d", limitRs))
+			}
+		}
 	}
 
 	billRefNo, err := GenerateBillRefNo()

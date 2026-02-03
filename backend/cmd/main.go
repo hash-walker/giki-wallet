@@ -11,6 +11,7 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/audit"
 	"github.com/hash-walker/giki-wallet/internal/auth"
 	"github.com/hash-walker/giki-wallet/internal/config"
+	"github.com/hash-walker/giki-wallet/internal/config_management"
 	"github.com/hash-walker/giki-wallet/internal/mailer"
 	"github.com/hash-walker/giki-wallet/internal/payment"
 	"github.com/hash-walker/giki-wallet/internal/payment/gateway"
@@ -77,6 +78,14 @@ func main() {
 
 	// Initialize Services with dependencies
 	auditService := audit.NewService(pool)
+
+	// Config Service (Initialize early for dependencies)
+	configService := config_management.NewService(pool)
+	if err := configService.Initialize(ctx); err != nil {
+		log.Printf("Warning: Failed to initialize system configs: %v", err)
+	}
+	configHandler := config_management.NewHandler(configService)
+
 	userService := user.NewService(pool, newWorker)
 	userHandler := user.NewHandler(userService, auditService)
 	authService := auth.NewService(pool, cfg.Secrets.JWTSecret, newWorker)
@@ -84,12 +93,12 @@ func main() {
 	auditHandler := audit.NewHandler(auditService)
 	walletService := wallet.NewService(pool, cfg.Secrets.LedgerSecret)
 	walletHandler := wallet.NewHandler(walletService)
-	paymentService := payment.NewService(pool, jazzCashClient, walletService, inquiryRateLimiter, cfg.Server.AppURL)
+	paymentService := payment.NewService(pool, jazzCashClient, walletService, inquiryRateLimiter, configService, cfg.Server.AppURL)
 	paymentHandler := payment.NewHandler(paymentService, walletService)
 	transportService := transport.NewService(pool, walletService, newWorker)
 	transportHandler := transport.NewHandler(transportService, auditService)
 
-	srv := api.NewServer(userHandler, authHandler, paymentHandler, transportHandler, walletHandler, newWorker, auditService, auditHandler)
+	srv := api.NewServer(userHandler, authHandler, paymentHandler, transportHandler, walletHandler, newWorker, auditService, auditHandler, configHandler)
 	srv.MountRoutes()
 
 	c := cors.New(cors.Options{
