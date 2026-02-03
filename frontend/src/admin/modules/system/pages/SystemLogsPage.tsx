@@ -6,6 +6,7 @@ import { PageHeader, TableWrapper, Table, PaginationControl } from '@/admin/shar
 import { Button } from '@/shared/components/ui/button';
 import { Eye, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from '@/lib/toast';
 
 export const SystemLogsPage: React.FC = () => {
     const [page, setPage] = useState(1);
@@ -15,15 +16,22 @@ export const SystemLogsPage: React.FC = () => {
     const [logs, setLogs] = useState<SystemAuditLog[]>([]);
     const [loading, setLoading] = useState(false);
     const [total, setTotal] = useState(0);
+    const [error, setError] = useState<string | null>(null);
 
     const fetchLogs = useCallback(async () => {
         setLoading(true);
+        setError(null);
         try {
             const res = await getSystemAuditLogs({ page, page_size: pageSize });
             setLogs(res.data);
             setTotal(res.meta.total_items);
         } catch (error) {
-            console.error(error);
+            console.error('Failed to fetch audit logs:', error);
+            const errorMsg = error instanceof Error ? error.message : 'Failed to fetch audit logs';
+            setError(errorMsg);
+            toast.error(errorMsg);
+            setLogs([]);
+            setTotal(0);
         } finally {
             setLoading(false);
         }
@@ -105,6 +113,14 @@ export const SystemLogsPage: React.FC = () => {
                     Refresh
                 </Button>
             </div>
+
+            {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p className="text-sm text-red-700">
+                        <strong>Error:</strong> {error}
+                    </p>
+                </div>
+            )}
 
             <TableWrapper count={total} itemName="log" isLoading={loading}>
                 {/* Pagination (Top) */}
