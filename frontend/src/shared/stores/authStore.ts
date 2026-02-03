@@ -25,6 +25,7 @@ export type AuthUser = {
 
 type AuthState = {
     token: string | null;
+    refreshToken: string | null;
     user: AuthUser | null;
     isLoading: boolean;
     initialized: boolean;
@@ -33,6 +34,7 @@ type AuthState = {
     signOut: () => void;
     loadMe: () => Promise<void>;
     verifyAndLogin: (token: string) => Promise<void>;
+    refreshSession: () => Promise<void>;
 
     registerUser: (input: SignUpPayload) => Promise<AuthUser>;
     login: (input: SignInPayload) => Promise<void>;
@@ -65,6 +67,7 @@ function mapAuthResponseToUser(data: AuthResponse): AuthUser {
 export const useAuthStore = create<AuthState>()(
     (set) => ({
         token: localStorage.getItem('auth_token'),
+        refreshToken: localStorage.getItem('refresh_token'),
         user: null,
         isLoading: false,
         initialized: false,
@@ -73,21 +76,29 @@ export const useAuthStore = create<AuthState>()(
         signOut: () => {
             void apiSignOut().catch(() => { });
             localStorage.removeItem('auth_token');
-            set({ token: null, user: null, error: null, isLoading: false, initialized: true });
+            localStorage.removeItem('refresh_token');
+            set({ token: null, refreshToken: null, user: null, error: null, isLoading: false, initialized: true });
         },
 
         loadMe: async () => {
             try {
                 const token = localStorage.getItem('auth_token');
                 if (!token) {
-                    set({ token: null, user: null, initialized: true });
+                    set({ token: null, refreshToken: null, user: null, initialized: true });
                     return;
                 }
                 const data = await getMe();
-                set({ token, user: mapAuthResponseToUser(data), initialized: true });
+                set({
+                    token,
+                    refreshToken: localStorage.getItem('refresh_token'),
+                    user: mapAuthResponseToUser(data),
+                    initialized: true
+                });
             } catch {
-                localStorage.removeItem('auth_token');
-                set({ token: null, user: null, initialized: true });
+                // If loadMe fails (token expired), we leave it to the axios interceptor 
+                // to attempt a refresh. We don't clear localStorage here to avoid
+                // killing a session that could be refreshed.
+                set({ initialized: true });
             }
         },
 
@@ -96,13 +107,59 @@ export const useAuthStore = create<AuthState>()(
             try {
                 const data = await verifyEmail(token);
                 const accessToken = data.auth?.access_token;
-                if (!accessToken) throw new Error('No token received');
+                const refreshToken = data.auth?.refresh_token;
+
+                if (!accessToken || !refreshToken) throw new Error('Incomplete token pair received');
+
                 localStorage.setItem('auth_token', accessToken);
-                set({ token: accessToken, user: mapAuthResponseToUser(data), isLoading: false, error: null, initialized: true });
+                localStorage.setItem('refresh_token', refreshToken);
+
+                set({
+                    token: accessToken,
+                    refreshToken,
+                    user: mapAuthResponseToUser(data),
+                    isLoading: false,
+                    error: null,
+                    initialized: true
+                });
             } catch (e) {
                 const message = getErrorMessage(e);
                 set({ error: message, isLoading: false });
                 throw new Error(message);
+            }
+        },
+
+        refreshSession: async () => {
+            const currentRefreshToken = localStorage.getItem('refresh_token');
+            if (!currentRefreshToken) {
+                useAuthStore.getState().signOut();
+                return;
+            }
+
+            try {
+                const { refreshToken: apiRefreshToken } = await import('@/shared/modules/auth/api');
+                const data = await apiRefreshToken(currentRefreshToken);
+
+                const accessToken = data.auth?.access_token;
+                const newRefreshToken = data.auth?.refresh_token;
+
+                if (!accessToken || !newRefreshToken) throw new Error('Failed to rotate tokens');
+
+                localStorage.setItem('auth_token', accessToken);
+                localStorage.setItem('refresh_token', newRefreshToken);
+
+                set({
+                    token: accessToken,
+                    refreshToken: newRefreshToken,
+                    // If we don't have user object yet (silent refresh), map it if it exists in response
+                    user: data.id ? mapAuthResponseToUser(data) : useAuthStore.getState().user,
+                    error: null,
+                    initialized: true
+                });
+            } catch (e) {
+                console.error('Session refresh failed:', e);
+                useAuthStore.getState().signOut();
+                throw e;
             }
         },
 
@@ -126,9 +183,21 @@ export const useAuthStore = create<AuthState>()(
             try {
                 const data = await signIn(input);
                 const accessToken = data.auth?.access_token;
-                if (!accessToken) throw new Error('No token received');
+                const refreshToken = data.auth?.refresh_token;
+
+                if (!accessToken || !refreshToken) throw new Error('Incomplete token pair received');
+
                 localStorage.setItem('auth_token', accessToken);
-                set({ token: accessToken, user: mapAuthResponseToUser(data), isLoading: false, error: null, initialized: true });
+                localStorage.setItem('refresh_token', refreshToken);
+
+                set({
+                    token: accessToken,
+                    refreshToken,
+                    user: mapAuthResponseToUser(data),
+                    isLoading: false,
+                    error: null,
+                    initialized: true
+                });
             } catch (e) {
                 const message = getErrorMessage(e);
                 set({ error: message, isLoading: false });

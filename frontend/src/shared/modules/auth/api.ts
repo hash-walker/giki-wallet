@@ -6,7 +6,7 @@ export type SignUpPayload = {
     phone_number: string;
     password: string;
     user_type: 'STUDENT' | 'EMPLOYEE';
-    reg_id: string; 
+    reg_id: string;
 };
 
 export type SignInPayload = {
@@ -53,4 +53,9 @@ export async function verifyEmail(token: string) {
 
 export async function signOut() {
     await apiClient.post('/auth/signout');
+}
+
+export async function refreshToken(token: string) {
+    const res = await apiClient.post<AuthResponse>('/auth/refresh', { refresh_token: token });
+    return res.data;
 }

@@ -30,6 +30,18 @@ apiClient.interceptors.request.use(
 );
 
 // Response interceptor - Handle errors globally
+let isRefreshing = false;
+let refreshSubscribers: ((token: string) => void)[] = [];
+
+const subscribeTokenRefresh = (cb: (token: string) => void) => {
+    refreshSubscribers.push(cb);
+};
+
+const onRereshed = (token: string) => {
+    refreshSubscribers.map((cb) => cb(token));
+    refreshSubscribers = [];
+};
+
 apiClient.interceptors.response.use(
     (response) => {
         // For successful responses, unwrap the APIResponse structure
@@ -45,44 +57,76 @@ apiClient.interceptors.response.use(
 
         return response;
     },
-    (error) => {
-        // Extract structured error from response
+    async (error) => {
         const appError = extractAPIError(error);
 
-        // Log the error for debugging
         logError(appError, {
             url: error.config?.url,
             method: error.config?.method,
         });
-
-        // Handle specific status codes
         if (error.response?.status === 401) {
-            // Unauthorized - clear token (expired/invalid)
-            localStorage.removeItem('auth_token');
 
-            // Optional: Redirect to login if not already there
-            if (window.location.pathname !== '/login') {
-                // You can dispatch a custom event here if needed
+            const isAuthRequest = error.config?.url?.includes('/auth/signin') || error.config?.url?.includes('/auth/refresh');
+
+            if (!isAuthRequest) {
+                const originalRequest = error.config;
+
+                if (!isRefreshing) {
+                    isRefreshing = true;
+                    try {
+                        const { useAuthStore } = await import('@/shared/stores/authStore');
+                        const store = useAuthStore.getState();
+
+                        if (store.refreshToken) {
+                            console.log('Session expired, attempting silent refresh...');
+                            await store.refreshSession();
+
+                            const newToken = localStorage.getItem('auth_token');
+                            isRefreshing = false;
+
+                            if (newToken) {
+                                onRereshed(newToken);
+                                originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                                return apiClient(originalRequest);
+                            }
+                        }
+                    } catch (refreshError) {
+                        isRefreshing = false;
+                        console.error('Silent refresh failed, logging out...');
+                        refreshSubscribers = [];
+                    }
+                } else {
+                    // Queue the request until refresh is done
+                    return new Promise((resolve) => {
+                        subscribeTokenRefresh((token) => {
+                            originalRequest.headers.Authorization = `Bearer ${token}`;
+                            resolve(apiClient(originalRequest));
+                        });
+                    });
+                }
+            }
+
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('refresh_token');
+
+            if (window.location.pathname !== '/login' && window.location.pathname !== '/admin/signin') {
                 console.warn('Session expired. Please log in again.');
             }
         }
 
         if (error.response?.status === 403) {
-            // Forbidden
             console.error('Access forbidden:', appError.message);
         }
 
         if (error.code === 'ECONNABORTED') {
             console.warn('Request timed out. The server might be busy or restarting.');
         } else if (error.response?.status >= 500) {
-            // Server error
             const data = error.response.data;
             if (typeof data === 'string' && data.includes('<html')) {
                 console.warn(`Server error (${error.response.status}): Service is currently unavailable (Proxy/Edge error).`);
             }
         }
 
-        // Reject with the structured AppError instead of raw axios error
         return Promise.reject(appError);
     }
 );
