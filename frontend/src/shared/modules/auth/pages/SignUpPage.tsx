@@ -136,7 +136,7 @@ export const SignUpPage = () => {
                     <Input
                         label="Phone number"
                         type="tel"
-                        placeholder="03XX-XXXXXXX"
+                        placeholder="03XXXXXXXXX"
                         autoComplete="tel"
                         {...register('phoneNumber')}
                         error={errors.phoneNumber?.message}

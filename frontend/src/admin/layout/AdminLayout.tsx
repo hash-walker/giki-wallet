@@ -42,6 +42,7 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
                 '/admin/trips',
                 '/admin/users',
                 '/admin/transactions',
+                '/admin/gateway-transactions',
                 '/admin/tickets',
 
             ];

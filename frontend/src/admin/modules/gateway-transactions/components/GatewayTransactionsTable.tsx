@@ -1,7 +1,7 @@
 import { GatewayTransaction } from '../schema';
 import { Table } from '../../../shared';
 import { Button } from '@/shared/components/ui/button';
-import { CheckCircle } from 'lucide-react';
+import { CheckCircle, RotateCw } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface GatewayTransactionsTableProps {
@@ -46,12 +46,12 @@ export const GatewayTransactionsTable = ({
                     <Button
                         size="sm"
                         variant="ghost"
-                        className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                         onClick={() => onVerify(txn.txn_ref_no)}
                         disabled={isUpdating}
                     >
-                        <CheckCircle className="w-4 h-4 mr-1" />
-                        Verify
+                        <RotateCw className={`w-4 h-4 mr-1 ${isUpdating ? 'animate-spin' : ''}`} />
+                        Inquiry Status
                     </Button>
                 )}
             </div>,

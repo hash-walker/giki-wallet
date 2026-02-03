@@ -1,9 +1,9 @@
 import { apiClient } from '@/lib/axios';
-import { GatewayTransaction } from './schema';
+import { GatewayTransaction, GatewayTransactionListParams, GatewayTransactionResponse } from './schema';
 
 export const GatewayTransactionService = {
-    listGatewayTransactions: async (): Promise<GatewayTransaction[]> => {
-        const response = await apiClient.get('/admin/transactions/gateway');
+    listGatewayTransactions: async (params: GatewayTransactionListParams): Promise<GatewayTransactionResponse> => {
+        const response = await apiClient.get('/admin/transactions/gateway', { params });
         return response.data;
     },
 

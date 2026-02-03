@@ -50,73 +50,30 @@ export const TransportPage = () => {
         void fetchData(true);
     }, [fetchData]);
 
-    // Anti-Zombie: Auto-release if timer hits 0 while holds exist
     useEffect(() => {
         if (activeHolds.length > 0 && timeLeft === 0 && !tripsLoading) {
-            // Wait a tick to ensure it's not just initializing
-            // actually timeLeft 0 is default state on init? 
-            // useHoldTimer sets 0 initially.
-            // But we need to distinguish "expired" from "init".
-            // activeHolds.length > 0 check handles initialization (initially 0 holds until fetch).
-            // But fetch might return holds that are already expired? No, backend filters those or returns error.
-            // If backend returns expired holds, timeLeft will be 0 immediately.
-            // So this logic works: If we have holds, and time is 0, they are expired.
-            // We should clear them locally to reset UI.
-
-            // NOTE: We call fetchData instead of releaseAllHolds because releaseAllHolds calls API.
-            // If they are already expired on backend, release API might error or be redundant.
-            // But we want to show the Toast.
-
-            // To be safe and prevent loop on init (if timeLeft initializes 0 before ticking),
-            // let's ensure we only trigger if we "saw" time > 0 before? Too complex.
-            // Simply: if activeHolds is non-empty, and time is 0, we have an issue.
-
-            // Let's rely on useHoldTimer behavior: it sets time immediately based on check.
-
             toast.error("Reservation expired. Please try again.");
-            fetchData(false); // Refresh source of truth (likely empty now)
-
-            // Also reset store local selection state if needed, though fetchData handles activeHolds sync.
-            // Reset wizard state?
+            fetchData(false);
             useTransportStore.getState().resetBookingFlow();
         }
     }, [activeHolds.length, timeLeft, tripsLoading, fetchData]);
 
-    // console.log('👤 User info:', { user, user_type: user?.user_type });
-
     const isStudent = user?.user_type === 'STUDENT';
-    // const isEmployee = user?.user_type?.toLowerCase() === 'employee';
 
     const handleBook = async (selection: BookingSelection) => {
-        // console.log('🎯 Book clicked', { userType: user?.user_type, direction });
-
         try {
             await addSelection(selection);
-            // console.log('✅ addSelection completed');
-
-            // Logic for navigation/modal
-            // Note: addSelection in store already handles 'isRoundTrip' direction switching
-
-            // We need to check the updated state (or infer it). 
-            // Since `addSelection` is async and updates store, `outboundSelection` / `returnSelection` 
-            // from the hook might not be updated in this render cycle immediately if we rely on closure.
-            // Using `useTransportStore.getState()` is safer for immediate check.
             const state = useTransportStore.getState();
 
             if (state.isRoundTrip) {
-                // If we have both selections, proceed to confirmation
                 if (state.outboundSelection && state.returnSelection) {
                     if (isStudent) {
                         setShowConfirmModal(true);
                     } else {
                         navigate('/transport/passengers');
                     }
-                } else {
-                    // Waiting for second leg. Store already switched direction toast.
-                    // Do nothing here.
-                }
+                } else { }
             } else {
-                // Single trip flow
                 if (isStudent) {
                     setShowConfirmModal(true);
                 } else {
@@ -125,7 +82,7 @@ export const TransportPage = () => {
             }
 
         } catch (error) {
-            console.error('❌ handleBook error:', error);
+            console.error('handleBook error:', error);
         }
     };
 
@@ -155,7 +112,6 @@ export const TransportPage = () => {
         );
     }
 
-    // Prepare data for BookingConfirmationModal
     const getTripSummary = (selection: BookingSelection | null): TripSummary | null => {
         if (!selection) return null;
         const trip = allTrips.find(t => t.id === selection.tripId);
@@ -177,7 +133,6 @@ export const TransportPage = () => {
     const outboundSummary = getTripSummary(outboundSelection);
     const returnSummary = getTripSummary(returnSelection);
 
-    // Filter holds by direction (using trip direction from activeHolds)
     const outboundHolds = activeHolds
         .filter(h => h.direction?.toUpperCase() === 'OUTBOUND')
         .map(h => ({ hold_id: h.id, expires_at: h.expires_at }));

@@ -19,3 +19,20 @@ export const updateGatewayTransactionStatusSchema = z.object({
 
 export type GatewayTransaction = z.infer<typeof gatewayTransactionSchema>;
 export type UpdateGatewayTransactionStatus = z.infer<typeof updateGatewayTransactionStatusSchema>;
+
+export interface GatewayTransactionListParams {
+    page: number;
+    page_size: number;
+    start_date?: string;
+    end_date?: string;
+    search?: string;
+    status?: string;
+    payment_method?: string;
+}
+
+export interface GatewayTransactionResponse {
+    data: GatewayTransaction[];
+    total_count: number;
+    page: number;
+    page_size: number;
+}
