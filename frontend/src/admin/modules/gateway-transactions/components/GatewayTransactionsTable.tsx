@@ -1,18 +1,20 @@
 import { GatewayTransaction } from '../schema';
 import { Table } from '../../../shared';
 import { Button } from '@/shared/components/ui/button';
-import { CheckCircle, RotateCw } from 'lucide-react';
+import { CheckCircle, RotateCw, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface GatewayTransactionsTableProps {
     transactions: GatewayTransaction[];
     onVerify: (txnRefNo: string) => void;
+    onViewLogs: (txnRefNo: string) => void;
     isUpdating: boolean;
 }
 
 export const GatewayTransactionsTable = ({
     transactions,
     onVerify,
+    onViewLogs,
     isUpdating
 }: GatewayTransactionsTableProps) => {
     const headers = [
@@ -41,7 +43,16 @@ export const GatewayTransactionsTable = ({
             <span key="date" className="text-sm text-gray-500">
                 {format(new Date(txn.created_at), 'MMM d, yyyy HH:mm')}
             </span>,
-            <div key="actions" className="flex justify-end">
+            <div key="actions" className="flex justify-end gap-2">
+                <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                    onClick={() => onViewLogs(txn.txn_ref_no)}
+                    title="View Logs"
+                >
+                    <Eye className="w-4 h-4" />
+                </Button>
                 {txn.status !== 'COMPLETED' && (
                     <Button
                         size="sm"
@@ -49,9 +60,10 @@ export const GatewayTransactionsTable = ({
                         className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                         onClick={() => onVerify(txn.txn_ref_no)}
                         disabled={isUpdating}
+                        title="Inquiry Status"
                     >
                         <RotateCw className={`w-4 h-4 mr-1 ${isUpdating ? 'animate-spin' : ''}`} />
-                        Inquiry Status
+                        Verify
                     </Button>
                 )}
             </div>,

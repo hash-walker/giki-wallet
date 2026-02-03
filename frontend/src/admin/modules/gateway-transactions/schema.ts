@@ -30,9 +30,23 @@ export interface GatewayTransactionListParams {
     payment_method?: string;
 }
 
+export interface PaymentAuditLog {
+    id: string;
+    event_type: string;
+    raw_payload: any;
+
+    txn_ref_no: string;
+    gateway_ref: string | null;
+    processed: boolean;
+    processed_at: string | null;
+    process_error: string | null;
+    received_at: string;
+}
+
 export interface GatewayTransactionResponse {
     data: GatewayTransaction[];
     total_count: number;
+    total_amount: string;
     page: number;
     page_size: number;
 }

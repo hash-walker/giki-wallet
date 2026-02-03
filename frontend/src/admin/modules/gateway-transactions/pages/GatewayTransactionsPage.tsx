@@ -4,15 +4,23 @@ import { useGatewayTransactionStore } from '../store';
 import { GatewayTransactionsTable } from '../components/GatewayTransactionsTable';
 import { Input } from '@/shared/components/ui/Input';
 import { Button } from '@/shared/components/ui/button';
-import { Search, RotateCw, Filter } from 'lucide-react';
+import { Search, RotateCw, Filter, Wallet, Download, TrendingUp, Banknote, Coins } from 'lucide-react';
 import { Select } from '@/shared/components/ui/Select';
 import { useDebounce } from '@/shared/hooks/useDebounce';
 
+import { AuditLogModal } from '../components/AuditLogModal';
+
 export const GatewayTransactionsPage = () => {
     const store = useGatewayTransactionStore();
+    const [viewingLogsFor, setViewingLogsFor] = useState<string | null>(null);
+
     const {
         transactions,
         totalCount,
+        totalLiability,
+        totalRevenue,
+        periodVolume,
+        periodRevenue,
         isLoading,
         isUpdating,
         page,
@@ -28,7 +36,9 @@ export const GatewayTransactionsPage = () => {
         setPaymentMethod,
         setDateRange,
         fetchTransactions,
-        verifyTransaction
+        verifyTransaction,
+        fetchFinanceStats,
+        exportTransactions
     } = store;
 
     // Week Selector Logic
@@ -52,9 +62,8 @@ export const GatewayTransactionsPage = () => {
     // Initial Fetch
     useEffect(() => {
         fetchTransactions();
-    }, []); // Only mount, subsequent fetches handled by setters in store or effects if we were cleaner, but store handles it.
-
-    // Actually store actions fetch immediately, so we don't need effects here except initial.
+        fetchFinanceStats();
+    }, []);
 
     const handleVerify = (txnRefNo: string) => {
         if (confirm('Verify Transaction Status?\n\nThis will query the payment gateway. If the transaction was successful but not recorded, the user will be credited immediately.\n\nProceed?')) {
@@ -69,10 +78,75 @@ export const GatewayTransactionsPage = () => {
                     title="Gateway Transactions"
                     description="Monitor and verify external validation top-ups."
                 />
-                <Button variant="outline" size="sm" onClick={() => fetchTransactions()} disabled={isLoading}>
-                    <RotateCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                    Refresh
-                </Button>
+                <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => exportTransactions()} disabled={isLoading}>
+                        <Download className="w-4 h-4 mr-2" />
+                        Export CSV
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => { fetchTransactions(); fetchFinanceStats(); }} disabled={isLoading}>
+                        <RotateCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                        Refresh
+                    </Button>
+                </div>
+            </div>
+
+            {/* Stats Section */}
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-sm font-medium text-gray-500">Total Lifetime Liability</p>
+                            <p className="text-2xl font-bold text-gray-900 mt-1">
+                                {new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR' }).format(totalLiability)}
+                            </p>
+                        </div>
+                        <div className="p-2 bg-red-50 rounded-lg">
+                            <Wallet className="w-5 h-5 text-red-600" />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-sm font-medium text-gray-500">Transport Revenue (Lifetime)</p>
+                            <p className="text-2xl font-bold text-green-600 mt-1">
+                                {new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR' }).format(totalRevenue)}
+                            </p>
+                        </div>
+                        <div className="p-2 bg-green-50 rounded-lg">
+                            <Banknote className="w-5 h-5 text-green-600" />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-sm font-medium text-gray-500">Period Deposit Volume</p>
+                            <p className="text-2xl font-bold text-blue-600 mt-1">
+                                {new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR' }).format(periodVolume)}
+                            </p>
+                        </div>
+                        <div className="p-2 bg-blue-50 rounded-lg">
+                            <TrendingUp className="w-5 h-5 text-blue-600" />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-sm font-medium text-gray-500">Period Revenue Volume</p>
+                            <p className="text-2xl font-bold text-emerald-600 mt-1">
+                                {new Intl.NumberFormat('en-PK', { style: 'currency', currency: 'PKR' }).format(periodRevenue)}
+                            </p>
+                        </div>
+                        <div className="p-2 bg-emerald-50 rounded-lg">
+                            <Coins className="w-5 h-5 text-emerald-600" />
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* Filters Section */}
@@ -159,10 +233,16 @@ export const GatewayTransactionsPage = () => {
                     <GatewayTransactionsTable
                         transactions={transactions}
                         onVerify={handleVerify}
+                        onViewLogs={setViewingLogsFor}
                         isUpdating={isUpdating}
                     />
                 </div>
             </TableWrapper>
+
+            <AuditLogModal
+                txnRefNo={viewingLogsFor}
+                onClose={() => setViewingLogsFor(null)}
+            />
         </div>
     );
 };
