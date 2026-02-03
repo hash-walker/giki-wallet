@@ -23,6 +23,8 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/worker"
 	"github.com/hash-walker/giki-wallet/internal/worker/worker_db"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -235,12 +237,15 @@ func (s *Service) createRoleProfile(ctx context.Context, tx pgx.Tx, userID uuid.
 	}
 }
 
-func (s *Service) ListUsers(ctx context.Context, page, pageSize int) (*UsersListWithPagination, error) {
+func (s *Service) ListUsers(ctx context.Context, page, pageSize int, search, userType, filterStatus string) (*UsersListWithPagination, error) {
 	offset := (page - 1) * pageSize
 
 	rows, err := s.userQ.ListUsers(ctx, user_db.ListUsersParams{
-		Limit:  int32(pageSize),
-		Offset: int32(offset),
+		Search:       search,
+		UserType:     userType,
+		FilterStatus: filterStatus,
+		Limit:        int32(pageSize),
+		Offset:       int32(offset),
 	})
 	if err != nil {
 		return nil, translateDBError(err)
@@ -423,5 +428,121 @@ func (s *Service) enqueueAccountRejectionJob(ctx context.Context, email, name st
 		Name:  name,
 	})
 
+	return nil
+}
+
+func (s *Service) UpdateUser(ctx context.Context, userID uuid.UUID, req RegisterRequest) (AdminUser, error) {
+	row, err := s.userQ.UpdateUserDetails(ctx, user_db.UpdateUserDetailsParams{
+		Name:        req.Name,
+		Email:       req.Email,
+		PhoneNumber: req.PhoneNumber,
+		ID:          userID,
+	})
+	if err != nil {
+		return AdminUser{}, translateDBError(err)
+	}
+
+	return mapDBUserRowToAdminUser(row), nil
+}
+
+func (s *Service) AdminCreateUser(ctx context.Context, req RegisterRequest) (*User, error) {
+	// Generate random password
+	password := GenerateRandomPassword(12)
+	req.Password = password
+
+	if err := s.validateRegistration(req); err != nil {
+		return nil, err
+	}
+
+	passwordHash, err := HashPassword(req.Password)
+	if err != nil {
+		return nil, commonerrors.Wrap(commonerrors.ErrInternal, err)
+	}
+
+	var user user_db.GikiWalletUser
+
+	err = common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
+		userQ := s.userQ.WithTx(tx)
+
+		// Admin created users are Active and Verified by default
+		isActive := true
+		isVerified := true
+
+		var userCreateErr error
+		user, userCreateErr = userQ.CreateUser(ctx, user_db.CreateUserParams{
+			Name:         req.Name,
+			Email:        req.Email,
+			PhoneNumber:  req.PhoneNumber,
+			AuthProvider: "email",
+			PasswordHash: passwordHash,
+			PasswordAlgo: "bcrypt",
+			IsActive:     isActive,
+			IsVerified:   isVerified,
+			UserType:     strings.ToUpper(req.UserType),
+		})
+		if userCreateErr != nil {
+			return userCreateErr
+		}
+
+		// Handle Profile Creation
+		if strings.ToUpper(req.UserType) == auth.RoleStudent {
+			_, err := userQ.CreateStudent(ctx, user_db.CreateStudentParams{
+				UserID:    user.ID,
+				RegID:     req.RegID,
+				BatchYear: pgtype.Int4{Int32: 0, Valid: false}, // Default
+			})
+			if err != nil {
+				return err
+			}
+		} else if strings.ToUpper(req.UserType) == auth.RoleEmployee {
+			_, err := userQ.CreateEmployee(ctx, user.ID)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Enqueue the "Account Created" email with the raw password
+		err = s.jobs.Enqueue(ctx, "SEND_ACCOUNT_CREATED_EMAIL", worker.AccountCreatedPayload{
+			Email:    req.Email,
+			Name:     req.Name,
+			Password: password,
+		})
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		if strings.Contains(err.Error(), "duplicate key value") {
+			return nil, commonerrors.ErrEmailTaken
+		}
+		return nil, translateDBError(err)
+	}
+
+	return mapDBUserToUser(user), nil
+}
+
+func GenerateRandomPassword(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
+	b := make([]byte, length)
+	if _, err := rand.Read(b); err != nil {
+		return "DefaultPass123!" // Fallback
+	}
+	for i := range b {
+		b[i] = charset[int(b[i])%len(charset)]
+	}
+	return string(b)
+}
+
+func (s *Service) DeleteUser(ctx context.Context, userID uuid.UUID) error {
+	err := s.userQ.DeleteUser(ctx, userID)
+	if err != nil {
+		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23503" {
+			return commonerrors.New("USER_HAS_DATA", http.StatusConflict, "Cannot delete user: User has associated tickets or transactions.")
+		}
+		return translateDBError(err)
+	}
 	return nil
 }

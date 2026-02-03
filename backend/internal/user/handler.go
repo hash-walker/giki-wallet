@@ -67,7 +67,14 @@ func (h *Handler) HandlerListUsers(w http.ResponseWriter, r *http.Request) {
 		pageSize = 20
 	}
 
-	users, err := h.service.ListUsers(r.Context(), page, pageSize)
+	search := r.URL.Query().Get("search")
+	userType := r.URL.Query().Get("user_type")
+	// Convert "EMPLOYEE" -> "EMPLOYEE", "active"/"inactive" -> "" (handled by filter_status)
+	// Actually user_type filter might expect "STUDENT" or "EMPLOYEE"
+
+	filterStatus := r.URL.Query().Get("filter_status")
+
+	users, err := h.service.ListUsers(r.Context(), page, pageSize, search, userType, filterStatus)
 	if err != nil {
 		middleware.HandleError(w, err, requestID)
 		return
@@ -141,4 +148,71 @@ func (h *Handler) HandlerRejectEmployee(w http.ResponseWriter, r *http.Request) 
 	}
 
 	common.ResponseWithJSON(w, http.StatusOK, nil, requestID)
+}
+
+func (h *Handler) HandlerAdminCreateUser(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	var params RegisterRequest
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidJSON, err), requestID)
+		return
+	}
+
+	if params.Email == "" || params.Name == "" || params.UserType == "" {
+		middleware.HandleError(w, commonerrors.ErrMissingField.WithDetails("fields", "email, name, user_type"), requestID)
+		return
+	}
+
+	user, err := h.service.AdminCreateUser(r.Context(), params)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusCreated, user, requestID)
+}
+
+func (h *Handler) HandlerUpdateUser(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	userIDStr := chi.URLParam(r, "user_id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidUUID, err), requestID)
+		return
+	}
+
+	var params RegisterRequest
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidJSON, err), requestID)
+		return
+	}
+
+	user, err := h.service.UpdateUser(r.Context(), userID, params)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, user, requestID)
+}
+
+func (h *Handler) HandlerDeleteUser(w http.ResponseWriter, r *http.Request) {
+	requestID := middleware.GetRequestID(r.Context())
+
+	userIDStr := chi.URLParam(r, "user_id")
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		middleware.HandleError(w, commonerrors.Wrap(commonerrors.ErrInvalidUUID, err), requestID)
+		return
+	}
+
+	err = h.service.DeleteUser(r.Context(), userID)
+	if err != nil {
+		middleware.HandleError(w, err, requestID)
+		return
+	}
+
+	common.ResponseWithJSON(w, http.StatusOK, map[string]string{"message": "User deleted successfully"}, requestID)
 }

@@ -1,0 +1,14 @@
+{{template "base" .}}
+
+{{define "content"}}
+<h2>Welcome to GIKI Transport!</h2>
+<p>Dear {{.Name}},</p>
+<p>Your account has been created by the administrator.</p>
+<p>Here are your login credentials:</p>
+<p><strong>Email:</strong> {{.Email}}</p>
+<p><strong>Temporary Password:</strong> {{.Password}}</p>
+<p>Please log in to the portal using these credentials.</p>
+<p>
+    <a href="https://giktransport.giki.edu.pk/auth/signin" class="button">Log In</a>
+</p>
+{{end}}

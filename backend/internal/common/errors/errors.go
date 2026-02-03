@@ -44,6 +44,9 @@ var (
 
 	// External Services (502)
 	ErrExternalService = New("EXTERNAL_SERVICE", http.StatusBadGateway, "External service unavailable")
+
+	// Domain Specific (User)
+	ErrEmailTaken = New("EMAIL_TAKEN", http.StatusConflict, "Email address is already in use")
 )
 
 // AppError defines a standard error for the application

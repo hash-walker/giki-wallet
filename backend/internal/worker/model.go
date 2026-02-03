@@ -23,6 +23,12 @@ type EmployeeApprovedPayload struct {
 	Link  string `json:"link"`
 }
 
+type AccountCreatedPayload struct {
+	Email    string `json:"email"`
+	Name     string `json:"name"`
+	Password string `json:"password"`
+}
+
 type TicketDetail struct {
 	SerialNo      string `json:"serial_no"`
 	TicketCode    string `json:"ticket_code"`

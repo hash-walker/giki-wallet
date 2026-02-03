@@ -338,6 +338,9 @@ func mapDBRouteTemplateToRouteTemplate(rows []transport_db.GetRouteStopsDetailsR
 }
 
 func mapAdminTicketsToItem(rows []transport_db.GetTicketsForAdminRow) []AdminTicketItem {
+	if rows == nil {
+		return []AdminTicketItem{}
+	}
 	items := make([]AdminTicketItem, 0, len(rows))
 	for _, row := range rows {
 		items = append(items, AdminTicketItem{

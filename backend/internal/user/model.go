@@ -132,3 +132,17 @@ type UsersListWithPagination struct {
 	Page       int         `json:"page"`
 	PageSize   int         `json:"page_size"`
 }
+
+func mapDBUserRowToAdminUser(row userdb.GikiWalletUser) AdminUser {
+	return AdminUser{
+		ID:          row.ID,
+		Name:        row.Name,
+		Email:       row.Email,
+		PhoneNumber: row.PhoneNumber,
+		IsActive:    row.IsActive,
+		IsVerified:  row.IsVerified,
+		UserType:    row.UserType,
+		CreatedAt:   row.CreatedAt,
+		UpdatedAt:   row.UpdatedAt,
+	}
+}

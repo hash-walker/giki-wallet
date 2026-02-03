@@ -112,6 +112,8 @@ func (w *JobWorker) processNextJob(ctx context.Context) {
 		processErr = w.handleTicketConfirmation(job.Payload)
 	case "SEND_TICKET_CANCELLED":
 		processErr = w.handleTicketCancelled(job.Payload)
+	case "SEND_ACCOUNT_CREATED_EMAIL":
+		processErr = w.handleAccountCreated(job.Payload)
 	default:
 		log.Printf("Unknown job type: %s", job.JobType)
 		processErr = fmt.Errorf("unknown job type")
@@ -181,4 +183,13 @@ func (w *JobWorker) handleTicketCancelled(payload json.RawMessage) error {
 	}
 
 	return w.mailer.SendTemplate(data.Email, "Trip Cancellation Notice", "ticket_cancelled.html", data)
+}
+
+func (w *JobWorker) handleAccountCreated(payload json.RawMessage) error {
+	var data AccountCreatedPayload
+	if err := json.Unmarshal(payload, &data); err != nil {
+		return err
+	}
+
+	return w.mailer.SendTemplate(data.Email, "Welcome to GIKI Transport", "account_created.html", data)
 }

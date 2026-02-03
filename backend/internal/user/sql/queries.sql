@@ -51,13 +51,38 @@ VALUES ($1, $2, $3, $4);
 -- name: ListUsers :many
 SELECT id, name, email, phone_number, is_active, is_verified, user_type, created_at, updated_at, COUNT(*) OVER() as total_count
 FROM giki_wallet.users
+WHERE 
+    (sqlc.arg('search')::text = '' OR 
+     name ILIKE '%' || sqlc.arg('search')::text || '%' OR 
+     email ILIKE '%' || sqlc.arg('search')::text || '%' OR 
+     phone_number ILIKE '%' || sqlc.arg('search')::text || '%')
+    AND (sqlc.arg('user_type')::text = '' OR user_type = sqlc.arg('user_type')::text)
+    AND (
+        sqlc.arg('filter_status')::text = ''
+        OR (sqlc.arg('filter_status')::text = 'active' AND is_active = TRUE)
+        OR (sqlc.arg('filter_status')::text = 'inactive' AND is_active = FALSE)
+    )
 ORDER BY created_at DESC
-LIMIT $1 OFFSET $2;
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
 
 -- name: UpdateUserStatus :one
 UPDATE giki_wallet.users
 SET is_active = $2, updated_at = NOW()
 WHERE id = $1
 RETURNING id, name, email, phone_number, is_active, is_verified, user_type, created_at, updated_at;
+
+-- name: UpdateUserDetails :one
+UPDATE giki_wallet.users
+SET 
+    name = COALESCE(NULLIF(sqlc.arg('name')::text, ''), name),
+    email = COALESCE(NULLIF(sqlc.arg('email')::text, ''), email),
+    phone_number = COALESCE(NULLIF(sqlc.arg('phone_number')::text, ''), phone_number),
+    updated_at = NOW()
+WHERE id = $1
+RETURNING *;
+
+-- name: DeleteUser :exec
+DELETE FROM giki_wallet.users
+WHERE id = $1;
 
 

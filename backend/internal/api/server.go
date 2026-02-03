@@ -125,6 +125,9 @@ func (s *Server) MountRoutes() {
 
 		r.Route("/users", func(r chi.Router) {
 			r.Get("/", s.User.HandlerListUsers)
+			r.Post("/", s.User.HandlerAdminCreateUser)    // Create User (Admin Flow)
+			r.Put("/{user_id}", s.User.HandlerUpdateUser) // Update User
+			r.Delete("/{user_id}", s.User.HandlerDeleteUser)
 			r.Patch("/{user_id}/status", s.User.HandlerUpdateUserStatus)
 			r.Post("/{user_id}/approve", s.User.HandlerApproveEmployee)
 			r.Post("/{user_id}/reject", s.User.HandlerRejectEmployee)
