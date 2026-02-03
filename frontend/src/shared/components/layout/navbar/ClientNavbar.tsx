@@ -44,6 +44,15 @@ export const ClientNavbar = ({
 
                 {/* Actions */}
                 <div className="flex items-center gap-3">
+                    <div className="hidden md:flex items-center gap-1 mr-2">
+                        <Button
+                            variant="ghost"
+                            className="text-gray-600 hover:text-gray-900 hover:bg-gray-100/50 rounded-full h-9 px-4 text-sm font-medium"
+                            onClick={() => navigate('/about')}
+                        >
+                            About
+                        </Button>
+                    </div>
                     {isAuthenticated ? (
                         <>
                             <div className="hidden md:flex items-center gap-2 mr-2">
@@ -75,6 +84,9 @@ export const ClientNavbar = ({
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={onMyBookingsClick} className="rounded-lg md:hidden cursor-pointer font-medium text-gray-700 hover:bg-gray-50">
                                         My Tickets
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => navigate('/about')} className="rounded-lg md:hidden cursor-pointer font-medium text-gray-700 hover:bg-gray-50">
+                                        About Us
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator className="my-1 bg-gray-100" />
                                     <DropdownMenuItem

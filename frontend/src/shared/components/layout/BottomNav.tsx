@@ -1,5 +1,5 @@
 
-import { Home, Ticket, User } from 'lucide-react';
+import { Home, Ticket, User, Info } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
@@ -75,6 +75,20 @@ export const BottomNav = () => {
                         isActive('/tickets') ? "bg-accent/10 shadow-sm" : "bg-transparent"
                     )}>
                         <Ticket className={cn("w-6 h-6", isActive('/tickets') && "fill-current")} />
+                    </div>
+                </button>
+                <button
+                    onClick={() => navigate('/about')}
+                    className={cn(
+                        "flex flex-col items-center gap-1 transition-all duration-300",
+                        isActive('/about') ? "text-accent scale-110" : "text-gray-400 hover:text-gray-600"
+                    )}
+                >
+                    <div className={cn(
+                        "p-2 rounded-2xl transition-all",
+                        isActive('/about') ? "bg-accent/10 shadow-sm" : "bg-transparent"
+                    )}>
+                        <Info className={cn("w-6 h-6", isActive('/about') && "fill-current")} />
                     </div>
                 </button>
 

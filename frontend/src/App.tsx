@@ -24,6 +24,7 @@ import { SettingsPage } from '@/admin/modules/settings/pages/SettingsPage';
 
 // Client components
 import { HomePage } from '@/client/pages/HomePage';
+import AboutPage from '@/client/pages/AboutPage';
 import { TransportPage } from '@/client/modules/transport/pages/TransportPage';
 import TopUpPage from '@/client/modules/wallet/pages/TopUpPage';
 import PaymentResultPage from '@/client/modules/wallet/pages/PaymentResultPage';
@@ -116,6 +117,14 @@ const router = createBrowserRouter([
         element: (
             <ClientLayout>
                 <HomePage />
+            </ClientLayout>
+        ),
+    },
+    {
+        path: '/about',
+        element: (
+            <ClientLayout>
+                <AboutPage />
             </ClientLayout>
         ),
     },
