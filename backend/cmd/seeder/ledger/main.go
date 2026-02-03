@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/hash-walker/giki-wallet/internal/config"
 	"github.com/hash-walker/giki-wallet/internal/wallet"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -34,7 +35,8 @@ func main() {
 		dbURL = strings.Replace(dbURL, "@db:", "@localhost:", 1)
 	}
 
-	pool, err := pgxpool.New(context.Background(), dbURL)
+	cfg := config.LoadConfig()
+	pool, err := pgxpool.New(context.Background(), cfg.Database.DbURL)
 
 	if err != nil {
 		log.Fatalf("Unable to connect to database: %v", err)
@@ -42,7 +44,7 @@ func main() {
 	defer pool.Close()
 
 	ctx := context.Background()
-	walletService := wallet.NewService(pool)
+	walletService := wallet.NewService(pool, cfg.Secrets.LedgerSecret)
 
 	// 1. Get or Create Transport Revenue Wallet
 	revenueWalletID, err := walletService.GetSystemWalletByName(ctx, wallet.TransportSystemWallet, wallet.SystemWalletRevenue)

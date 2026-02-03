@@ -11,7 +11,6 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/auth"
 	"github.com/hash-walker/giki-wallet/internal/config"
 	"github.com/hash-walker/giki-wallet/internal/mailer"
-	"github.com/hash-walker/giki-wallet/internal/middleware"
 	"github.com/hash-walker/giki-wallet/internal/payment"
 	"github.com/hash-walker/giki-wallet/internal/payment/gateway"
 	"github.com/hash-walker/giki-wallet/internal/transport"
@@ -52,7 +51,7 @@ func main() {
 
 	dbConfig, err := pgxpool.ParseConfig(cfg.Database.DbURL)
 	if err != nil {
-		middleware.LogAppError(err, "Unable to parse database connection string")
+		log.Fatalf("Unable to parse database connection string: %v", err)
 	}
 
 	dbConfig.MaxConns = 50
@@ -64,7 +63,7 @@ func main() {
 	pool, err := pgxpool.NewWithConfig(ctx, dbConfig)
 
 	if err != nil {
-		middleware.LogAppError(err, "Unable to connect to database")
+		log.Fatalf("Unable to connect to database: %v", err)
 	}
 	defer pool.Close()
 
@@ -78,16 +77,16 @@ func main() {
 	// Initialize Services with dependencies
 	userService := user.NewService(pool, newWorker)
 	userHandler := user.NewHandler(userService)
-	authService := auth.NewService(pool)
+	authService := auth.NewService(pool, cfg.Secrets.JWTSecret)
 	authHandler := auth.NewHandler(authService)
-	walletService := wallet.NewService(pool)
+	walletService := wallet.NewService(pool, cfg.Secrets.LedgerSecret)
 	walletHandler := wallet.NewHandler(walletService)
 	paymentService := payment.NewService(pool, jazzCashClient, walletService, inquiryRateLimiter, cfg.Server.AppURL)
 	paymentHandler := payment.NewHandler(paymentService, walletService)
 	transportService := transport.NewService(pool, walletService, newWorker)
 	transportHandler := transport.NewHandler(transportService)
 
-	srv := api.NewServer(userHandler, authHandler, paymentHandler, transportHandler, walletHandler)
+	srv := api.NewServer(userHandler, authHandler, paymentHandler, transportHandler, walletHandler, newWorker)
 	srv.MountRoutes()
 
 	c := cors.New(cors.Options{

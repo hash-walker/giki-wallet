@@ -65,13 +65,13 @@ func TestE2E_FullUserJourney(t *testing.T) {
 	os.Setenv("JAZZCASH_CARD_PAYMENT_URL", "http://sandbox.jazzcash.com.pk/card")
 	os.Setenv("JAZZCASH_STATUS_INQUIRY_URL", "http://sandbox.jazzcash.com.pk/inquiry")
 
-	// Initialize Services
-	userService := user.NewService(testDBPool)
-	authService := auth.NewService(testDBPool)
-	walletService := wallet.NewService(testDBPool)
-
-	// Payment deps
+	// Load config first
 	cfg := config.LoadConfig()
+
+	// Initialize Services
+	userService := user.NewService(testDBPool, nil)
+	authService := auth.NewService(testDBPool, cfg.Secrets.JWTSecret)
+	walletService := wallet.NewService(testDBPool, cfg.Secrets.LedgerSecret)
 	jcClient := gateway.NewJazzCashClient(
 		cfg.Jazzcash.MerchantID,
 		cfg.Jazzcash.Password,
@@ -86,7 +86,7 @@ func TestE2E_FullUserJourney(t *testing.T) {
 	rateLimiter := payment.NewRateLimiter(10)
 	paymentService := payment.NewService(testDBPool, jcClient, walletService, rateLimiter, "http://localhost:3000")
 
-	transportService := transport.NewService(testDBPool, walletService)
+	transportService := transport.NewService(testDBPool, walletService, nil)
 
 	// Clean up previous test runs
 	cleanup(ctx, t)

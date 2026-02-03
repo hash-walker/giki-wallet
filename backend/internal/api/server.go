@@ -5,11 +5,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/hash-walker/giki-wallet/internal/auth"
+	"github.com/hash-walker/giki-wallet/internal/common"
 	"github.com/hash-walker/giki-wallet/internal/middleware"
 	"github.com/hash-walker/giki-wallet/internal/payment"
 	"github.com/hash-walker/giki-wallet/internal/transport"
 	"github.com/hash-walker/giki-wallet/internal/user"
 	"github.com/hash-walker/giki-wallet/internal/wallet"
+	"github.com/hash-walker/giki-wallet/internal/worker"
 )
 
 type Server struct {
@@ -19,6 +21,7 @@ type Server struct {
 	Payment   *payment.Handler
 	Transport *transport.Handler
 	Wallet    *wallet.Handler
+	Worker    *worker.JobWorker
 }
 
 func NewServer(
@@ -27,6 +30,7 @@ func NewServer(
 	paymentHandler *payment.Handler,
 	transportHandler *transport.Handler,
 	walletHandler *wallet.Handler,
+	jobWorker *worker.JobWorker,
 ) *Server {
 	return &Server{
 		Router:    chi.NewRouter(),
@@ -35,6 +39,7 @@ func NewServer(
 		Payment:   paymentHandler,
 		Transport: transportHandler,
 		Wallet:    walletHandler,
+		Worker:    jobWorker,
 	}
 }
 
@@ -59,11 +64,11 @@ func (s *Server) MountRoutes() {
 	r.Post("/auth/signin", s.Auth.Login)
 	r.Post("/auth/signout", s.Auth.Logout)
 	r.Get("/auth/verify", s.Auth.VerifyEmail)
-	r.With(auth.RequireAuth).Get("/auth/me", s.Auth.Me)
+	r.With(s.Auth.Authenticate).Get("/auth/me", s.Auth.Me)
 
 	r.Route("/payment", func(r chi.Router) {
 		r.Group(func(r chi.Router) {
-			r.Use(auth.RequireAuth)
+			r.Use(s.Auth.Authenticate)
 			r.Post("/topup", s.Payment.TopUp)
 			r.Get("/status/{txnRefNo}", s.Payment.CheckStatus)
 		})
@@ -80,7 +85,7 @@ func (s *Server) MountRoutes() {
 		r.Get("/routes", s.Transport.ListRoutes)
 
 		r.Group(func(r chi.Router) {
-			r.Use(auth.RequireAuth)
+			r.Use(s.Auth.Authenticate)
 			r.Get("/quota", s.Transport.GetQuota)
 			r.Post("/holds", s.Transport.HoldSeats)
 			r.Get("/holds/active", s.Transport.GetActiveHolds)
@@ -92,13 +97,13 @@ func (s *Server) MountRoutes() {
 	})
 
 	r.Route("/wallet", func(r chi.Router) {
-		r.Use(auth.RequireAuth)
+		r.Use(s.Auth.Authenticate)
 		r.Get("/balance", s.Wallet.GetBalance)
 		r.Get("/history", s.Wallet.GetHistory)
 	})
 
 	r.Route("/admin", func(r chi.Router) {
-		r.Use(auth.RequireLogin("/admin/signin"))
+		r.Use(s.Auth.RequireLogin("/admin/signin"))
 		r.Use(auth.RequireRole(auth.RoleSuperAdmin, auth.RoleTransportAdmin, auth.RoleFinanceAdmin))
 
 		r.Get("/dashboard", func(w http.ResponseWriter, r *http.Request) {
@@ -146,5 +151,16 @@ func (s *Server) MountRoutes() {
 			r.Get("/revenue/period", s.Payment.GetRevenuePeriodVolume)
 		})
 		r.Get("/finance/transactions", s.Wallet.GetAdminTransactions)
+
+		// Worker Status
+		r.Get("/worker/status", func(w http.ResponseWriter, r *http.Request) {
+			requestID := middleware.GetRequestID(r.Context())
+			status, err := s.Worker.GetStatus(r.Context())
+			if err != nil {
+				middleware.HandleError(w, err, requestID)
+				return
+			}
+			common.ResponseWithJSON(w, http.StatusOK, status, requestID)
+		})
 	})
 }

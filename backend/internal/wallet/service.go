@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -23,14 +22,16 @@ import (
 )
 
 type Service struct {
-	q      *wallet.Queries
-	dbPool *pgxpool.Pool
+	q            *wallet.Queries
+	dbPool       *pgxpool.Pool
+	ledgerSecret string
 }
 
-func NewService(dbPool *pgxpool.Pool) *Service {
+func NewService(dbPool *pgxpool.Pool, ledgerSecret string) *Service {
 	return &Service{
-		q:      wallet.New(dbPool),
-		dbPool: dbPool,
+		q:            wallet.New(dbPool),
+		dbPool:       dbPool,
+		ledgerSecret: ledgerSecret,
 	}
 }
 
@@ -368,7 +369,6 @@ func (s *Service) GetSystemWalletBalance(ctx context.Context, walletName SystemW
 		return 0, err
 	}
 
-	// storage is in cents/paisas, return main unit
 	return float64(balance) / 100.0, nil
 }
 
@@ -401,8 +401,8 @@ func (s *Service) CalculateRowHash(
 	createdAt time.Time,
 ) string {
 
-	// get secret key from environment
-	secretKey := os.Getenv("LEDGER_HASH_SECRET")
+	// use centralized secret
+	secretKey := s.ledgerSecret
 
 	// Build message: concatenate all fields that should be immutable
 	message := fmt.Sprintf(

@@ -1,9 +1,12 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	"github.com/google/uuid"
 
 	"github.com/hash-walker/giki-wallet/internal/common"
 	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
@@ -18,6 +21,59 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{
 		service: service,
 	}
+}
+
+// Authenticate is a middleware that validates the JWT token
+func (h *Handler) Authenticate(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID := middleware.GetRequestID(r.Context())
+
+		userID, userRole, err := h.validateRequest(r)
+		if err != nil {
+			middleware.HandleError(w, err, requestID)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), userIDKey, userID)
+		ctx = context.WithValue(ctx, userRoleKey, userRole)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// RequireLogin redirects to a specified path if authentication fails
+func (h *Handler) RequireLogin(redirectOnFail string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			userID, userRole, err := h.validateRequest(r)
+			if err != nil {
+				http.Redirect(w, r, redirectOnFail, http.StatusFound)
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), userIDKey, userID)
+			ctx = context.WithValue(ctx, userRoleKey, userRole)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func (h *Handler) validateRequest(r *http.Request) (uuid.UUID, string, error) {
+	tokenString, err := getTokenFromRequest(r)
+	if err != nil {
+		return uuid.Nil, "", err
+	}
+
+	claims, err := ValidateJWT(tokenString, h.service.jwtSecret)
+	if err != nil {
+		return uuid.Nil, "", err
+	}
+
+	userID, err := uuid.Parse(claims.Subject)
+	if err != nil {
+		return uuid.Nil, "", commonerrors.Wrap(ErrInvalidToken, err)
+	}
+
+	return userID, claims.UserType, nil
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {

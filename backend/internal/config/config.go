@@ -11,6 +11,7 @@ type Config struct {
 	Server   ServerConfig
 	Jazzcash JazzcashConfig
 	Mailer   GraphSenderConfig
+	Secrets  SecretsConfig
 }
 
 type DatabaseConfig struct {
@@ -46,6 +47,11 @@ type GraphSenderConfig struct {
 	SenderEmail  string
 }
 
+type SecretsConfig struct {
+	JWTSecret    string
+	LedgerSecret string
+}
+
 func LoadConfig() *Config {
 	cfg := &Config{
 		Database: DatabaseConfig{
@@ -72,6 +78,10 @@ func LoadConfig() *Config {
 			TenantID:     getRequiredEnv("MS_GRAPH_TENANT_ID"),
 			ClientSecret: getRequiredEnv("MS_GRAPH_CLIENT_SECRET"),
 			SenderEmail:  getRequiredEnv("MS_GRAPH_SENDER_EMAIL"),
+		},
+		Secrets: SecretsConfig{
+			JWTSecret:    getEnvWithDefault("TOKEN_SECRET", "super-secret-dev-token"),
+			LedgerSecret: getEnvWithDefault("LEDGER_HASH_SECRET", "super-secret-dev-ledger"),
 		},
 	}
 

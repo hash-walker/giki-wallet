@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"net/http"
-	"os"
 	"slices"
 	"strings"
 
@@ -23,41 +22,6 @@ const (
 // =============================================================================
 // MIDDLEWARES
 // =============================================================================
-
-func RequireAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestID := middleware.GetRequestID(r.Context())
-
-		userID, userRole, err := validateRequest(r)
-		if err != nil {
-			middleware.HandleError(w, err, requestID)
-			return
-		}
-
-		// Success: Set Context
-		ctx := context.WithValue(r.Context(), userIDKey, userID)
-		ctx = context.WithValue(ctx, userRoleKey, userRole)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-func RequireLogin(redirectOnFail string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-			userID, userRole, err := validateRequest(r)
-
-			if err != nil {
-				http.Redirect(w, r, redirectOnFail, http.StatusFound)
-				return
-			}
-
-			ctx := context.WithValue(r.Context(), userIDKey, userID)
-			ctx = context.WithValue(ctx, userRoleKey, userRole)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
-}
 
 func RequireRole(allowedRoles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -88,27 +52,6 @@ func RequireRole(allowedRoles ...string) func(http.Handler) http.Handler {
 // =============================================================================
 // HELPERS (Logic Extraction)
 // =============================================================================
-
-func validateRequest(r *http.Request) (uuid.UUID, string, error) {
-
-	tokenString, err := getTokenFromRequest(r)
-	if err != nil {
-		return uuid.Nil, "", err
-	}
-
-	tokenSecret := os.Getenv("TOKEN_SECRET")
-	claims, err := ValidateJWT(tokenString, tokenSecret)
-	if err != nil {
-		return uuid.Nil, "", err
-	}
-
-	userID, err := uuid.Parse(claims.Subject)
-	if err != nil {
-		return uuid.Nil, "", commonerrors.Wrap(ErrInvalidToken, err)
-	}
-
-	return userID, claims.UserType, nil
-}
 
 func getTokenFromRequest(r *http.Request) (string, error) {
 

@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -24,16 +23,18 @@ import (
 )
 
 type Service struct {
-	userQ  *user_db.Queries
-	authQ  *auth.Queries
-	dbPool *pgxpool.Pool
+	userQ     *user_db.Queries
+	authQ     *auth.Queries
+	dbPool    *pgxpool.Pool
+	jwtSecret string
 }
 
-func NewService(dbPool *pgxpool.Pool) *Service {
+func NewService(dbPool *pgxpool.Pool, jwtSecret string) *Service {
 	return &Service{
-		authQ:  auth.New(dbPool),
-		userQ:  user_db.New(dbPool),
-		dbPool: dbPool,
+		authQ:     auth.New(dbPool),
+		userQ:     user_db.New(dbPool),
+		dbPool:    dbPool,
+		jwtSecret: jwtSecret,
 	}
 }
 
@@ -179,10 +180,8 @@ func (s *Service) authenticateAndIssueTokens(ctx context.Context, tx pgx.Tx, ema
 
 func (s *Service) issueTokenPair(ctx context.Context, tx pgx.Tx, user user_db.GikiWalletUser, expiresIn time.Duration) (TokenPairs, error) {
 
-	tokenSecret := os.Getenv("TOKEN_SECRET")
-
-	if tokenSecret == "" {
-		return TokenPairs{}, commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("TOKEN_SECRET environment variable not set"))
+	if s.jwtSecret == "" {
+		return TokenPairs{}, commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("JWT secret not configured"))
 	}
 
 	claims := CustomClaims{
@@ -198,7 +197,7 @@ func (s *Service) issueTokenPair(ctx context.Context, tx pgx.Tx, user user_db.Gi
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	signedToken, err := token.SignedString([]byte(tokenSecret))
+	signedToken, err := token.SignedString([]byte(s.jwtSecret))
 
 	if err != nil {
 		return TokenPairs{}, commonerrors.Wrap(ErrTokenCreation, err)
