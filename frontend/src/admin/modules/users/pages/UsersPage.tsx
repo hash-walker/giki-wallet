@@ -11,7 +11,17 @@ import { useUserStore } from '../store';
 import { PaginationControl } from '@/admin/shared/components/PaginationControl';
 
 export const UsersPage = () => {
-    const { users, isLoading, fetchUsers, toggleUserStatus, approveUser, rejectUser, pagination } = useUserStore();
+    const {
+        users,
+        isLoading,
+        fetchUsers,
+        toggleUserStatus,
+        approveUser,
+        rejectUser,
+        pagination,
+        filters,
+        setFilters
+    } = useUserStore();
 
     const totalPages = Math.ceil(pagination.totalCount / pagination.pageSize);
 
@@ -21,13 +31,21 @@ export const UsersPage = () => {
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | undefined>();
-    const [searchTerm, setSearchTerm] = useState('');
-    const [filterRole, setFilterRole] = useState<string>('all');
-    const [filterStatus, setFilterStatus] = useState<string>('all');
+    const [searchTerm, setSearchTerm] = useState<string>(filters.search); // Local state for input
+
+    // Debounce search
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (searchTerm !== filters.search) {
+                setFilters({ search: searchTerm });
+            }
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm, setFilters, filters.search]);
 
     useEffect(() => {
-        fetchUsers(1);
-    }, [fetchUsers]);
+        fetchUsers(pagination.page);
+    }, [fetchUsers]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleAddUser = () => {
         setEditingUser(undefined);
@@ -39,41 +57,27 @@ export const UsersPage = () => {
         setIsModalOpen(true);
     };
 
-    const handleDeleteUser = (id: string) => {
-        if (window.confirm('Are you sure you want to delete this user?')) {
-            // TODO: Implement delete in backend if needed
-            console.log('Delete user', id);
+    const handleDeleteUser = async (id: string) => {
+        if (window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+            await useUserStore.getState().deleteUser(id);
         }
     };
 
+    const handleSubmitUser = async (userData: Partial<User>) => {
+        if (editingUser) {
+            await useUserStore.getState().updateUser(editingUser.id, userData);
+        } else {
+            await useUserStore.getState().createUser(userData);
+        }
+        setIsModalOpen(false);
+        setEditingUser(undefined);
+    };
     const handleToggleActive = (id: string) => {
         const user = users.find(u => u.id === id);
         if (user) {
             toggleUserStatus(id, user.is_active);
         }
     };
-
-    const handleSubmitUser = (userData: Partial<User>) => {
-        // TODO: Implement Create/Update in store/service
-        console.log('Submit user', userData);
-        setIsModalOpen(false);
-        setEditingUser(undefined);
-    };
-
-    // Filter users
-    const filteredUsers = users.filter(user => {
-        const matchesSearch =
-            user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (user.phone_number && user.phone_number.includes(searchTerm));
-
-        const matchesRole = filterRole === 'all' || user.user_type === filterRole;
-        const matchesStatus = filterStatus === 'all' ||
-            (filterStatus === 'active' && user.is_active) ||
-            (filterStatus === 'inactive' && !user.is_active);
-
-        return matchesSearch && matchesRole && matchesStatus;
-    });
 
     return (
         <div className="space-y-6">
@@ -100,8 +104,8 @@ export const UsersPage = () => {
                 </div>
                 <div className="w-full md:w-48">
                     <Select
-                        value={filterRole}
-                        onChange={(value) => setFilterRole(value)}
+                        value={filters.role}
+                        onChange={(value) => setFilters({ role: value })}
                         options={[
                             { value: 'all', label: 'All Roles' },
                             { value: 'STUDENT', label: 'Student' },
@@ -113,8 +117,8 @@ export const UsersPage = () => {
                 </div>
                 <div className="w-full md:w-48">
                     <Select
-                        value={filterStatus}
-                        onChange={(value) => setFilterStatus(value)}
+                        value={filters.status}
+                        onChange={(value) => setFilters({ status: value })}
                         options={[
                             { value: 'all', label: 'All Status' },
                             { value: 'active', label: 'Active' },
@@ -136,7 +140,7 @@ export const UsersPage = () => {
                         />
                     </div>
                     <UsersTable
-                        users={filteredUsers}
+                        users={users}
                         onEdit={handleEditUser}
                         onDelete={handleDeleteUser}
                         onToggleActive={handleToggleActive}

@@ -14,14 +14,26 @@ interface UserState {
         totalCount: number;
     };
 
+    filters: {
+        search: string;
+        role: string;
+        status: string;
+    };
+    setFilters: (filters: Partial<UserState['filters']>) => void;
+
     // Actions
     fetchUsers: (page?: number) => Promise<void>;
+    createUser: (data: Partial<User>) => Promise<void>;
+    updateUser: (userId: string, data: Partial<User>) => Promise<void>;
+    deleteUser: (userId: string) => Promise<void>;
     toggleUserStatus: (userId: string, currentStatus: boolean) => Promise<void>;
     approveUser: (userId: string) => Promise<void>;
     rejectUser: (userId: string) => Promise<void>;
 }
 
 export const useUserStore = create<UserState>((set, get) => ({
+    // ... (existing state)
+    // ...
     users: [],
     isLoading: false,
     isUpdating: false,
@@ -30,15 +42,36 @@ export const useUserStore = create<UserState>((set, get) => ({
         pageSize: 100,
         totalCount: 0,
     },
+    filters: {
+        search: '',
+        role: 'all',
+        status: 'all',
+    },
+
+    setFilters: (newFilters) => {
+        set((state) => ({
+            filters: { ...state.filters, ...newFilters },
+            pagination: { ...state.pagination, page: 1 },
+        }));
+        get().fetchUsers(1);
+    },
 
     fetchUsers: async (page = 1) => {
+        // ... (existing fetchUsers)
         set({ isLoading: true });
+        const { filters, pagination } = get();
         try {
-            const response = await UserService.listUsers(page, get().pagination.pageSize);
+            const response = await UserService.listUsers(
+                page,
+                pagination.pageSize,
+                filters.search,
+                filters.role,
+                filters.status
+            );
             set({
                 users: response.data,
                 pagination: {
-                    ...get().pagination,
+                    ...pagination,
                     page: response.page,
                     totalCount: response.total_count,
                 }
@@ -87,7 +120,6 @@ export const useUserStore = create<UserState>((set, get) => ({
         set({ isUpdating: true });
         try {
             await UserService.rejectUser(userId);
-            // Optionally remove from list or update locally
             set((state) => ({
                 users: state.users.map((u) => (u.id === userId ? { ...u, is_active: false } : u)),
             }));
@@ -95,6 +127,60 @@ export const useUserStore = create<UserState>((set, get) => ({
         } catch (error) {
             console.error(error);
             toast.error('Failed to reject user');
+        } finally {
+            set({ isUpdating: false });
+        }
+    },
+
+    createUser: async (data: Partial<User>) => {
+        set({ isUpdating: true });
+        try {
+            await UserService.createUser(data);
+            get().fetchUsers(1); // Refresh list
+            toast.success('User created successfully');
+        } catch (error) {
+            console.error(error);
+            toast.error('Failed to create user');
+        } finally {
+            set({ isUpdating: false });
+        }
+    },
+
+    updateUser: async (userId: string, data: Partial<User>) => {
+        set({ isUpdating: true });
+        try {
+            const updatedUser = await UserService.updateUser(userId, data);
+            set((state) => ({
+                users: state.users.map((u) => (u.id === userId ? { ...u, ...updatedUser } : u)),
+            }));
+            toast.success('User updated successfully');
+        } catch (error) {
+            console.error(error);
+            toast.error('Failed to update user');
+        } finally {
+            set({ isUpdating: false });
+        }
+    },
+
+    deleteUser: async (userId: string) => {
+        set({ isUpdating: true });
+        try {
+            await UserService.deleteUser(userId);
+            set((state) => ({
+                users: state.users.filter((u) => u.id !== userId),
+                pagination: {
+                    ...state.pagination,
+                    totalCount: state.pagination.totalCount - 1,
+                }
+            }));
+            toast.success('User deleted successfully');
+        } catch (error) {
+            console.error(error);
+            if (error instanceof Error && error.message.includes('USER_HAS_DATA')) {
+                toast.error('Cannot delete user: Associated data exists');
+            } else {
+                toast.error('Failed to delete user');
+            }
         } finally {
             set({ isUpdating: false });
         }

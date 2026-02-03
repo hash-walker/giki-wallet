@@ -15,12 +15,12 @@ interface UsersTableProps {
 const getRoleBadge = (role: string) => {
     const roleUpper = role.toUpperCase();
     const styles: Record<string, string> = {
-        STUDENT: 'bg-blue-100 text-blue-800',
-        EMPLOYEE: 'bg-green-100 text-green-800',
-        ADMIN: 'bg-purple-100 text-purple-800',
-        TRANSPORT_ADMIN: 'bg-purple-100 text-purple-800',
-        FINANCE_ADMIN: 'bg-purple-100 text-purple-800',
-        SUPER_ADMIN: 'bg-purple-100 text-purple-800',
+        STUDENT: 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-700/10',
+        EMPLOYEE: 'bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-700/10',
+        ADMIN: 'bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-700/10',
+        TRANSPORT_ADMIN: 'bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-700/10',
+        FINANCE_ADMIN: 'bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-700/10',
+        SUPER_ADMIN: 'bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-700/10',
     };
 
     const labels: Record<string, string> = {
@@ -64,11 +64,11 @@ export const UsersTable = ({
             <span key="phone" className="text-sm text-gray-600">{user.phone_number || 'N/A'}</span>,
             getRoleBadge(user.user_type),
             user.is_active ? (
-                <span key="status-active" className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                <span key="status-active" className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
                     Active
                 </span>
             ) : (
-                <span key="status-inactive" className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                <span key="status-inactive" className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-600/20">
                     Inactive
                 </span>
             ),

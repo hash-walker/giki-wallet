@@ -7,7 +7,7 @@ interface TicketsTableProps {
     tickets: AdminTicket[];
 }
 
-export const TicketsTable = ({ tickets }: TicketsTableProps) => {
+export const TicketsTable = ({ tickets = [] }: TicketsTableProps) => {
     const headers = [
         { content: 'Ticket #', align: 'left' as const },
         { content: 'Passenger', align: 'left' as const },
