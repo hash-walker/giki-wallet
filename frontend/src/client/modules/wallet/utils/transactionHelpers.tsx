@@ -10,6 +10,7 @@ export interface Transaction {
     amount: number;
     timestamp: string;
     date: string; // Format: YYYY-MM-DD
+    referenceId?: string;
 }
 
 export const getTransactionIcon = (type: TransactionType): ReactNode => {
@@ -41,6 +42,7 @@ export const getIconBackground = (type: TransactionType): string => {
             return "bg-orange-50";
     }
 };
+
 export const mapTxType = (type: string): TransactionType => {
     switch (type) {
         case 'TRANSPORT_BOOKING': return 'ticket';
@@ -49,5 +51,22 @@ export const mapTxType = (type: string): TransactionType => {
         case 'TRANSFER': return 'transfer';
         case 'TRANSFER_RECEIVED': return 'received';
         default: return 'ticket';
+    }
+};
+
+export const getTransactionTitle = (transaction: Transaction): string => {
+    switch (transaction.type) {
+        case 'ticket':
+            return 'Ticket Booking';
+        case 'topup':
+            return 'Wallet Top-up';
+        case 'transfer':
+            return 'Money Sent';
+        case 'received':
+            return 'Money Received';
+        case 'refund':
+            return 'Refund Received';
+        default:
+            return transaction.description;
     }
 };

@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { Transaction, getTransactionIcon, getIconBackground } from '../utils/transactionHelpers';
+import { Transaction, getTransactionIcon, getIconBackground, getTransactionTitle } from '../utils/transactionHelpers';
 import { useWalletModuleStore } from '../store';
 
 interface TransactionCardProps {
@@ -24,9 +24,14 @@ export const TransactionCard = ({ transaction }: TransactionCardProps) => {
             {/* Transaction Details */}
             <div className="flex-1 min-w-0">
                 <p className="text-base font-bold text-gray-900 mb-0.5 truncate leading-tight" title={transaction.description}>
-                    {transaction.description}
+                    {getTransactionTitle(transaction)}
                 </p>
-                <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">{transaction.timestamp}</p>
+                <div className="flex flex-col gap-0.5">
+                    {transaction.type === 'topup' && transaction.referenceId && (
+                        <p className="text-[10px] text-gray-500 font-medium tabular-nums">Ref: {transaction.referenceId}</p>
+                    )}
+                    <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">{transaction.timestamp}</p>
+                </div>
             </div>
 
             {/* Amount */}

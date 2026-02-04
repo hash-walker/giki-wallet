@@ -37,7 +37,8 @@ export const TransactionHistory = ({
                 description: t.description,
                 amount: t.amount,
                 timestamp: dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-                date: dateObj.toISOString().split('T')[0]
+                date: dateObj.toISOString().split('T')[0],
+                referenceId: t.reference_id
             };
         });
     }, [transactions]);
