@@ -140,7 +140,7 @@ export const TicketCard = ({ ticket }: TicketCardProps) => {
                             <div className="bg-slate-900 p-3 rounded-2xl border border-slate-900 shadow-md shadow-slate-200 flex flex-col justify-between group-hover:scale-105 transition-transform">
                                 <div className="flex items-center gap-1.5 text-slate-500 mb-1">
                                     <Hash className="w-3.5 h-3.5" />
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Seat</span>
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Serial</span>
                                 </div>
                                 <p className="font-black text-white text-3xl leading-none tracking-tighter">
                                     {ticket.serial_no.toString().padStart(2, '0')}

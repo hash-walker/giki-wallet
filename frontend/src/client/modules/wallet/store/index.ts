@@ -38,7 +38,7 @@ interface PaymentState {
 interface TopUpFormState {
     // Form Data Slice
     formData: TopUpFormData;
-    
+
     // Actions
     setAmount: (amount: string) => void;
     setMobileNumber: (mobile: string) => void;
@@ -65,7 +65,7 @@ export const useWalletModuleStore = create<WalletModuleStore>((set, get) => ({
 
     // Initial Payment State
     status: 'idle',
-    timeLeft: 60,
+    timeLeft: 120,
     txnRefNo: null,
     errorMessage: null,
 
@@ -108,7 +108,7 @@ export const useWalletModuleStore = create<WalletModuleStore>((set, get) => ({
     setErrorMessage: (errorMessage) => set({ errorMessage }),
     resetPaymentState: () => set({
         status: 'idle',
-        timeLeft: 60,
+        timeLeft: 120,
         txnRefNo: null,
         errorMessage: null
     }),

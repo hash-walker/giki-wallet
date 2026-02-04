@@ -250,11 +250,49 @@ func (s *Service) checkUserAndPassword(ctx context.Context, tx pgx.Tx, email str
 	}
 
 	passwordHash := user.PasswordHash
+	passwordAlgo := strings.ToUpper(user.PasswordAlgo)
 
-	err = bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password))
+	var isValid bool
+	var verificationErr error
 
-	if err != nil {
-		return user_db.GikiWalletUser{}, ErrInvalidPassword
+	switch passwordAlgo {
+	case "BCRYPT":
+		err = bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password))
+		if err == nil {
+			isValid = true
+		} else {
+			verificationErr = ErrInvalidPassword
+		}
+	case "DJANGO_PBKDF2_SHA256":
+		isValid, err = verifyDjangoPBKDF2(password, passwordHash)
+		if err != nil {
+			return user_db.GikiWalletUser{}, commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("failed to verify legacy password: %v", err))
+		}
+		if !isValid {
+			verificationErr = ErrInvalidPassword
+		}
+	case "LOCKED":
+		return user_db.GikiWalletUser{}, commonerrors.Wrap(ErrUserInactive, fmt.Errorf("account is locked"))
+	default:
+		return user_db.GikiWalletUser{}, commonerrors.Wrap(commonerrors.ErrInternal, fmt.Errorf("unsupported password algorithm: %s", passwordAlgo))
+	}
+
+	if verificationErr != nil {
+		return user_db.GikiWalletUser{}, verificationErr
+	}
+
+	if passwordAlgo == "DJANGO_PBKDF2_SHA256" {
+		newHash, err := HashPassword(password)
+		if err == nil {
+			_, updateErr := userQ.UpdateUserPasswordWithAlgo(ctx, user_db.UpdateUserPasswordWithAlgoParams{
+				ID:           user.ID,
+				PasswordHash: newHash,
+				PasswordAlgo: "BCRYPT",
+			})
+			if updateErr != nil {
+				fmt.Printf("Failed to upgrade legacy password for %s: %v\n", user.Email, updateErr)
+			}
+		}
 	}
 
 	return user, nil
@@ -417,9 +455,10 @@ func (s *Service) ResetPassword(ctx context.Context, token, newPassword string) 
 		}
 
 		// 3. Update user
-		_, err = userQ.UpdateUserPassword(ctx, user_db.UpdateUserPasswordParams{
+		_, err = userQ.UpdateUserPasswordWithAlgo(ctx, user_db.UpdateUserPasswordWithAlgoParams{
 			ID:           t.UserID,
 			PasswordHash: hashedPassword,
+			PasswordAlgo: "BCRYPT",
 		})
 		if err != nil {
 			return commonerrors.Wrap(commonerrors.ErrDatabase, err)

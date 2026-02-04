@@ -504,7 +504,7 @@ func (s *Service) enqueueTicketConfirmationJob(ctx context.Context, userID uuid.
 	payload := worker.TicketConfirmedPayload{
 		Email:      user.Email,
 		UserName:   user.Name,
-		TotalPrice: totalPrice,
+		TotalPrice: totalPrice /100,
 		Tickets:    tickets,
 	}
 

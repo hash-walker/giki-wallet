@@ -8,6 +8,7 @@ run:
 build:
 	go build -o bin/server cmd/server/main.go
 
+
 # Run unit tests
 test:
 	go test ./...

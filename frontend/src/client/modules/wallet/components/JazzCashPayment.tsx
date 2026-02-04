@@ -1,5 +1,5 @@
 import React from 'react';
-import { Phone, CheckCircle2, XCircle, Loader2, Smartphone, ShieldCheck } from 'lucide-react';
+import { Phone, CheckCircle2, XCircle, Loader2, Smartphone, ShieldCheck, Clock } from 'lucide-react';
 import { toast } from '@/lib/toast';
 import { useJazzCashPayment } from '../hooks/useJazzCashPayment';
 
@@ -22,7 +22,16 @@ const JazzCashPayment: React.FC<JazzCashPaymentProps> = ({
     maxLimit,
     currentBalance
 }) => {
-    const { status, timeLeft, errorMessage, initiatePayment, reset } = useJazzCashPayment(
+    // 1. Destructure the new props here
+    const {
+        status,
+        timeLeft,
+        errorMessage,
+        initiatePayment,
+        reset,
+        statusMessage, // New dynamic message
+        showTimer      // New boolean to toggle the countdown visibility
+    } = useJazzCashPayment(
         amount,
         phoneNumber,
         cnicLast6
@@ -75,8 +84,9 @@ const JazzCashPayment: React.FC<JazzCashPaymentProps> = ({
 
     return (
         <div className="bg-white p-8 rounded-[2rem] shadow-2xl border border-gray-100 max-w-sm mx-auto overflow-hidden relative">
+            {/* Updated Progress Bar: Uses 100s scale instead of 60s */}
             <div className={`absolute top-0 left-0 w-full h-1 transition-all duration-1000 bg-primary ${status !== 'idle' ? 'opacity-100' : 'opacity-0'}`}
-                style={{ width: `${(timeLeft / 60) * 100}%` }} />
+                style={{ width: `${(timeLeft / 100) * 100}%` }} />
 
             <div className="relative z-10">
                 <div className="flex justify-between items-start mb-8">
@@ -91,24 +101,42 @@ const JazzCashPayment: React.FC<JazzCashPaymentProps> = ({
 
                 {(status === 'initiating' || status === 'processing') ? (
                     <div className="space-y-8 py-4 animate-in fade-in duration-700">
-                        {status === 'processing' ? (<div className="text-center">
-                            <div className="relative inline-block">
-                                <div className="absolute inset-0 bg-primary/10 rounded-full scale-150 animate-ping opacity-20" />
-                                <h1 className="text-6xl font-black text-gray-900 tabular-nums">
-                                    0:{timeLeft < 10 ? `0${timeLeft}` : timeLeft}
-                                </h1>
-                            </div>
-                            <p className="text-gray-400 text-sm font-bold uppercase tracking-tighter mt-4">Remaining Seconds</p>
-                        </div>) : (
-                            <div className="flex justify-center py-8">
-                                <div className="relative">
-                                    <div className="absolute inset-0 bg-yellow-500/20 rounded-full animate-ping" />
-                                    <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center relative z-10">
-                                        <Smartphone className="w-8 h-8 text-yellow-600 animate-pulse" />
+
+                        {/* 2. Logic for the Big Central Icon/Timer */}
+                        <div className="text-center min-h-[140px] flex flex-col items-center justify-center">
+                            {status === 'processing' ? (
+                                <>
+                                    {showTimer ? (
+                                        // Urgent Phase (Last 60s): Show Countdown
+                                        <div className="relative inline-block animate-in zoom-in duration-300">
+                                            <div className="absolute inset-0 bg-red-500/10 rounded-full scale-150 animate-ping opacity-20" />
+                                            <h1 className="text-6xl font-black text-red-500 tabular-nums">
+                                                0:{timeLeft < 10 ? `0${timeLeft}` : timeLeft}
+                                            </h1>
+                                            <p className="text-red-400 text-sm font-bold uppercase tracking-tighter mt-4">Hurry Up!</p>
+                                        </div>
+                                    ) : (
+                                        // Buffer Phase (First 40s): Show waiting icon instead of timer
+                                        <div className="relative inline-block animate-in fade-in duration-500">
+                                            <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center relative z-10 mx-auto">
+                                                <Clock className="w-12 h-12 text-primary animate-pulse" />
+                                            </div>
+                                            <p className="text-primary/60 text-sm font-bold uppercase tracking-tighter mt-4">Waiting for Approval...</p>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                // Initiating state
+                                <div className="flex justify-center py-2">
+                                    <div className="relative">
+                                        <div className="absolute inset-0 bg-yellow-500/20 rounded-full animate-ping" />
+                                        <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center relative z-10">
+                                            <Smartphone className="w-8 h-8 text-yellow-600 animate-pulse" />
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
 
                         <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 relative overflow-hidden">
                             {/* Security Strip */}
@@ -123,14 +151,17 @@ const JazzCashPayment: React.FC<JazzCashPaymentProps> = ({
                                         {status === 'initiating' ? 'Requesting' : 'Action Required'}
                                     </p>
                                     <p className="text-sm font-bold text-gray-900">
-                                        {status === 'initiating' ? 'Sending Payment Request...' : 'Payment Request Sent'}
+                                        {status === 'initiating' ? 'Sending Payment Request...' : 'Check Your Phone'}
                                     </p>
                                 </div>
                             </div>
+
+                            {/* 3. Logic for the Text Message */}
                             <p className="text-[11px] text-gray-500 mt-4 leading-relaxed font-medium pl-14">
                                 {status === 'initiating'
                                     ? "We're sending a payment request to your JazzCash app. Please keep your phone ready."
-                                    : `A secure MPIN prompt has been sent to ${phoneNumber}. Please authorize RS ${amount} on your phone now.`}
+                                    : statusMessage // Use the dynamic message from the hook
+                                }
                             </p>
                         </div>
 

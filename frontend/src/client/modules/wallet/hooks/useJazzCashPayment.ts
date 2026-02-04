@@ -1,6 +1,6 @@
-import { useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useMemo } from 'react';
 import { useWalletModuleStore, PaymentFlowStatus } from '../store';
-import { topUp } from '../api';
+import { topUp, getTransactionStatus } from '../api';
 import { getErrorMessage } from '@/lib/errors';
 import { TopUpRequest } from '../types';
 
@@ -9,14 +9,99 @@ export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast
     const {
         formData,
         status,
+        timeLeft,
+        txnRefNo,
+        errorMessage,
         setStatus,
+        setTimeLeft,
+        setTxnRefNo,
         setErrorMessage,
         fetchBalance,
         resetPaymentState: reset
     } = useWalletModuleStore();
 
+    const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const pollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
     const isActive = useRef(false);
+
+    // --- Derived State for UI ---
+
+    // 1. Determine if we are in the "Hurry Up" phase (last 60 seconds)
+    const isUrgentPhase = timeLeft <= 60;
+
+    // 2. Logic to hide the timer during the first 40s (buffer), show it only for the last 60s
+    const showTimer = status === 'processing' && isUrgentPhase;
+
+    // 3. Dynamic Message based on the phase
+    const statusMessage = useMemo(() => {
+        if (status !== 'processing') return '';
+
+        if (!isUrgentPhase) {
+            // First 40 seconds (TimeLeft: 100 -> 61)
+            return "Request is sent. Please approve the payment request by entering your MPIN in the JazzCash app.";
+        } else {
+            // Last 60 seconds (TimeLeft: 60 -> 0)
+            return "Please hurry up and approve the payment!";
+        }
+    }, [status, isUrgentPhase]);
+
+
+    const clearAllTimers = useCallback(() => {
+        if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+        if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current);
+        timerIntervalRef.current = null;
+        pollTimeoutRef.current = null;
+
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+    }, []);
+
+    const handleSuccess = useCallback(() => {
+        clearAllTimers();
+        setStatus('success');
+        fetchBalance();
+    }, [clearAllTimers, setStatus, fetchBalance]);
+
+    const handleFailure = useCallback((msg: string) => {
+        if (msg === 'canceled' || msg === 'Canceled') return;
+
+        clearAllTimers();
+        setStatus('failed');
+        setErrorMessage(msg);
+    }, [clearAllTimers, setStatus, setErrorMessage]);
+
+    const pollOnce = useCallback(async (currentTxnRefNo: string) => {
+        try {
+            const result = await getTransactionStatus(currentTxnRefNo);
+            if (result.status === 'SUCCESS') handleSuccess();
+            else if (result.status === 'FAILED') handleFailure(result.message || "Transaction failed");
+        } catch (err) {
+            // Silently ignore poll errors, wait for next cycle
+        }
+    }, [handleSuccess, handleFailure]);
+
+    const startPolling = useCallback(() => {
+        if (pollTimeoutRef.current) return;
+
+        const tick = async () => {
+            pollTimeoutRef.current = null;
+
+            const { status: currentStatus, txnRefNo: currentTxnRefNo } = useWalletModuleStore.getState();
+            if (currentStatus !== 'processing' || !currentTxnRefNo) return;
+
+            await pollOnce(currentTxnRefNo);
+
+            const { status: nextStatus, txnRefNo: nextTxnRefNo } = useWalletModuleStore.getState();
+            if (nextStatus === 'processing' && nextTxnRefNo) {
+                pollTimeoutRef.current = setTimeout(tick, 1000);
+            }
+        };
+
+        pollTimeoutRef.current = setTimeout(tick, 1000);
+    }, [pollOnce]);
 
     const initiatePayment = async () => {
         if (isActive.current) return;
@@ -29,6 +114,20 @@ export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast
         // IMMEDIATELY show the "Payment Request Sent" state
         setStatus('processing');
 
+        // CHANGE 1: Set total time to 100s (40s Buffer + 60s Urgent)
+        setTimeLeft(100);
+
+        // Start countdown immediately
+        timerIntervalRef.current = setInterval(() => {
+            setTimeLeft((prev: number) => {
+                if (prev <= 1) {
+                    handleFailure("Payment timed out. Please try again.");
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
         try {
             const request: TopUpRequest = {
                 idempotency_key: formData.idempotency_key,
@@ -38,38 +137,55 @@ export const useJazzCashPayment = (amount: number, phoneNumber: string, cnicLast
                 cnic_last6: formData.cnic_last_six
             };
 
-            // Send payment request in background
+            // This awaits the initial API response (the "res" you mentioned)
             const result = await topUp(request, abortControllerRef.current.signal);
 
             if (result.status === 'SUCCESS') {
-                setStatus('success');
-                fetchBalance();
+                handleSuccess();
             } else if (result.redirect) {
-                // For CARD payments, redirect to the payment page
                 const url = result.redirect.startsWith('/') ? window.location.origin + result.redirect : result.redirect;
                 window.location.assign(url);
             } else if (result.status === 'PENDING') {
-                // Keep showing processing state for mobile wallet
-                setStatus('processing');
+                setTxnRefNo(result.txn_ref_no || null);
+                // Even if this returns quickly (e.g., in 2s), the timer is still at ~98s.
+                // The UI will continue showing "Request sent" until the timer naturally hits 60s.
+                startPolling();
             } else {
-                setStatus('failed');
-                setErrorMessage(result.message || "Payment initiation failed");
+                handleFailure(result.message || "Initiation failed");
             }
         } catch (err: any) {
             if (err.code === 'ERR_CANCELED' || err.name === 'CanceledError') {
-                return; // User cancelled, do nothing
+                return;
             }
-            setStatus('failed');
-            setErrorMessage(getErrorMessage(err));
+            handleFailure(getErrorMessage(err));
         } finally {
             isActive.current = false;
         }
     };
 
+    // Auto-Wake on visibility change
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible' && status === 'processing') {
+                startPolling();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, [status, startPolling]);
+
+    useEffect(() => {
+        return () => clearAllTimers();
+    }, [clearAllTimers]);
+
     return {
         status,
+        timeLeft,
         errorMessage,
         initiatePayment,
-        reset
+        reset,
+        // New helper props for your UI
+        statusMessage,
+        showTimer
     };
 };
