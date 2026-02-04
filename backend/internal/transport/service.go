@@ -301,13 +301,11 @@ func (s *Service) HoldSeats(ctx context.Context, userID uuid.UUID, userRole stri
 			return ErrQuotaExceeded
 		}
 
-		expiry := time.Now().Add(5 * time.Minute)
-
-		for i := 0; i < req.Count; i++ {
-
-			_, deleteErr := qtx.DecreaseTripSeat(ctx, req.TripID)
-			if deleteErr != nil {
-				if errors.Is(deleteErr, pgx.ErrNoRows) {
+holdDuration := 3 * time.Minute
+if userRole == "TRANSPORT_ADMIN" || userRole == "SUPER_ADMIN" || userRole == "EMPLOYEE" {
+holdDuration = 7 * time.Minute
+}
+expiry := time.Now().Add(holdDuration)
 					return ErrTripFull
 				}
 				return commonerrors.Wrap(commonerrors.ErrDatabase, deleteErr)
