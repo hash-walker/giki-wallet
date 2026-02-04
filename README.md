@@ -1,102 +1,99 @@
-# Giki Wallet: Modular Monolith
+# Giki Wallet: Modular Monolith Architecture
 
-[![Go Version](https://img.shields.io/github/go-mod/go-version/hash-walker/giki-wallet?filename=backend%2Fgo.mod)](https://golang.org)
-[![React](https://img.shields.io/badge/Frontend-React%2019-blue)](https://react.dev)
-[![Docker](https://img.shields.io/badge/Infrastructure-Docker-blue)](https://www.docker.com)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/hash-walker/giki-wallet?filename=backend%2Fgo.mod&style=flat-square&logo=go)](https://golang.org)
+[![React](https://img.shields.io/badge/Frontend-React%2019-blue?style=flat-square&logo=react)](https://react.dev)
+[![Tailwind CSS](https://img.shields.io/badge/Styling-Tailwind%20v4-38B2AC?style=flat-square&logo=tailwind-css)](https://tailwindcss.com/)
+[![Docker](https://img.shields.io/badge/Infrastructure-Docker-2496ED?style=flat-square&logo=docker)](https://www.docker.com)
+[![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-336791?style=flat-square&logo=postgresql)](https://www.postgresql.org/)
 
-Giki Wallet is a unified platform for managing digital transactions and transport services at GIKI. It is built as a **Strict Modular Monolith**, prioritizing separation of concerns at every level—from code structure to database schemas—to avoid "AI layer-hell" and ensure long-term maintainability.
+## Overview
 
----
+Giki Wallet is a unified financial and transport management system developed for the GIKI ecosystem. The project implements a **Strict Modular Monolith** architecture to ensure domain isolation, maintainability, and scalability while avoiding the operational overhead of microservices.
 
-## 🚀 Tech Stack
+## Technology Stack
 
 ### Backend
-- **Language**: [Go (Golang)](https://go.dev/)
-- **Database Tooling**: [SQLC](https://sqlc.dev/) (Type-safe SQL) & [Goose](https://github.com/pressly/goose) (Migrations)
-- **Integrations**: MS Graph API (Email), JazzCash SDK (Payments)
-- **Architecture**: Modular Monolith with Domain-Driven Design (DDD) principles.
+*   **Core:** [Go (Golang)](https://go.dev/)
+*   **Data Access:** [SQLC](https://sqlc.dev/) for type-safe SQL generator.
+*   **Database Migrations:** [Goose](https://github.com/pressly/goose) for versioned schema management.
+*   **Integrations:** Microsoft Graph API (Notification Services), JazzCash SDK (Payment Gateway).
 
 ### Frontend
-- **Framework**: [React 19](https://react.dev/) via [Vite](https://vitejs.dev/)
-- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/), [shadcn/ui](https://ui.shadcn.com/)
-- **State Management**: [Zustand](https://github.com/pmndrs/zustand)
-- **Data Fetching**: [TanStack Query](https://tanstack.com/query/latest)
-- **Icons**: [Lucide React](https://lucide.dev/)
+*   **Core:** [React 19](https://react.dev/) via [Vite](https://vitejs.dev/).
+*   **Styling:** [Tailwind CSS v4](https://tailwindcss.com/) and [shadcn/ui](https://ui.shadcn.com/) component library.
+*   **State Management:** [Zustand](https://github.com/pmndrs/zustand).
+*   **Data Fetching:** [TanStack Query](https://tanstack.com/query/latest) for server-state management.
 
 ### Infrastructure
-- **Containerization**: Docker & Docker Compose
-- **Reverse Proxy**: Nginx (serving frontend assets and proxying API requests)
-- **Database**: PostgreSQL (Multi-schema isolation)
+*   **Containerization:** [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docker.com/compose/).
+*   **Server/Proxy:** [Nginx](https://www.nginx.com/) for reverse proxying and static asset delivery.
+*   **Database:** [PostgreSQL](https://www.postgresql.org/) with multi-schema orchestration.
 
----
+## Architecture and Domain Modules
 
-## 🏗 Architecture Breakdown
+### Internal Backend Modules (`/backend/internal/`)
+The system is partitioned into independent domain modules to ensure strict separation of concerns:
 
-### 1. Backend Domain Modules (`backend/internal/`)
-Each module is self-contained with its own logic, types, and database queries.
-- **`auth`**: Authentication and session management.
-- **`wallet`**: Core ledger, accounts, and balance management.
-- **`payment`**: JazzCash gateway integration and transaction reconciliation.
-- **`transport`**: Bus routes, schedules, and seat reservations.
-- **`user`**: Profile management and identity.
-- **`audit`**: Global logging and system activity tracking.
-- **`mailer`**: Email notifications using Microsoft Graph.
+*   **`auth`**: Identity management, session orchestration, and authentication protocols.
+*   **`wallet`**: Financial ledger system managing accounts, balances, and atomic transactions.
+*   **`payment`**: JazzCash gateway integration, transaction processing, and reconciliation.
+*   **`transport`**: Logistics management including routes, schedules, stops, and seat inventory.
+*   **`user`**: User profile management and GIKI-specific identity verification.
+*   **`audit`**: Global system-wide auditing and event logging.
+*   **`mailer`**: Template-based notification delivery via MS Graph.
 
-### 2. Database Isolation Strategy
-We use separate PostgreSQL schemas to ensure data boundaries:
-| Schema | Responsibility |
-| --- | --- |
-| `giki_wallet` | User accounts, transactions, and ledger. |
-| `transport_system` | Routes, stop timings, and bookings. |
-| `giki_system` | Shared configurations, audit logs, and permissions. |
+### Database Schema Strategy
+PostgreSQL schemas are utilized to enforce logical data boundaries:
+| Schema | Domain | Responsibility |
+| :--- | :--- | :--- |
+| `giki_wallet` | Financial | Ledgers, transactions, and balances. |
+| `transport_system` | Logistics | Routes, schedules, and bookings. |
+| `giki_system` | System | Authentication, audit logs, and global config. |
 
-### 3. Frontend Views (`frontend/src/`)
-- **`client/`**: The primary user-facing wallet and transport booking application.
-- **`admin/`**: Administrative dashboard for managing routes, users, and monitoring payments.
-- **`shared/`**: Reusable UI components and utility functions.
-
----
-
-## 🛠 Getting Started
+## Getting Started
 
 ### Prerequisites
-- Docker & Docker Compose
-- Go 1.22+ (for local development)
-- Node.js & npm (for local frontend development)
+*   Docker and Docker Compose.
+*   Go 1.22+ (required for local backend development).
 
-### 1. Setup Environment
-Copy the example environment file and update your secrets:
-```bash
-cp .env.example .env
-```
+### Environment Configuration
+1.  Initialize environment file:
+    ```bash
+    cp .env.example .env
+    ```
+2.  Configure secrets and connection strings in `.env`.
 
-### 2. Launch with Docker
-The easiest way to get the entire system running including Nginx, Backend, Frontend, and Database:
+### Deployment via Docker
+To build and start the entire service stack:
 ```bash
 docker-compose up --build
 ```
-The app will be available at `http://localhost`.
+Access points:
+*   Frontend: `http://localhost`
+*   Backend API: `http://localhost/api`
 
-### 3. Development Commands (Makefile)
-Located in `backend/Makefile`:
-- `make sqlc-generate`: Update Go code after modifying `.sql` queries.
-- `make migrate-up`: Run database migrations.
-- `make run`: Run the backend server locally.
-- `make test`: Run unit tests.
+### Development Commands
+Common tasks are managed via the `Makefile` in the `backend/` directory:
+*   `make sqlc-generate`: Regenerate the data access layer.
+*   `make migrate-up`: Apply database schema changes.
+*   `make run`: Start the API server in a local environment.
+*   `make test`: Run the test suite.
 
----
+## Project Structure
 
-## 📁 Repository Structure
 ```text
 .
-├── backend/            # Go source code, migrations, and dockerfile
-├── frontend/           # React application (Vite, Tailwind)
-├── infrastructure/     # Nginx configs, Postgres bootstrap scripts
-├── certs/              # SSL certificates for production
-└── docker-compose.yml  # System orchestration
+├── backend/            # Go API, SQLC configurations, and migrations
+├── frontend/           # React application, Vite config, and components
+├── infrastructure/     # Nginx configurations and database bootstrap scripts
+├── certs/              # SSL certificate storage
+└── docker-compose.yml  # System orchestration manifest
 ```
 
----
+## Architectural Principles
 
-## 🧠 Philosophy: Modular Monolith over Microservices
-We chose a modular monolith to reduce networking overhead and deployment complexity while maintaining the clean boundaries of microservices. If a domain (like Transport) grows too large, its isolated nature allows it to be extracted into a standalone service with minimal effort.
+### Modular Monolith Philosophy
+The project adheres to several key principles to maintain codebase health:
+1.  **Strict Domain Isolation:** Cross-module communication is restricted to defined service interfaces.
+2.  **Schema Enforcement:** Foreign keys across schemas are minimized to facilitate future decoupling.
+3.  **Type Safety:** Ensuring consistency from SQL schemas to frontend interfaces.
