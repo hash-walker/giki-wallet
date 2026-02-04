@@ -20,13 +20,14 @@ type JobWorker struct {
 	mailer        *mailer.GraphSender
 	lastHeartbeat time.Time
 }
-
-func NewWorker(dbPool *pgxpool.Pool, mailer *mailer.GraphSender) *JobWorker {
-	return &JobWorker{
-		q:      worker.New(dbPool),
-		dbPool: dbPool,
-		mailer: mailer,
-	}
+unc NewWorker(dbPool *pgxpool.Pool, mailer *mailer.GraphSender) *JobWorker {
+return &JobWorker{
+q:             worker.New(dbPool),
+dbPool:        dbPool,
+mailer:        mailer,
+lastHeartbeat: time.Now(),
+}
+}
 }
 
 func (w *JobWorker) Enqueue(ctx context.Context, jobType string, payload interface{}) error {
