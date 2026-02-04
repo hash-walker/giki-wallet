@@ -1,7 +1,7 @@
-import { Ticket, ArrowUpCircle, ArrowRightLeft, ArrowDownCircle } from 'lucide-react';
+import { Ticket, Wallet, ArrowRightLeft, RotateCcw, Bus } from 'lucide-react';
 import { ReactNode } from 'react';
 
-export type TransactionType = 'ticket' | 'topup' | 'transfer' | 'received';
+export type TransactionType = 'ticket' | 'topup' | 'transfer' | 'received' | 'refund';
 
 export interface Transaction {
     id: string;
@@ -15,13 +15,15 @@ export interface Transaction {
 export const getTransactionIcon = (type: TransactionType): ReactNode => {
     switch (type) {
         case 'ticket':
-            return <Ticket className="w-5 h-5 text-primary" />;
+            return <Bus className="w-5 h-5 text-primary" />;
         case 'topup':
-            return <ArrowUpCircle className="w-5 h-5 text-accent" />;
+            return <Wallet className="w-5 h-5 text-accent" />;
         case 'transfer':
             return <ArrowRightLeft className="w-5 h-5 text-primary" />;
         case 'received':
-            return <ArrowDownCircle className="w-5 h-5 text-destructive" />;
+            return <ArrowRightLeft className="w-5 h-5 text-green-600 flip-x" />; // Reuse and flip for received
+        case 'refund':
+            return <RotateCcw className="w-5 h-5 text-orange-500" />;
     }
 };
 
@@ -34,13 +36,16 @@ export const getIconBackground = (type: TransactionType): string => {
         case 'transfer':
             return "bg-primary/10";
         case 'received':
-            return "bg-destructive/10";
+            return "bg-green-100";
+        case 'refund':
+            return "bg-orange-50";
     }
 };
 export const mapTxType = (type: string): TransactionType => {
     switch (type) {
-        case 'TICKET_PURCHASE': return 'ticket';
-        case 'TOP_UP': return 'topup';
+        case 'TRANSPORT_BOOKING': return 'ticket';
+        case 'JAZZCASH_DEPOSIT': return 'topup';
+        case 'REFUND': return 'refund';
         case 'TRANSFER': return 'transfer';
         case 'TRANSFER_RECEIVED': return 'received';
         default: return 'ticket';

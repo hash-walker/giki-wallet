@@ -1,6 +1,36 @@
 import React from 'react';
 import { Github, Linkedin, Instagram, Globe, Code2, Users, Lightbulb, Heart } from 'lucide-react';
 
+const teamMembers = [
+    {
+        name: "Muhammad Taimoor",
+        socials: {
+            linkedin: "https://www.linkedin.com/in/m-taimoor-dev/",
+            github: "https://github.com/muhammadtaimoor9583",
+            instagram: "#",
+            blog: "#"
+        }
+    },
+    {
+        name: "Junaid Saleem",
+        socials: {
+            linkedin: "https://www.linkedin.com/in/junaid-saleem/",
+            github: "https://github.com/JunaidSalim ",
+            instagram: "#",
+            blog: "#"
+        }
+    },
+    {
+        name: "Muneeb Bin Nasir",
+        socials: {
+            linkedin: "https://www.linkedin.com/in/muneebbinnasir/",
+            github: "",
+            instagram: "#",
+            blog: "#"
+        }
+    }
+];
+
 const AboutPage = () => {
     return (
         <div className="max-w-3xl mx-auto px-6 py-12 space-y-16 mb-20">
@@ -43,13 +73,13 @@ const AboutPage = () => {
                     <div className="shrink-0">
                         <img
                             src="/hamza.jpeg"
-                            alt="Hamza"
+                            alt="HamzaFaraz"
                             className="w-32 h-32 rounded-2xl object-cover shadow-sm grayscale hover:grayscale-0 transition-all duration-500"
                         />
                     </div>
                     <div className="space-y-4 text-center md:text-left">
                         <div className="space-y-1">
-                            <h2 className="text-2xl font-bold text-gray-900">Hamza</h2>
+                            <h2 className="text-2xl font-bold text-gray-900">Hamza Faraz</h2>
                             <p className="text-primary font-medium">President Microsoft Club GIKI</p>
                         </div>
                         <p className="text-gray-600 max-w-md">
@@ -68,10 +98,26 @@ const AboutPage = () => {
             </div>
 
             {/* Footer Tag */}
-            <div className="text-center pt-8">
-                <p className="text-sm font-medium text-gray-400">
+            <div className="text-center pt-8 border-t border-gray-100">
+                <p className="text-sm font-medium text-gray-400 mb-8">
                     MADE WITH <Heart className="w-3 h-3 inline fill-current text-red-400" /> IN GIK INSTITUTE
                 </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-y-12 gap-x-8 max-w-2xl mx-auto">
+                    {teamMembers.map((member) => (
+                        <div key={member.name} className="space-y-4 group">
+                            <p className="text-sm font-semibold text-gray-900 group-hover:text-primary transition-colors duration-200">
+                                {member.name}
+                            </p>
+                            <div className="flex items-center justify-center gap-6 sm:gap-4">
+                                <SimpleSocialLink icon={Linkedin} href={member.socials.linkedin} />
+                                <SimpleSocialLink icon={Github} href={member.socials.github} />
+                                <SimpleSocialLink icon={Instagram} href={member.socials.instagram} />
+                                <SimpleSocialLink icon={Globe} href={member.socials.blog} />
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
     );

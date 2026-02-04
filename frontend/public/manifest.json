@@ -4,19 +4,13 @@
     "description": "Secure & Intelligent Payments for GIKI",
     "icons": [
         {
-            "src": "logo.svg",
-            "type": "image/svg+xml",
-            "sizes": "any",
-            "purpose": "any"
-        },
-        {
-            "src": "icon.png",
+            "src": "logo_new.png",
             "type": "image/png",
             "sizes": "1024x1024",
             "purpose": "any"
         },
         {
-            "src": "icon.png",
+            "src": "logo_new.png",
             "type": "image/png",
             "sizes": "1024x1024",
             "purpose": "maskable"
