@@ -66,3 +66,13 @@ func NumericToFloat64(n pgtype.Numeric) float64 {
 	f, _ := n.Float64Value()
 	return f.Float64
 }
+
+func SortUUIDs(ids []uuid.UUID) {
+	for i := 0; i < len(ids); i++ {
+		for j := i + 1; j < len(ids); j++ {
+			if ids[i].String() > ids[j].String() {
+				ids[i], ids[j] = ids[j], ids[i]
+			}
+		}
+	}
+}

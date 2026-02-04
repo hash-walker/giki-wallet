@@ -13,7 +13,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/hash-walker/giki-wallet/internal/common"
 	commonerrors "github.com/hash-walker/giki-wallet/internal/common/errors"
-	"github.com/hash-walker/giki-wallet/internal/middleware"
 	wallet "github.com/hash-walker/giki-wallet/internal/wallet/wallet_db"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -46,24 +45,40 @@ func (s *Service) executeDoubleEntryTransaction(
 	description string,
 ) error {
 
-	walletQ := s.q.WithTx(tx)
+	walletQ := s.q
+	if tx != nil {
+		walletQ = s.q.WithTx(tx)
+	}
 
 	if amount <= 0 {
 		return commonerrors.Wrap(commonerrors.ErrInvalidInput, fmt.Errorf("transaction amount must be positive"))
 	}
 
-	// lock both wallets (prevent race conditions)
-	senderWallet, err := walletQ.GetWalletForUpdate(ctx, senderWalletID)
+	// Sort IDs to prevent AB/BA deadlocks
+	firstID, secondID := senderWalletID, receiverWalletID
+	if firstID.String() > secondID.String() {
+		firstID, secondID = secondID, firstID
+	}
+
+	// lock both wallets in consistent order
+	firstWallet, err := walletQ.GetWalletForUpdate(ctx, firstID)
 	if err != nil {
-		fmt.Printf("[DEBUG] Failed to lock sender wallet: %v\n", err)
+		fmt.Printf("[DEBUG] Failed to lock first wallet (%s): %v\n", firstID, err)
 		return commonerrors.Wrap(ErrDatabase, err)
 	}
 
-	_, err = walletQ.GetWalletForUpdate(ctx, receiverWalletID)
-
+	secondWallet, err := walletQ.GetWalletForUpdate(ctx, secondID)
 	if err != nil {
-		fmt.Printf("[DEBUG] Failed to lock receiver wallet: %v\n", err)
+		fmt.Printf("[DEBUG] Failed to lock second wallet (%s): %v\n", secondID, err)
 		return commonerrors.Wrap(ErrDatabase, err)
+	}
+
+	// Correctly identify sender/receiver metadata from the locked rows
+	var senderWallet wallet.GikiWalletWallet
+	if firstWallet.ID == senderWalletID {
+		senderWallet = firstWallet
+	} else {
+		senderWallet = secondWallet
 	}
 
 	// check sender balance (if not system wallet)
@@ -174,48 +189,28 @@ func (s *Service) RefundTicket(ctx context.Context, tx pgx.Tx, userID uuid.UUID,
 	// 3. Execute Transaction
 	return s.ExecuteTransaction(ctx, tx, transportWalletID, userWallet.ID, amount, "REFUND", referenceID, description)
 }
-
-func (s *Service) GetOrCreateWallet(ctx context.Context, tx pgx.Tx, userID uuid.UUID) (*Wallet, error) {
-
+func (s *Service) GetOrCreateWallet(ctx context.Context, tx pgx.Tx, userID uuid.UUID) (wallet.GikiWalletWallet, error) {
 	walletQ := s.q
 	if tx != nil {
 		walletQ = s.q.WithTx(tx)
 	}
 
-	w, err := walletQ.GetWallet(ctx, common.GoogleUUIDtoPgUUID(userID, true))
-
-	if err == nil {
-		return MapDBWalletToWallet(w), nil
+	arg := wallet.GetOrCreateWalletAtomicParams{
+		UserID:  common.GoogleUUIDtoPgUUID(userID, true),
+		Column2: "Personal Wallet",
+		Type:    common.StringToText("PERSONAL"),
+		Status:  "ACTIVE",
 	}
 
-	if !errors.Is(err, pgx.ErrNoRows) {
-		middleware.LogAppError(commonerrors.Wrap(ErrDatabase, err), "wallet-get-"+userID.String())
-		return nil, commonerrors.Wrap(ErrDatabase, err)
+	return walletQ.GetOrCreateWalletAtomic(ctx, arg)
+}
+
+func (s *Service) GetWalletForUpdate(ctx context.Context, tx pgx.Tx, walletID uuid.UUID) (wallet.GikiWalletWallet, error) {
+	walletQ := s.q
+	if tx != nil {
+		walletQ = s.q.WithTx(tx)
 	}
-
-	w, err = s.q.CreateWallet(ctx, wallet.CreateWalletParams{
-		UserID: common.GoogleUUIDtoPgUUID(userID, true),
-		Type:   common.StringToText("PERSONAL"),
-		Status: "ACTIVE",
-	})
-
-	if err != nil {
-
-		check := CheckUniqueConstraintViolation(err)
-
-		if check {
-			w, err = walletQ.GetWallet(ctx, common.GoogleUUIDtoPgUUID(userID, true))
-			if err != nil {
-				return nil, commonerrors.Wrap(ErrDatabase, err)
-			}
-			return MapDBWalletToWallet(w), nil
-		} else {
-			middleware.LogAppError(commonerrors.Wrap(ErrDatabase, err), "wallet-create-"+userID.String())
-			return nil, commonerrors.Wrap(ErrDatabase, err)
-		}
-	}
-
-	return MapDBWalletToWallet(w), nil
+	return walletQ.GetWalletForUpdate(ctx, walletID)
 }
 
 func (s *Service) GetUserBalance(ctx context.Context, userID uuid.UUID) (*BalanceResponse, error) {

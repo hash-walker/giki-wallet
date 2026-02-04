@@ -138,6 +138,9 @@ WHERE id = $1;
 -- name: GetTripPrice :one
 SELECT base_price FROM giki_transport.trip WHERE id = $1;
 
+-- name: GetTripForUpdate :one
+SELECT id FROM giki_transport.trip WHERE id = $1 FOR UPDATE;
+
 
 -- =============================================
 -- 2. QUOTA & RULES (Smart Logic)

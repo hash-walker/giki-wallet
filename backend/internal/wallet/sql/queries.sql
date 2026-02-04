@@ -1,7 +1,13 @@
 -- name: CreateWallet :one
-
 INSERT INTO giki_wallet.wallets (user_id, name, type, status)
 VALUES ($1, COALESCE(NULLIF($2, ''), 'Personal Wallet'), $3, $4)
+RETURNING *;
+
+-- name: GetOrCreateWalletAtomic :one
+INSERT INTO giki_wallet.wallets (user_id, name, type, status)
+VALUES ($1, COALESCE(NULLIF($2, ''), 'Personal Wallet'), $3, $4)
+ON CONFLICT (user_id) WHERE type = 'PERSONAL'
+DO UPDATE SET status = wallets.status
 RETURNING *;
 
 -- name: GetWallet :one
@@ -33,6 +39,13 @@ RETURNING *;
 
 -- name: GetWalletBalanceSnapshot :one
 SELECT balance_after
+FROM giki_wallet.ledger
+WHERE wallet_id = $1
+ORDER BY created_at DESC
+LIMIT 1;
+
+-- name: GetLastLedgerHash :one
+SELECT row_hash
 FROM giki_wallet.ledger
 WHERE wallet_id = $1
 ORDER BY created_at DESC

@@ -348,7 +348,6 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 	}
 
 	var tickets []BookTicketResponse
-	// Caches for batch optimization
 	tripCache := make(map[uuid.UUID]transport_db.GetTripRow)
 	routeCache := make(map[uuid.UUID]transport_db.GetRouteDetailsForTripRow)
 
@@ -360,6 +359,7 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 	err := common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
 		qtx := s.q.WithTx(tx)
 
+		var err error
 		var userWalletID, revenueWalletID uuid.UUID
 
 		if isStudent {
@@ -369,19 +369,46 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 			}
 			userWalletID = userWallet.ID
 
-			revWallet, err := s.wallet.GetSystemWalletByName(ctx, wallet.TransportSystemWallet, wallet.SystemWalletRevenue)
+			revWalletID, err := s.wallet.GetSystemWalletByName(ctx, wallet.TransportSystemWallet, wallet.SystemWalletRevenue)
 			if err != nil {
 				return err
 			}
-			revenueWalletID = revWallet
+			revenueWalletID = revWalletID
+
+			// [HARDENING] Lock Revenue Wallet at the TOP to ensure strict Wallets -> Trips order
+			if _, err := s.wallet.GetWalletForUpdate(ctx, tx, revenueWalletID); err != nil {
+				return commonerrors.Wrap(wallet.ErrDatabase, err)
+			}
 		}
 
-		for _, item := range items {
-
+			
+		holds := make([]transport_db.GikiTransportTripHold, len(items))
+		uniqueTripIDs := make(map[uuid.UUID]struct{})
+		for i, item := range items {
 			hold, err := qtx.GetHold(ctx, item.HoldID)
 			if err != nil {
 				return commonerrors.Wrap(commonerrors.ErrDatabase, err)
 			}
+			holds[i] = hold
+			uniqueTripIDs[hold.TripID] = struct{}{}
+		}
+
+	
+		sortedTripIDs := make([]uuid.UUID, 0, len(uniqueTripIDs))
+		for id := range uniqueTripIDs {
+			sortedTripIDs = append(sortedTripIDs, id)
+		}
+		common.SortUUIDs(sortedTripIDs)
+
+		for _, tripID := range sortedTripIDs {
+			if _, err := qtx.GetTripForUpdate(ctx, tripID); err != nil {
+				return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+			}
+		}
+
+	
+		for i, item := range items {
+			hold := holds[i]
 
 			if time.Now().After(hold.ExpiresAt) {
 				return ErrHoldExpired
@@ -677,8 +704,13 @@ func (s *Service) GetUserTickets(ctx context.Context, userID uuid.UUID) ([]MyTic
 }
 
 func GenerateRandomCode() string {
+	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // Omit ambiguous characters like 0, O, 1, I
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return fmt.Sprintf("%04d", rng.Intn(10000))
+	b := make([]byte, 6)
+	for i := range b {
+		b[i] = charset[rng.Intn(len(charset))]
+	}
+	return string(b)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
