@@ -1,80 +1,102 @@
 # Giki Wallet: Modular Monolith
 
-## The Story & Philosophy
+[![Go Version](https://img.shields.io/github/go-mod/go-version/hash-walker/giki-wallet?filename=backend%2Fgo.mod)](https://golang.org)
+[![React](https://img.shields.io/badge/Frontend-React%2019-blue)](https://react.dev)
+[![Docker](https://img.shields.io/badge/Infrastructure-Docker-blue)](https://www.docker.com)
 
-This project evolved from our previous **Giki Transport System**. After months of manual development, we integrated **AI-assisted coding (Cursor)**. While powerful, the AI often introduced unnecessary "layers of solutions" for simple problems, creating a complex web that was difficult to debug.
-
-**Our Core Principle:** To combat "AI layer-hell," we have shifted to a **Strict Modular Monolith**. We prioritize **separation at every level** (folders, logic, and database schemas). If a bug appears in the Transport module, you look at the Transport folder—not the entire app.
-
----
-
-## Architecture Breakdown
-
-### 1. Backend (Go)
-
-The backend is structured to ensure that modules are logically isolated even while living in the same codebase.
-
-* **`cmd/api/`**: The "Front Door." Contains `main.go`, initializes the server, and handles top-level routing.
-* **`internal/common/`**: Shared infrastructure used by all modules (Middlewares, global error handling, and standardized JSON responses).
-* **`internal/`**: The business logic, split into independent domains:
-* **Wallet Module**: Handles identities, accounts, and the core ledger.
-* **Transport Module**: Manages routes, schedules, and ticketing.
-
-
-* **`sql/migrations/`**: Organized by schema to match our database isolation strategy.
-
-### 2. Database (PostgreSQL)
-
-We use a single PostgreSQL instance but enforce strict data boundaries using **Schemas**. This prevents "spaghetti data" and allows for easy migration to microservices later.
-
-| Schema | System | Responsibility |
-| --- | --- | --- |
-| `giki_wallet` | **Wallet** | Users, Ledger, Transactions |
-| `transport_system` | **Transport** | Routes, Schedules, Tickets |
-| `giki_system` | **System** | Audit Logs, Global Configs, Permissions |
-
-### 3. Tooling
-
-* **SQLC**: Generates type-safe Go code from raw SQL. We use separate `sqlc.yaml` configurations to keep the generated repository code scoped to its specific module.
-* **Docker & Docker Compose**: Orchestrates the environment.
-* `infrastructure/postgres/bootstrap.sql`: Automatically initializes the database and all schemas on first run.
-* `Dockerfile`: Uses **multi-stage builds** and **layer caching** for fast, tiny production images.
-
-
+Giki Wallet is a unified platform for managing digital transactions and transport services at GIKI. It is built as a **Strict Modular Monolith**, prioritizing separation of concerns at every level—from code structure to database schemas—to avoid "AI layer-hell" and ensure long-term maintainability.
 
 ---
 
-## Getting Started
+## 🚀 Tech Stack
 
-1. **Environment Setup**: Copy `.env.example` to `.env` and fill in your secrets.
-2. **Infrastructure**: Run the database setup.
-```bash
-docker-compose up -d db
+### Backend
+- **Language**: [Go (Golang)](https://go.dev/)
+- **Database Tooling**: [SQLC](https://sqlc.dev/) (Type-safe SQL) & [Goose](https://github.com/pressly/goose) (Migrations)
+- **Integrations**: MS Graph API (Email), JazzCash SDK (Payments)
+- **Architecture**: Modular Monolith with Domain-Driven Design (DDD) principles.
 
-```
+### Frontend
+- **Framework**: [React 19](https://react.dev/) via [Vite](https://vitejs.dev/)
+- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/), [shadcn/ui](https://ui.shadcn.com/)
+- **State Management**: [Zustand](https://github.com/pmndrs/zustand)
+- **Data Fetching**: [TanStack Query](https://tanstack.com/query/latest)
+- **Icons**: [Lucide React](https://lucide.dev/)
 
-
-3. **Generate Code**: Run SQLC to generate the repository layers.
-```bash
-sqlc generate
-
-```
-
-
-4. **Run App**: Start the backend and frontend.
-```bash
-docker-compose up
-
-```
-
-
+### Infrastructure
+- **Containerization**: Docker & Docker Compose
+- **Reverse Proxy**: Nginx (serving frontend assets and proxying API requests)
+- **Database**: PostgreSQL (Multi-schema isolation)
 
 ---
 
-## Debugging Strategy
+## 🏗 Architecture Breakdown
 
-Because of our modular design, follow this flow when a problem arises:
+### 1. Backend Domain Modules (`backend/internal/`)
+Each module is self-contained with its own logic, types, and database queries.
+- **`auth`**: Authentication and session management.
+- **`wallet`**: Core ledger, accounts, and balance management.
+- **`payment`**: JazzCash gateway integration and transaction reconciliation.
+- **`transport`**: Bus routes, schedules, and seat reservations.
+- **`user`**: Profile management and identity.
+- **`audit`**: Global logging and system activity tracking.
+- **`mailer`**: Email notifications using Microsoft Graph.
 
-1. **Is it a Database issue?** Check the specific schema in Postgres.
-2. **Is it a Logic issue?** Go directly to `internal/modules/[module_name]`.
-3. **Is it a Global issue?** Check `internal/common`.
+### 2. Database Isolation Strategy
+We use separate PostgreSQL schemas to ensure data boundaries:
+| Schema | Responsibility |
+| --- | --- |
+| `giki_wallet` | User accounts, transactions, and ledger. |
+| `transport_system` | Routes, stop timings, and bookings. |
+| `giki_system` | Shared configurations, audit logs, and permissions. |
+
+### 3. Frontend Views (`frontend/src/`)
+- **`client/`**: The primary user-facing wallet and transport booking application.
+- **`admin/`**: Administrative dashboard for managing routes, users, and monitoring payments.
+- **`shared/`**: Reusable UI components and utility functions.
+
+---
+
+## 🛠 Getting Started
+
+### Prerequisites
+- Docker & Docker Compose
+- Go 1.22+ (for local development)
+- Node.js & npm (for local frontend development)
+
+### 1. Setup Environment
+Copy the example environment file and update your secrets:
+```bash
+cp .env.example .env
+```
+
+### 2. Launch with Docker
+The easiest way to get the entire system running including Nginx, Backend, Frontend, and Database:
+```bash
+docker-compose up --build
+```
+The app will be available at `http://localhost`.
+
+### 3. Development Commands (Makefile)
+Located in `backend/Makefile`:
+- `make sqlc-generate`: Update Go code after modifying `.sql` queries.
+- `make migrate-up`: Run database migrations.
+- `make run`: Run the backend server locally.
+- `make test`: Run unit tests.
+
+---
+
+## 📁 Repository Structure
+```text
+.
+├── backend/            # Go source code, migrations, and dockerfile
+├── frontend/           # React application (Vite, Tailwind)
+├── infrastructure/     # Nginx configs, Postgres bootstrap scripts
+├── certs/              # SSL certificates for production
+└── docker-compose.yml  # System orchestration
+```
+
+---
+
+## 🧠 Philosophy: Modular Monolith over Microservices
+We chose a modular monolith to reduce networking overhead and deployment complexity while maintaining the clean boundaries of microservices. If a domain (like Transport) grows too large, its isolated nature allows it to be extracted into a standalone service with minimal effort.
