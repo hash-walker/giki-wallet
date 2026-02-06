@@ -1,113 +1,57 @@
-import { useState, useMemo } from 'react';
-import { Table, TableWrapper, getWeekStart, getWeekEnd, isDateInWeek } from '../../../shared';
+import { useState, useEffect, useCallback } from 'react';
+import { Table, TableWrapper, getWeekStart, getWeekEnd } from '../../../shared';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
 import { Badge } from './HistoryBadge';
 import { formatDate, formatCurrency } from '../utils/formatting';
 import { AdminTicket } from '../../tickets/types';
+import { getAdminTickets } from '../../tickets/service';
+import { useDebounce } from '@/shared/hooks/useDebounce';
+import { toast } from 'sonner';
 
 interface TicketsHistoryProps {
     selectedWeek: Date;
 }
 
-// Helper to create ticket data outside component render
-const getMockTicketsData = (): AdminTicket[] => {
-    const now = Date.now();
-    const twoWeeksAgo = now - 604800000 * 2;
-    const oneWeekAgo = now - 604800000;
-    const threeWeeksAgo = now - 604800000 * 3;
-
-    return [
-        {
-            ticket_id: '1',
-            serial_no: 1,
-            ticket_code: '1234',
-            user_name: 'John Doe',
-            user_email: 'john@example.com',
-            route_name: 'GIKI to Peshawar',
-            direction: 'to-giki',
-            pickup_location: 'University Stop',
-            dropoff_location: 'Peshawar',
-            departure_time: new Date(twoWeeksAgo).toISOString(),
-            status: 'CONFIRMED',
-            bus_type: 'Employee',
-            passenger_name: 'John Doe',
-            passenger_relation: 'Self',
-            price: 200,
-            booking_time: new Date(twoWeeksAgo - 86400000).toISOString(),
-        },
-        {
-            ticket_id: '2',
-            serial_no: 2,
-            ticket_code: '5678',
-            user_name: 'Alice Smith',
-            user_email: 'alice@example.com',
-            route_name: 'GIKI to Islamabad',
-            direction: 'from-giki',
-            pickup_location: 'F-6 Markaz',
-            dropoff_location: 'Islamabad',
-            departure_time: new Date(oneWeekAgo).toISOString(),
-            status: 'CONFIRMED',
-            bus_type: 'Student',
-            passenger_name: 'Alice Smith',
-            passenger_relation: 'Self',
-            price: 200,
-            booking_time: new Date(oneWeekAgo - 86400000).toISOString(),
-        },
-        {
-            ticket_id: '3',
-            serial_no: 3,
-            ticket_code: '9012',
-            user_name: 'John Doe',
-            user_email: 'john@example.com',
-            route_name: 'GIKI to Lahore',
-            direction: 'to-giki',
-            pickup_location: 'Model Town',
-            dropoff_location: 'Lahore',
-            departure_time: new Date(threeWeeksAgo).toISOString(),
-            status: 'CANCELLED',
-            bus_type: 'Employee',
-            passenger_name: 'Jane Doe',
-            passenger_relation: 'Spouse',
-            price: 200,
-            refund_amount: 150,
-            booking_time: new Date(threeWeeksAgo - 86400000).toISOString(),
-            status_updated_at: new Date(threeWeeksAgo + 86400000).toISOString(),
-        },
-    ];
-};
-
 export const TicketsHistory = ({ selectedWeek }: TicketsHistoryProps) => {
-    // Mock data - all tickets from previous weeks (replace with API calls)
-    const [tickets] = useState<AdminTicket[]>(() => getMockTicketsData());
+    const [tickets, setTickets] = useState<AdminTicket[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [totalCount, setTotalCount] = useState(0);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState<string>('all');
     const [filterBusType, setFilterBusType] = useState<string>('all');
 
+    const debouncedSearch = useDebounce(searchTerm, 500);
+
     const weekStart = getWeekStart(selectedWeek);
     const weekEnd = getWeekEnd(selectedWeek);
 
-    const filteredTickets = useMemo(() => {
-        return tickets.filter((ticket) => {
-            // Filter by selected week based on departure time
-            const departureDate = new Date(ticket.departure_time);
-            if (!isDateInWeek(departureDate, weekStart, weekEnd)) {
-                return false;
-            }
+    const fetchTickets = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const response = await getAdminTickets(
+                weekStart.toISOString(),
+                weekEnd.toISOString(),
+                filterBusType,
+                filterStatus,
+                debouncedSearch,
+                1, // Default to page 1 for history view for now
+                100 // Large page size to show enough history
+            );
+            setTickets(response.data);
+            setTotalCount(response.total_count);
+        } catch (error) {
+            console.error('Failed to fetch ticket history:', error);
+            toast.error('Failed to load ticket history');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [weekStart, weekEnd, filterBusType, filterStatus, debouncedSearch]);
 
-            const matchesSearch =
-                ticket.ticket_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                ticket.passenger_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                ticket.user_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                ticket.user_email.toLowerCase().includes(searchTerm.toLowerCase());
-
-            const matchesStatus = filterStatus === 'all' || ticket.status === filterStatus;
-            const matchesBusType = filterBusType === 'all' || ticket.bus_type === filterBusType;
-
-            return matchesSearch && matchesStatus && matchesBusType;
-        });
-    }, [tickets, weekStart, weekEnd, searchTerm, filterStatus, filterBusType]);
+    useEffect(() => {
+        void fetchTickets();
+    }, [fetchTickets]);
 
     const headers = [
         { content: 'Travel Date', align: 'left' as const },
@@ -120,7 +64,7 @@ export const TicketsHistory = ({ selectedWeek }: TicketsHistoryProps) => {
         { content: 'Booked At', align: 'left' as const },
     ];
 
-    const rows = filteredTickets.map((ticket) => ({
+    const rows = tickets.map((ticket) => ({
         key: ticket.ticket_id,
         cells: [
             <div key="departureDate">
@@ -197,8 +141,12 @@ export const TicketsHistory = ({ selectedWeek }: TicketsHistoryProps) => {
             </div>
 
             {/* Table */}
-            <TableWrapper count={filteredTickets.length} itemName="ticket">
-                <Table headers={headers} rows={rows} emptyMessage="No ticket history found." />
+            <TableWrapper count={totalCount || tickets.length} itemName="ticket">
+                {isLoading ? (
+                    <div className="p-8 text-center text-gray-500">Loading history...</div>
+                ) : (
+                    <Table headers={headers} rows={rows} emptyMessage="No ticket history found." />
+                )}
             </TableWrapper>
         </div>
     );

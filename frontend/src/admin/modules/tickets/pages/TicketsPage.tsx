@@ -14,7 +14,8 @@ import { useDebounce } from '@/shared/hooks/useDebounce';
 const STATUS_FILTERS = [
     { id: 'all', label: 'All Tickets' },
     { id: 'CONFIRMED', label: 'Confirmed' },
-    { id: 'CANCELLED', label: 'Cancelled' },
+    { id: 'CANCELLED', label: 'Cancelled (User)' },
+    { id: 'CANCELLED_BY_ADMIN', label: 'Cancelled (Admin)' },
 ];
 
 export const TicketsPage = () => {
@@ -169,8 +170,8 @@ export const TicketsPage = () => {
                             onChange={setBusType}
                             options={[
                                 { value: 'all', label: 'All Bus Types' },
-                                { value: 'student', label: 'Student' },
-                                { value: 'employee', label: 'Employee' }
+                                { value: 'STUDENT', label: 'Student' },
+                                { value: 'EMPLOYEE', label: 'Employee' }
                             ]}
                             placeholder="Bus Type"
                         />

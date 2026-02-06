@@ -1,5 +1,5 @@
 export const formatCurrency = (amount: number): string => {
-    return `RS ${amount.toLocaleString()}`;
+    return `RS ${(amount / 100).toLocaleString()}`;
 };
 
 export const formatDate = (dateString: string): string => {
@@ -16,7 +16,7 @@ export const formatTime = (timeString: string): string => {
     if (timeString.includes('AM') || timeString.includes('PM')) {
         return timeString;
     }
-    
+
     // Otherwise format from 24-hour format
     const [hours, minutes] = timeString.split(':');
     const hour = parseInt(hours);

@@ -10,8 +10,8 @@ export interface AdminTicket {
     pickup_location: string;
     dropoff_location: string;
     departure_time: string; // ISO datetime
-    status: 'CONFIRMED' | 'CANCELLED' | 'PENDING' | 'DELETED';
-    bus_type: 'Student' | 'Employee';
+    status: 'CONFIRMED' | 'CANCELLED' | 'CANCELLED_BY_ADMIN' | 'PENDING' | 'DELETED';
+    bus_type: 'STUDENT' | 'EMPLOYEE';
     passenger_name: string;
     passenger_relation: string;
     booking_time: string; // ISO datetime

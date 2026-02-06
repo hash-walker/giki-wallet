@@ -34,8 +34,8 @@ export const TicketFilters = ({
                     onChange={(value) => onBusTypeChange(value)}
                     options={[
                         { value: 'all', label: 'All Bus Types' },
-                        { value: 'Student', label: 'Student' },
-                        { value: 'Employee', label: 'Employee' },
+                        { value: 'STUDENT', label: 'Student' },
+                        { value: 'EMPLOYEE', label: 'Employee' },
                     ]}
                     placeholder="Bus Type"
                 />

@@ -50,7 +50,7 @@ export const TicketsTable = ({ tickets = [] }: TicketsTableProps) => {
             <Badge key="bus_type" status={ticket.bus_type as any} />,
             <div key="price" className="text-right">
                 <div className="text-sm font-semibold text-gray-900">{formatCurrency(ticket.price)}</div>
-                {ticket.status === 'CANCELLED' && (
+                {(ticket.status === 'CANCELLED' || ticket.status === 'CANCELLED_BY_ADMIN') && (
                     <div className="text-xs text-red-600">Refunded</div>
                 )}
             </div>,
