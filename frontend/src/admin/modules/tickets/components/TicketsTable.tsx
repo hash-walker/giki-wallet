@@ -1,7 +1,7 @@
 import { AdminTicket } from '../types';
 import { Table } from '../../../shared';
 import { Badge } from './Badge';
-import { formatDate, formatCurrency } from '../utils/formatting';
+import { formatDate, formatCurrency, formatTime } from '../utils/formatting';
 
 interface TicketsTableProps {
     tickets: AdminTicket[];
@@ -43,7 +43,7 @@ export const TicketsTable = ({ tickets = [] }: TicketsTableProps) => {
             <div key="datetime">
                 <div className="text-sm font-medium text-gray-900">{formatDate(ticket.departure_time)}</div>
                 <div className="text-xs text-gray-500">
-                    {new Date(ticket.departure_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {formatTime(ticket.departure_time)}
                 </div>
             </div>,
             <Badge key="status" status={ticket.status as any} />,

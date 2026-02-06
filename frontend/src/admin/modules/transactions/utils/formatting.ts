@@ -2,22 +2,21 @@ export const formatCurrency = (amount: number): string => {
     return `RS ${amount.toLocaleString()}`;
 };
 
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
+
+const TIMEZONE = 'Asia/Karachi';
+
+function parseAsZoned(iso: string) {
+    if (!iso) return new Date();
+    return new Date(iso);
+}
+
 export const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-    });
+    return formatInTimeZone(parseAsZoned(dateString), TIMEZONE, 'MMM d, yyyy');
 };
 
 export const formatTime = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-    });
+    return formatInTimeZone(parseAsZoned(dateString), TIMEZONE, 'h:mm a');
 };
 
 export const formatDateTime = (dateString: string): string => {

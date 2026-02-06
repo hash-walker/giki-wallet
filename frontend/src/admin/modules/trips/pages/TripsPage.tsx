@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, startOfWeek, endOfWeek } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 import {
     Plus,
     Pencil,
@@ -463,20 +464,10 @@ export const TripsPage = () => {
                                             <td className="px-6 py-4 text-gray-600">
                                                 <div className="flex flex-col">
                                                     <span className="font-medium">
-                                                        {new Date(trip.departure_time).toLocaleDateString('en-PK', {
-                                                            timeZone: 'Asia/Karachi',
-                                                            weekday: 'short',
-                                                            month: 'short',
-                                                            day: 'numeric'
-                                                        })}
+                                                        {formatInTimeZone(new Date(trip.departure_time), 'Asia/Karachi', 'EEE, MMM d')}
                                                     </span>
                                                     <span className="text-xs text-gray-400 mt-0.5">
-                                                        {new Date(trip.departure_time).toLocaleTimeString('en-PK', {
-                                                            timeZone: 'Asia/Karachi',
-                                                            hour: 'numeric',
-                                                            minute: '2-digit',
-                                                            hour12: true
-                                                        })}
+                                                        {formatInTimeZone(new Date(trip.departure_time), 'Asia/Karachi', 'hh:mm a')}
                                                     </span>
                                                 </div>
                                             </td>
@@ -597,15 +588,7 @@ export const TripsPage = () => {
                 <DeleteTripModal
                     isOpen={deleteModalOpen}
                     tripName={tripToProcess.route_name}
-                    departureTime={new Date(tripToProcess.departure_time).toLocaleString('en-PK', {
-                        timeZone: 'Asia/Karachi',
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        hour12: true
-                    }).replace(',', ' •')}
+                    departureTime={formatInTimeZone(new Date(tripToProcess.departure_time), 'Asia/Karachi', 'EEE, MMM d • hh:mm a')}
                     onClose={() => {
                         setDeleteModalOpen(false);
                         setTripToProcess(null);
@@ -662,14 +645,7 @@ export const TripsPage = () => {
                                 <p className="font-bold text-gray-900">{tripToProcess.route_name}</p>
                             </div>
                             <div className="text-right text-sm text-gray-500">
-                                {new Date(tripToProcess.departure_time).toLocaleString('en-PK', {
-                                    timeZone: 'Asia/Karachi',
-                                    month: 'short',
-                                    day: 'numeric',
-                                    hour: 'numeric',
-                                    minute: '2-digit',
-                                    hour12: true
-                                })}
+                                {formatInTimeZone(new Date(tripToProcess.departure_time), 'Asia/Karachi', 'MMM d, hh:mm a')}
                             </div>
                         </div>
 

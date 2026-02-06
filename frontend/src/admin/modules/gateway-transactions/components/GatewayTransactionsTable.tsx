@@ -2,7 +2,7 @@ import { GatewayTransaction } from '../schema';
 import { Table } from '../../../shared';
 import { Button } from '@/shared/components/ui/button';
 import { CheckCircle, RotateCw, Eye } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 
 interface GatewayTransactionsTableProps {
     transactions: GatewayTransaction[];
@@ -50,7 +50,7 @@ export const GatewayTransactionsTable = ({
             </div>,
 
             <span key="date" className="text-sm text-gray-500">
-                {format(new Date(txn.created_at), 'MMM d, yyyy HH:mm')}
+                {formatInTimeZone(new Date(txn.created_at), 'Asia/Karachi', 'MMM d, yyyy HH:mm')}
             </span>,
             <div key="actions" className="flex justify-end gap-2">
                 <Button

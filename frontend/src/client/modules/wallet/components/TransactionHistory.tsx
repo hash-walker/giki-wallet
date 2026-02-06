@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { Modal } from '@/shared/components/ui/Modal';
-import { formatDate, groupTransactionsByDate } from '../utils/walletHelpers';
+import { formatDate, formatTime, groupTransactionsByDate } from '../utils/walletHelpers';
 import { Transaction, mapTxType } from '../utils/transactionHelpers';
 import { TransactionCard } from './TransactionCard';
 import { useWalletModuleStore } from '../store';
@@ -23,11 +23,7 @@ export const TransactionHistory = ({
         }
     }, [isOpen, fetchHistory]);
 
-    // Map ApiTransaction to Transaction UI model if needed, or check compatibility
-    // Helper expects Transaction which has { id, type, description, amount, timestamp, date }
-    // ApiTransaction has { id, amount, balance_after, type, reference_id, description, created_at }
-
-    // We need to map it locally or update helpers. Let's map locally to satisfy Transaction type.
+    // Map ApiTransaction to Transaction UI model
     const mappedTransactions: Transaction[] = useMemo(() => {
         return transactions.map((t: ApiTransaction) => {
             const dateObj = new Date(t.created_at);
@@ -36,7 +32,7 @@ export const TransactionHistory = ({
                 type: mapTxType(t.type),
                 description: t.description,
                 amount: t.amount,
-                timestamp: dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                timestamp: formatTime(t.created_at),
                 date: dateObj.toISOString().split('T')[0],
                 referenceId: t.reference_id
             };

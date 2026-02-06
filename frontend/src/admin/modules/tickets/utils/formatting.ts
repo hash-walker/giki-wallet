@@ -2,27 +2,30 @@ export const formatCurrency = (amount: number): string => {
     return `RS ${(amount / 100).toLocaleString()}`;
 };
 
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
+
+const TIMEZONE = 'Asia/Karachi';
+
+function parseAsZoned(iso: string) {
+    if (!iso) return new Date();
+    return new Date(iso);
+}
+
 export const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-    });
+    return formatInTimeZone(parseAsZoned(dateString), TIMEZONE, 'MMM d, yyyy');
 };
 
-export const formatTime = (timeString: string): string => {
-    // If time is already formatted (e.g., "9:00 AM"), return as is
-    if (timeString.includes('AM') || timeString.includes('PM')) {
-        return timeString;
+export const formatTime = (dateString: string): string => {
+    // Check if it's already a formatted string 
+    if (dateString.includes('AM') || dateString.includes('PM')) {
+        return dateString;
     }
 
-    // Otherwise format from 24-hour format
-    const [hours, minutes] = timeString.split(':');
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const hour12 = hour % 12 || 12;
-    return `${hour12}:${minutes} ${ampm}`;
+    try {
+        return formatInTimeZone(dateString, TIMEZONE, 'h:mm a');
+    } catch {
+        return dateString;
+    }
 };
 
 export const formatDateTime = (dateString: string, timeString: string): string => {

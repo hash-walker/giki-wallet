@@ -5,7 +5,7 @@ import { LogDetailsModal } from '../components/LogDetailsModal';
 import { PageHeader, TableWrapper, Table, PaginationControl } from '@/admin/shared';
 import { Button } from '@/shared/components/ui/button';
 import { Eye, RefreshCw } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 import { toast } from '@/lib/toast';
 
 export const SystemLogsPage: React.FC = () => {
@@ -59,7 +59,7 @@ export const SystemLogsPage: React.FC = () => {
         key: log.id,
         cells: [
             <span key="time" className="text-sm text-gray-600 font-medium">
-                {format(new Date(log.created_at), 'MMM dd, HH:mm:ss')}
+                {formatInTimeZone(new Date(log.created_at), 'Asia/Karachi', 'MMM dd, HH:mm:ss')}
             </span>,
             <span key="action" className="text-sm font-semibold text-gray-800">
                 {log.action}

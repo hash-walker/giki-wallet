@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useForm, FormProvider, Controller, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { addHours, parse, format, differenceInHours } from 'date-fns';
+import { fromZonedTime, formatInTimeZone } from 'date-fns-tz';
 import { useTripCreateStore } from '../store';
 import { createTripSchema, CreateTripFormValues } from '../schema';
 import { Button } from '@/shared/components/ui/button';
@@ -66,12 +67,12 @@ export const TripCreateForm = ({ onSuccess }: { onSuccess?: () => void }) => {
         // Booking opens X hours before departure
         const bookingOpenDateTime = addHours(departureDateTime, -tmpl.rules.open_hours_before);
         setValue('bookingOpenDate', bookingOpenDateTime);
-        setValue('bookingOpenTime', format(bookingOpenDateTime, 'HH:mm'));
+        setValue('bookingOpenTime', formatInTimeZone(bookingOpenDateTime, 'Asia/Karachi', 'HH:mm'));
 
         // Booking closes X hours before departure
         const bookingCloseDateTime = addHours(departureDateTime, -tmpl.rules.close_hours_before);
         setValue('bookingCloseDate', bookingCloseDateTime);
-        setValue('bookingCloseTime', format(bookingCloseDateTime, 'HH:mm'));
+        setValue('bookingCloseTime', formatInTimeZone(bookingCloseDateTime, 'Asia/Karachi', 'HH:mm'));
 
         // Auto-detect direction
         const stops = tmpl.stops;
@@ -186,16 +187,16 @@ export const TripCreateForm = ({ onSuccess }: { onSuccess?: () => void }) => {
     };
 
     const onSubmit: SubmitHandler<CreateTripFormValues> = async (values) => {
-        // Combine Date + Time for departure (Forcing PKT interpretation)
+        // Combine Date + Time for departure (Using proper timezone handling)
         const dateStr = format(values.date, 'yyyy-MM-dd');
-        const departureDateTime = new Date(`${dateStr}T${values.time}:00+05:00`);
+        const departureDateTime = fromZonedTime(`${dateStr} ${values.time}`, 'Asia/Karachi');
 
-        // Combine Date + Time for booking window (Forcing PKT interpretation)
+        // Combine Date + Time for booking window (Using proper timezone handling)
         const bookingOpenDateStr = format(values.bookingOpenDate, 'yyyy-MM-dd');
-        const bookingOpenDateTime = new Date(`${bookingOpenDateStr}T${values.bookingOpenTime}:00+05:00`);
+        const bookingOpenDateTime = fromZonedTime(`${bookingOpenDateStr} ${values.bookingOpenTime}`, 'Asia/Karachi');
 
         const bookingCloseDateStr = format(values.bookingCloseDate, 'yyyy-MM-dd');
-        const bookingCloseDateTime = new Date(`${bookingCloseDateStr}T${values.bookingCloseTime}:00+05:00`);
+        const bookingCloseDateTime = fromZonedTime(`${bookingCloseDateStr} ${values.bookingCloseTime}`, 'Asia/Karachi');
 
         // Calculate offset hours (hours before departure)
         const openOffsetHours = Math.round(differenceInHours(departureDateTime, bookingOpenDateTime));

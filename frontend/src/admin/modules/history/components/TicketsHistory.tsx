@@ -3,7 +3,7 @@ import { Table, TableWrapper, getWeekStart, getWeekEnd } from '../../../shared';
 import { Input } from '@/shared/components/ui/Input';
 import { Select } from '@/shared/components/ui/Select';
 import { Badge } from './HistoryBadge';
-import { formatDate, formatCurrency } from '../utils/formatting';
+import { formatDate, formatCurrency, formatTime } from '../utils/formatting';
 import { AdminTicket } from '../../tickets/types';
 import { getAdminTickets } from '../../tickets/service';
 import { useDebounce } from '@/shared/hooks/useDebounce';
@@ -70,7 +70,7 @@ export const TicketsHistory = ({ selectedWeek }: TicketsHistoryProps) => {
             <div key="departureDate">
                 <div className="text-sm font-medium text-gray-900">{formatDate(ticket.departure_time)}</div>
                 <div className="text-xs text-gray-500">
-                    {new Date(ticket.departure_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {formatTime(ticket.departure_time)}
                 </div>
             </div>,
             <div key="ticketCode">

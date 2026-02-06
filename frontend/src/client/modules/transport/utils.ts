@@ -4,35 +4,36 @@ import type { Trip, TripStop } from './validators';
 // DATE/TIME FORMATTING
 // ============================================================================
 
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
+
+// ============================================================================
+// DATE/TIME FORMATTING
+// ============================================================================
+
+const TIMEZONE = 'Asia/Karachi';
+
+// Helper to safely parse date string as Karachi time if it might be naive
+function parseAsZoned(iso: string) {
+    if (!iso) return new Date();
+    // Standard Behavior: Trust the ISO string (UTC)
+    // formatInTimeZone will correctly convert UTC -> Asia/Karachi
+    return new Date(iso);
+}
+
 export function formatDateTime(iso: string) {
-    const d = new Date(iso);
-    return d.toLocaleString('en-PK', {
-        timeZone: 'Asia/Karachi',
-        weekday: 'short',
-        month: 'short',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
+    return formatInTimeZone(parseAsZoned(iso), TIMEZONE, 'EEE, MMM dd, HH:mm');
 }
 
 export function formatTime(iso: string) {
-    const d = new Date(iso);
-    return d.toLocaleTimeString('en-PK', {
-        timeZone: 'Asia/Karachi',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
+    return formatInTimeZone(parseAsZoned(iso), TIMEZONE, 'HH:mm');
+}
+
+export function formatTime12(iso: string) {
+    return formatInTimeZone(parseAsZoned(iso), TIMEZONE, 'hh:mm a');
 }
 
 export function formatDate(iso: string) {
-    const d = new Date(iso);
-    return d.toLocaleDateString('en-PK', {
-        timeZone: 'Asia/Karachi',
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-    });
+    return formatInTimeZone(parseAsZoned(iso), TIMEZONE, 'EEE, MMM d');
 }
 
 // ============================================================================

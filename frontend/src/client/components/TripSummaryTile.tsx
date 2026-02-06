@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { Modal } from '@/shared/components/ui/Modal';
 import { getWeeklySummary } from '@/client/modules/transport/api';
 import { Trip } from '@/client/modules/transport/validators';
-import { formatDateTime } from '@/client/modules/transport/utils';
+import { formatDateTime, formatTime12, formatDate } from '@/client/modules/transport/utils';
 import { useAuthStore } from '@/shared/stores/authStore';
 
 export const TripSummaryTile = () => {
@@ -56,11 +56,7 @@ export const TripSummaryTile = () => {
     }, [trips]);
 
     // Helper formatters
-    const formatTime = (dateStr: string) =>
-        new Date(dateStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-
-    const formatDate = (dateStr: string) =>
-        new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    const formatTime = (dateStr: string) => formatTime12(dateStr);
 
     if (loading) {
         return (
