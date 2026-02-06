@@ -29,7 +29,7 @@ func NewGraphSender(clientID, tenantID, clientSecret, senderEmail string) *Graph
 		TenantID:     tenantID,
 		ClientSecret: clientSecret,
 		SenderEmail:  senderEmail,
-		httpClient:   &http.Client{Timeout: 10 * time.Second},
+		httpClient:   &http.Client{Timeout: 30 * time.Second},
 	}
 }
 

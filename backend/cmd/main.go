@@ -69,7 +69,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	inquiryRateLimiter := payment.NewRateLimiter(10)
+	inquiryRateLimiter := payment.NewRateLimiter(50)
 
 	// Initialize Worker first
 	newWorker := worker.NewWorker(pool, newMailer)
