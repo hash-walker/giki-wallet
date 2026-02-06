@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Select } from '@/shared/components/ui/Select';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/lib/utils';
+import { CheckCircle2 } from 'lucide-react';
 import { useAuthStore } from '@/shared/stores/authStore';
 import { useTransportStore } from '../store';
 import { getGIKIStopObject, formatTime, formatDate } from '../utils';
@@ -84,13 +85,14 @@ export const TransportBookingCard = ({
 }: TransportBookingCardProps) => {
     const navigate = useNavigate();
     const { user } = useAuthStore();
-    const { activeHolds, releaseAllHolds, isRoundTrip } = useTransportStore();
+    const { activeHolds, releaseAllHolds, isRoundTrip, draftOutbound, draftInbound, updateDraft } = useTransportStore();
 
-    // Selection state
-    const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
-    const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
-    const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
-    const [ticketCount, setTicketCount] = useState(1);
+    // Selection state initialized from store drafts
+    const currentDraft = direction === 'OUTBOUND' ? draftOutbound : draftInbound;
+    const [selectedRouteId, setSelectedRouteId] = useState<string | null>(currentDraft.routeId || null);
+    const [selectedTripId, setSelectedTripId] = useState<string | null>(currentDraft.tripId || null);
+    const [selectedStopId, setSelectedStopId] = useState<string | null>(currentDraft.stopId || null);
+    const [ticketCount, setTicketCount] = useState(currentDraft.ticketCount || 1);
 
     // Derived flags
     const isStudent = user?.user_type === 'STUDENT';
@@ -113,13 +115,14 @@ export const TransportBookingCard = ({
         return filtered;
     }, [allTrips, direction]);
 
-    // Reset selection when direction changes
+    // Re-hydrate logic when direction changes
     useEffect(() => {
-        setSelectedRouteId(null);
-        setSelectedTripId(null);
-        setSelectedStopId(null);
-        setTicketCount(1);
-    }, [direction]);
+        const draft = direction === 'OUTBOUND' ? draftOutbound : draftInbound;
+        setSelectedRouteId(draft.routeId || null);
+        setSelectedTripId(draft.tripId || null);
+        setSelectedStopId(draft.stopId || null);
+        setTicketCount(draft.ticketCount || 1);
+    }, [direction, draftOutbound, draftInbound]);
 
     // Role-based Auto-set logic can go here if needed
     useEffect(() => {
@@ -206,6 +209,14 @@ export const TransportBookingCard = ({
         setSelectedTripId(null);
         setSelectedStopId(null);
         setTicketCount(1);
+
+        // Sync to store draft
+        updateDraft(direction, {
+            routeId: routeId || undefined,
+            tripId: undefined,
+            stopId: undefined,
+            ticketCount: 1
+        });
     };
 
     const handleTimeChange = (tripId: string | null) => {
@@ -215,6 +226,13 @@ export const TransportBookingCard = ({
         setSelectedTripId(tripId);
         setSelectedStopId(null);
         setTicketCount(1);
+
+        // Sync to store draft
+        updateDraft(direction, {
+            tripId: tripId || undefined,
+            stopId: undefined,
+            ticketCount: 1
+        });
     };
 
     const handleStopChange = (stopId: string | null) => {
@@ -222,6 +240,9 @@ export const TransportBookingCard = ({
             releaseAllHolds();
         }
         setSelectedStopId(stopId);
+
+        // Sync to store draft
+        updateDraft(direction, { stopId: stopId || undefined });
     };
 
     const handleBook = () => {
@@ -258,6 +279,7 @@ export const TransportBookingCard = ({
 
     const isFull = currentTrip ? (currentTrip.available_seats <= 0 || currentTrip.status === 'FULL') : false;
     const isScheduled = currentTrip?.status === 'SCHEDULED';
+    const isHeld = currentTrip ? activeHolds.some(h => h.trip_id === currentTrip.id) : false;
 
     // Max Tickets Logic:
     // 1. Hard Role Limit (Student=1, Employee=3 via TicketSelect which handles role check too, but let's be safe)
@@ -323,6 +345,12 @@ export const TransportBookingCard = ({
                                     </Badge>
                                 )}
                                 <span className="text-[10px] font-bold text-gray-500 uppercase">{currentTrip.route_name}</span>
+                                {isHeld && (
+                                    <span className="flex items-center gap-1 text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                                        <CheckCircle2 className="w-3 h-3" />
+                                        Held
+                                    </span>
+                                )}
                                 {isFull && <Badge type="FULL">Full</Badge>}
                             </div>
                             <Availability isFull={isFull} tickets={currentTrip.available_seats} />
@@ -392,6 +420,12 @@ export const TransportBookingCard = ({
                                 </Badge>
                             )}
                             <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">{currentTrip.route_name}</span>
+                            {isHeld && (
+                                <span className="flex items-center gap-1 text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                                    <CheckCircle2 className="w-3 h-3" />
+                                    Held
+                                </span>
+                            )}
                             {isFull && <Badge type="FULL">Full</Badge>}
                         </div>
                     ) : (
@@ -424,10 +458,10 @@ export const TransportBookingCard = ({
                     <Button
                         className="w-full font-semibold shadow-sm"
                         disabled={!hasCompleteSelection || isFull || isScheduled}
-                        variant={!hasCompleteSelection || isFull ? "secondary" : "default"}
+                        variant={!hasCompleteSelection || isFull || isHeld ? "secondary" : "default"}
                         onClick={handleBook}
                     >
-                        {isFull ? "Waitlist" : (isScheduled ? "Scheduled" : "Book Now")}
+                        {isHeld ? "Reserved" : (isFull ? "Waitlist" : (isScheduled ? "Scheduled" : "Book Now"))}
                     </Button>
                 </div>
             </div>

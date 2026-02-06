@@ -6,7 +6,8 @@ import type { Trip, TripStop } from './validators';
 
 export function formatDateTime(iso: string) {
     const d = new Date(iso);
-    return d.toLocaleString(undefined, {
+    return d.toLocaleString('en-PK', {
+        timeZone: 'Asia/Karachi',
         weekday: 'short',
         month: 'short',
         day: '2-digit',
@@ -17,12 +18,21 @@ export function formatDateTime(iso: string) {
 
 export function formatTime(iso: string) {
     const d = new Date(iso);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleTimeString('en-PK', {
+        timeZone: 'Asia/Karachi',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
 }
 
 export function formatDate(iso: string) {
     const d = new Date(iso);
-    return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    return d.toLocaleDateString('en-PK', {
+        timeZone: 'Asia/Karachi',
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+    });
 }
 
 // ============================================================================

@@ -128,6 +128,15 @@ export const bookingSelectionSchema = z.object({
 export type Passenger = z.infer<typeof passengerSchema>;
 export type BookingSelection = z.infer<typeof bookingSelectionSchema>;
 
+export interface BookingDraft {
+    routeId?: string;
+    tripId?: string;
+    pickupId?: string;
+    dropoffId?: string;
+    stopId?: string; // Local helper for the non-GIKI stop
+    ticketCount: number;
+}
+
 // ============================================================================
 // TICKET TYPES
 // ============================================================================

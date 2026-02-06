@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useBlocker } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/shared/stores/authStore';
 import { useTransportStore } from '../store';
 import { useHoldTimer } from '../hooks';
@@ -9,6 +10,7 @@ import { PendingReservationBanner } from '../components/PendingReservationBanner
 import { AbandonBookingModal } from '../components/AbandonBookingModal';
 import { TransportBookingCard } from '../components/TransportBookingCard';
 import { BookingConfirmationModal, TripSummary } from '../components/BookingConfirmationModal';
+import { SelectionSummary } from '../components/SelectionSummary';
 import { formatDate, formatTime } from '../utils';
 import type { BookingSelection } from '../validators';
 import { toast } from 'sonner';
@@ -43,7 +45,7 @@ export const TransportPage = () => {
         ({ currentLocation, nextLocation }) =>
             activeHolds.length > 0 &&
             currentLocation.pathname !== nextLocation.pathname &&
-            nextLocation.pathname !== '/transport/passengers'
+            !nextLocation.pathname.includes('/transport/passengers')
     );
 
     useEffect(() => {
@@ -151,6 +153,15 @@ export const TransportPage = () => {
 
             <TransportHeader />
 
+            {/* Dynamic Selection Summary (Cart) */}
+            <SelectionSummary
+                isRoundTrip={isRoundTrip}
+                allTrips={allTrips}
+                outboundSelection={outboundSelection}
+                returnSelection={returnSelection}
+                activeHolds={activeHolds}
+            />
+
             <div className="grid gap-6">
                 <TransportBookingModeSelector
                     direction={direction}
@@ -171,6 +182,33 @@ export const TransportPage = () => {
                         loading={tripsLoading}
                         quota={useTransportStore.getState().quota}
                     />
+
+                    {activeHolds.length > 0 && (
+                        <div className="pt-4 flex justify-center sticky bottom-6 z-10">
+                            <button
+                                className={cn(
+                                    "px-10 py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl transition-all duration-300 active:scale-95",
+                                    (isRoundTrip && outboundSelection && returnSelection) || (!isRoundTrip && (outboundSelection || returnSelection))
+                                        ? "bg-slate-900 text-white hover:bg-slate-800 scale-105"
+                                        : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                                )}
+                                disabled={!useTransportStore.getState().canProceed()}
+                                onClick={() => {
+                                    if (useTransportStore.getState().canProceed()) {
+                                        if (isStudent) {
+                                            setShowConfirmModal(true);
+                                        } else {
+                                            navigate('/transport/passengers');
+                                        }
+                                    }
+                                }}
+                            >
+                                {isRoundTrip
+                                    ? (outboundSelection && returnSelection ? "Finalize Booking" : "Select Both Trips to Continue")
+                                    : "Continue to Booking"}
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 

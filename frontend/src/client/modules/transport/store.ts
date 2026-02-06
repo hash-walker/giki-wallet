@@ -16,6 +16,7 @@ import type {
     ActiveHold,
     HoldSeatsResponse,
     BookingSelection,
+    BookingDraft,
     Passenger,
     MyTicket,
 } from './validators';
@@ -45,6 +46,10 @@ interface TransportState {
     returnSelection: BookingSelection | null;
     passengers: Record<string, Passenger>;
 
+    // Senior UX: Drafts for form re-hydration
+    draftOutbound: BookingDraft;
+    draftInbound: BookingDraft;
+
     // Actions
     fetchData: (showLoading?: boolean) => Promise<void>;
     releaseAllHolds: () => Promise<void>;
@@ -53,9 +58,11 @@ interface TransportState {
     updatePassenger: (holdId: string, passenger: Passenger) => void;
     resetBookingFlow: () => void;
     addSelection: (selection: BookingSelection) => Promise<void>;
+    updateDraft: (direction: 'OUTBOUND' | 'INBOUND', draft: Partial<BookingDraft>) => void;
     confirmBooking: (confirmations: Array<{ holdId: string; passengerName: string; passengerRelation: string }>) => Promise<void>;
     fetchUserTickets: () => Promise<void>;
     cancelTicket: (ticketId: string) => Promise<void>;
+    canProceed: () => boolean;
 }
 
 // ============================================================================
@@ -76,37 +83,33 @@ export const useTransportStore = create<TransportState>((set, get) => ({
     outboundSelection: null,
     returnSelection: null,
     passengers: {},
+    draftOutbound: { ticketCount: 1 },
+    draftInbound: { ticketCount: 1 },
 
     // ========================================================================
     // ACTIONS
     // ========================================================================
 
     setRoundTrip: (enabled) => {
-        const { activeHolds } = get();
-        if (activeHolds.length > 0) {
-            toast.error('Please release active reservations before changing mode');
+        const { activeHolds, releaseAllHolds } = get();
+        if (enabled && activeHolds.length > 0) {
+            toast.error('Please release active reservations before enabling Round Trip mode');
             return;
         }
+
+        // Feature: If turning OFF, reset to OUTBOUND to avoid being "stuck" in a hidden return leg
+        if (!enabled) {
+            set({ direction: 'OUTBOUND' });
+        }
+
         set({ isRoundTrip: enabled });
     },
 
     setDirection: (direction) => {
-        const { activeHolds, isRoundTrip } = get();
-
-        if (!isRoundTrip && activeHolds.length > 0) {
-            toast.error('Please release active holds before changing direction');
-            return;
-        }
-
-        if (activeHolds.length > 0 && !isRoundTrip) {
-            toast.error('Please release active holds before changing direction');
-            return;
-        }
-
         set({ direction });
     },
 
-    updatePassenger: (holdId, passenger) => set(state => ({
+    updatePassenger: (holdId: string, passenger: Passenger) => set((state: TransportState) => ({
         passengers: { ...state.passengers, [holdId]: passenger }
     })),
 
@@ -115,8 +118,17 @@ export const useTransportStore = create<TransportState>((set, get) => ({
             outboundSelection: null,
             returnSelection: null,
             passengers: {},
-            // Reset direction to Outbound? Or keep current? Keep current usually better UX.
+            draftOutbound: { ticketCount: 1 },
+            draftInbound: { ticketCount: 1 },
         });
+    },
+
+    updateDraft: (direction: 'OUTBOUND' | 'INBOUND', draft: Partial<BookingDraft>) => {
+        if (direction === 'OUTBOUND') {
+            set((state: TransportState) => ({ draftOutbound: { ...state.draftOutbound, ...draft } }));
+        } else {
+            set((state: TransportState) => ({ draftInbound: { ...state.draftInbound, ...draft } }));
+        }
     },
 
     // ========================================================================
@@ -136,12 +148,13 @@ export const useTransportStore = create<TransportState>((set, get) => ({
             const role = user?.user_type.toUpperCase();
 
             const filteredTrips = (tripsData || []).filter(trip => {
-                // Filtering Logic:
+                // Filtering Logic (Case-Insensitive):
                 // 1. Admins see everything.
                 // 2. Students see ONLY 'STUDENT' buses.
                 // 3. Employees see ONLY 'EMPLOYEE' buses.
-                if (role === 'STUDENT' && trip.bus_type !== 'STUDENT') return false;
-                if (role === 'EMPLOYEE' && trip.bus_type !== 'EMPLOYEE') return false;
+                const busType = trip.bus_type.toUpperCase();
+                if (role === 'STUDENT' && busType !== 'STUDENT') return false;
+                if (role === 'EMPLOYEE' && busType !== 'EMPLOYEE') return false;
 
                 return true;
             });
@@ -265,19 +278,27 @@ export const useTransportStore = create<TransportState>((set, get) => ({
             const { isRoundTrip } = get();
 
             if (direction === 'OUTBOUND') {
+                const alreadySelectedReturn = !!get().returnSelection;
                 set(state => ({
                     outboundSelection: selection,
+                    draftOutbound: selection, // Sync draft on success
                     passengers: { ...state.passengers, ...newPassengers },
-                    direction: isRoundTrip ? 'INBOUND' : 'OUTBOUND'
+                    direction: (isRoundTrip && !alreadySelectedReturn) ? 'INBOUND' : 'OUTBOUND'
                 }));
-                if (isRoundTrip) {
+                if (isRoundTrip && !alreadySelectedReturn) {
                     toast.success('Outbound seat held! Now select Return trip.');
                 }
             } else {
+                const alreadySelectedOutbound = !!get().outboundSelection;
                 set(state => ({
                     returnSelection: selection,
-                    passengers: { ...state.passengers, ...newPassengers }
+                    draftInbound: selection, // Sync draft on success
+                    passengers: { ...state.passengers, ...newPassengers },
+                    direction: (isRoundTrip && !alreadySelectedOutbound) ? 'OUTBOUND' : 'INBOUND'
                 }));
+                if (isRoundTrip && !alreadySelectedOutbound) {
+                    toast.success('Return seat held! Now select Outbound trip.');
+                }
             }
         } catch (e) {
             const { isRoundTrip, direction, activeHolds, releaseAllHolds } = get();
@@ -368,7 +389,7 @@ export const useTransportStore = create<TransportState>((set, get) => ({
         }
     },
 
-    cancelTicket: async (ticketId) => {
+    cancelTicket: async (ticketId: string) => {
         set({ loading: true });
         try {
             await cancelTicket(ticketId);
@@ -393,5 +414,13 @@ export const useTransportStore = create<TransportState>((set, get) => ({
         } finally {
             set({ loading: false });
         }
-    }
+    },
+
+    canProceed: () => {
+        const { isRoundTrip, outboundSelection, returnSelection } = get();
+        if (isRoundTrip) {
+            return !!(outboundSelection && returnSelection);
+        }
+        return !!(outboundSelection || returnSelection);
+    },
 }));

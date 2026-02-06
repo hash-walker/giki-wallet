@@ -40,7 +40,7 @@ export function TransportBookingModeSelector({
                             <Switch
                                 checked={isRoundTrip}
                                 onCheckedChange={onRoundTripChange}
-                                disabled={disabledRoundTrip}
+                                disabled={disabledRoundTrip && !isRoundTrip}
                             />
                         </div>
                     </div>
