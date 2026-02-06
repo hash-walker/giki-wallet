@@ -1,4 +1,3 @@
-import { Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface LogoProps {
@@ -13,7 +12,7 @@ export const Logo = ({ subText, className }: LogoProps) => {
                 <div className="absolute inset-0 bg-primary/10 rounded-xl group-hover:bg-primary/20 transition-colors" />
                 <div className="relative w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-sm group-hover:scale-110 transition-all duration-300">
                     <img
-                        src="/logo_new.png"
+                        src="/logo_v2.png"
                         alt="GIKI Wallet Logo"
                         className="w-full h-full object-cover"
                     />
