@@ -209,10 +209,10 @@ DELETE FROM giki_transport.trip_holds WHERE id = $1;
 
 INSERT INTO giki_transport.tickets (
     trip_id, user_id, serial_no, ticket_code, pickup_stop_id, dropoff_stop_id,
-    status, passenger_name, passenger_relation
+    status, passenger_name, passenger_relation, price_paid
 )
-VALUES ($1, $2, COALESCE((SELECT MAX(serial_no) FROM giki_transport.tickets WHERE trip_id = $1), 0) + 1, $3, $4, $5, 'CONFIRMED', $6, $7)
-RETURNING id, serial_no;
+VALUES ($1, $2, COALESCE((SELECT MAX(serial_no) FROM giki_transport.tickets WHERE trip_id = $1), 0) + 1, $3, $4, $5, 'CONFIRMED', $6, $7, $8)
+RETURNING id, serial_no, price_paid;
 
 
 -- =============================================
@@ -239,7 +239,7 @@ WHERE tr.id = $1;
 
 -- name: GetTicketForCancellation :one
 SELECT
-    t.id, t.trip_id, t.user_id, t.status, tr.base_price
+    t.id, t.trip_id, t.user_id, t.status, t.price_paid as base_price
 FROM giki_transport.tickets t
          JOIN giki_transport.trip tr ON t.trip_id = tr.id
 WHERE t.id = $1
@@ -278,7 +278,7 @@ SELECT
     tr.id AS trip_id,
     tr.departure_time,
     tr.bus_type,
-    tr.base_price,
+    t.price_paid as base_price,
     tr.direction,
 
     r.name AS route_name,
@@ -350,7 +350,7 @@ SELECT
     r.name as route_name,
     s_pickup.address as pickup_location,
     s_dropoff.address as dropoff_location,
-    tr.base_price as price,
+    t.price_paid as price,
     COUNT(*) OVER() as total_count
 FROM giki_transport.tickets t
 JOIN giki_transport.trip tr ON t.trip_id = tr.id
@@ -392,6 +392,7 @@ SELECT
     r.name as route_name,
     s_pickup.address as pickup_location,
     s_dropoff.address as dropoff_location,
+    t.price_paid as price,
     COUNT(*) OVER() as total_count
 FROM giki_transport.tickets t
 JOIN giki_transport.trip tr ON t.trip_id = tr.id
@@ -424,7 +425,7 @@ SELECT
     t.user_id,
     t.ticket_code,
     t.passenger_name,
-    tr.base_price,
+    t.price_paid as base_price,
     r.name as route_name
 FROM giki_transport.tickets t
 JOIN giki_transport.trip tr ON t.trip_id = tr.id

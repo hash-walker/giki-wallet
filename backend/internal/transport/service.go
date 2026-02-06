@@ -33,15 +33,17 @@ type Service struct {
 
 	dashboardCache map[string]tripCacheEntry
 	cacheMutex     sync.RWMutex
+	loc            *time.Location
 }
 
-func NewService(dbPool *pgxpool.Pool, walletService *wallet.Service, worker *worker.JobWorker) *Service {
+func NewService(dbPool *pgxpool.Pool, walletService *wallet.Service, worker *worker.JobWorker, loc *time.Location) *Service {
 	return &Service{
 		q:              transport_db.New(dbPool),
 		wallet:         walletService,
 		worker:         worker,
 		dbPool:         dbPool,
 		dashboardCache: make(map[string]tripCacheEntry),
+		loc:            loc,
 	}
 }
 
@@ -368,11 +370,7 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 			return commonerrors.Wrap(commonerrors.ErrDatabase, lockErr)
 		}
 
-		// Load PKT location for email consistency
-		loc, err := time.LoadLocation("Asia/Karachi")
-		if err != nil {
-			loc = time.FixedZone("PKT", 5*60*60)
-		}
+		var err error
 
 		var userWalletID, revenueWalletID uuid.UUID
 		if isStudent {
@@ -464,6 +462,7 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 					DropoffStopID:     hold.DropoffStopID,
 					PassengerName:     item.PassengerName,
 					PassengerRelation: item.PassengerRelation,
+					PricePaid:         price,
 				})
 
 				if bookingErr == nil {
@@ -512,7 +511,7 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 				TicketCode:    finalCode,
 				PassengerName: item.PassengerName,
 				RouteName:     routeDetails.RouteName,
-				TripTime:      trip.DepartureTime.In(loc).Format("Mon, 02 Jan 15:04"),
+				TripTime:      trip.DepartureTime.In(s.loc).Format("Mon, 02 Jan 15:04"),
 				Price:         int(price / 100),
 			})
 			totalPrice += int(price)
@@ -779,7 +778,7 @@ func (s *Service) ExportTripData(ctx context.Context, tripIDs []uuid.UUID) ([]by
 	for _, tg := range tripOrder {
 		safeRouteName := strings.ReplaceAll(tg.RouteName, " ", "_")
 		safeRouteName = strings.ReplaceAll(safeRouteName, "/", "-")
-		filename := fmt.Sprintf("%s_%s.csv", safeRouteName, tg.DepartureTime.Format("20060102_1504"))
+		filename := fmt.Sprintf("%s_%s.csv", safeRouteName, tg.DepartureTime.In(s.loc).Format("20060102_1504"))
 
 		f, err := zipWriter.Create(filename)
 		if err != nil {
@@ -788,19 +787,11 @@ func (s *Service) ExportTripData(ctx context.Context, tripIDs []uuid.UUID) ([]by
 
 		w := csv.NewWriter(f)
 
-		// Load PKT location
-		loc, err := time.LoadLocation("Asia/Karachi")
-		if err != nil {
-			// Fallback to UTC or offset if location not found
-			loc = time.FixedZone("PKT", 5*60*60)
-		}
-		localDeparture := tg.DepartureTime.In(loc)
-
 		// 1. Header Info
 		_ = w.Write([]string{"GIKI TRANSPORT - TRIP MANIFEST"})
 		_ = w.Write([]string{"Route", tg.RouteName})
 		_ = w.Write([]string{"Bus", tg.BusType})
-		_ = w.Write([]string{"Departure", localDeparture.Format("Mon, 02 Jan 15:04")})
+		_ = w.Write([]string{"Departure", tg.DepartureTime.In(s.loc).Format("Mon, 02 Jan 15:04")})
 		_ = w.Write([]string{"Direction", tg.Direction})
 		_ = w.Write([]string{"Total Passengers", strconv.Itoa(len(tg.Tickets))})
 		_ = w.Write([]string{}) // Empty row

@@ -86,6 +86,12 @@ func main() {
 	}
 	configHandler := config_management.NewHandler(configService)
 
+	// Load App Timezone
+	loc, err := time.LoadLocation(cfg.Server.AppTimezone)
+	if err != nil {
+		log.Fatalf("Critical: Failed to load application timezone %s: %v", cfg.Server.AppTimezone, err)
+	}
+
 	userService := user.NewService(pool, newWorker)
 	userHandler := user.NewHandler(userService, auditService)
 	authService := auth.NewService(pool, cfg.Secrets.JWTSecret, newWorker)
@@ -95,7 +101,7 @@ func main() {
 	walletHandler := wallet.NewHandler(walletService)
 	paymentService := payment.NewService(pool, jazzCashClient, walletService, inquiryRateLimiter, configService, cfg.Server.AppURL)
 	paymentHandler := payment.NewHandler(paymentService, walletService)
-	transportService := transport.NewService(pool, walletService, newWorker)
+	transportService := transport.NewService(pool, walletService, newWorker, loc)
 	transportHandler := transport.NewHandler(transportService, auditService)
 
 	srv := api.NewServer(userHandler, authHandler, paymentHandler, transportHandler, walletHandler, newWorker, auditService, auditHandler, configHandler)
