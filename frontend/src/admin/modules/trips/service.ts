@@ -39,7 +39,7 @@ export const TripService = {
         if (endDate) params.append('end_date', endDate.toISOString());
 
         const { data } = await apiClient.get<TripResponse[]>('/admin/trips', { params });
-        return data;
+        return data || [];
     },
 
 

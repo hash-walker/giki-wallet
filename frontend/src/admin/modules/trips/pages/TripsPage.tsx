@@ -92,14 +92,16 @@ export const TripsPage = () => {
         void fetchTrips(weekStart, weekEnd);
     }, [currentWeek, fetchTrips]);
 
+    const normalizedTrips = Array.isArray(trips) ? trips : [];
+
     const availableTimes = useMemo(() => {
         const times = new Set<string>();
-        trips.forEach((trip: TripResponse) => {
+        normalizedTrips.forEach((trip: TripResponse) => {
             const time = format(new Date(trip.departure_time), 'HH:mm');
             times.add(time);
         });
         return Array.from(times).sort();
-    }, [trips]);
+    }, [normalizedTrips]);
 
     const filteredTrips = useMemo(() => {
         return trips.filter((trip: TripResponse) => {
