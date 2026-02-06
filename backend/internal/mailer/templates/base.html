@@ -1,87 +1,171 @@
 {{define "base"}}
-
 <!DOCTYPE html>
 <html>
 
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
+
         body {
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            background-color: #f4f4f4;
+            font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background-color: #F8FAFC;
+            /* Slate 50 */
             margin: 0;
             padding: 0;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .wrapper {
+            width: 100%;
+            background-color: #F8FAFC;
+            padding: 40px 0;
         }
 
         .container {
             max-width: 600px;
-            margin: 30px auto;
-            background: #ffffff;
-            border-radius: 8px;
+            margin: 0 auto;
+            background: #FFFFFF;
+            border-radius: 16px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            /* Very subtle shadow */
             overflow: hidden;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
         .header {
-            background-color: #003366;
-            color: #ffffff;
-            padding: 20px;
+            padding: 32px 32px 0 32px;
             text-align: center;
         }
 
         .content {
-            padding: 30px;
-            color: #333333;
+            padding: 32px;
+            color: #334155;
+            /* Slate 700 */
             line-height: 1.6;
+            font-size: 16px;
         }
 
+        /* Typography Utilities */
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: #0F172A;
+            margin: 0 0 16px 0;
+            letter-spacing: -0.02em;
+        }
+
+        h2 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #0F172A;
+            margin: 24px 0 12px 0;
+        }
+
+        p {
+            margin: 0 0 16px 0;
+        }
+
+        .text-muted {
+            color: #64748B;
+            /* Slate 500 */
+        }
+
+        .text-sm {
+            font-size: 14px;
+        }
+
+        /* Button Component */
         .button {
             display: inline-block;
-            background-color: #003366;
-            color: #ffffff;
-            padding: 12px 24px;
+            background-color: #0F172A;
+            /* Primary */
+            color: #FFFFFF !important;
+            padding: 14px 28px;
             text-decoration: none;
-            border-radius: 4px;
-            font-weight: bold;
-            margin-top: 20px;
+            border-radius: 12px;
+            /* Smooth corners */
+            font-weight: 600;
+            font-size: 16px;
+            text-align: center;
+            margin-top: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 4px rgba(15, 23, 42, 0.1);
+        }
+
+        .button:hover {
+            background-color: #1E293B;
+        }
+
+        /* Cards/Boxes */
+        .box {
+            background-color: #FFFFFF;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #E2E8F0;
+            /* Slate 200 */
         }
 
         .footer {
-            background-color: #eeeeee;
-            padding: 15px;
+            padding: 24px;
             text-align: center;
-            font-size: 12px;
-            color: #666666;
+            font-size: 13px;
+            color: #94A3B8;
+            /* Slate 400 */
         }
 
+        .footer a {
+            color: #94A3B8;
+            text-decoration: underline;
+        }
+
+        /* Mobile Optimization */
         @media only screen and (max-width: 600px) {
+            .wrapper {
+                padding: 10px;
+            }
+
             .container {
                 width: 100% !important;
-                margin: 0 !important;
-                border-radius: 0 !important;
+                border-radius: 12px;
             }
 
             .content {
-                padding: 20px !important;
+                padding: 24px !important;
             }
 
             .header {
-                padding: 15px !important;
+                padding: 24px 24px 0 24px;
             }
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>GIKI Transport & Wallet</h1>
-        </div>
-        <div class="content">
-            {{template "body" .}}
+    <div class="wrapper">
+        <div class="container">
+            <div class="header">
+                <!-- Logo Container -->
+                <div style="display: inline-flex; align-items: center; justify-content: center; gap: 12px;">
+                    <!-- Logo Image -->
+                    <img src="https://giktransport.giki.edu.pk/logo_new.png" alt="GIKI Wallet" width="40" height="40"
+                        style="border-radius: 10px; display: block;">
+
+                    <!-- Text Logo -->
+                    <div
+                        style="font-size: 24px; font-weight: 900; color: #0F172A; letter-spacing: -0.04em; line-height: 1;">
+                        GIKI <span style="color: #0D9488;">Wallet</span>
+                    </div>
+                </div>
+            </div>
+            <div class="content">
+                {{template "body" .}}
+            </div>
         </div>
         <div class="footer">
-            &copy; 2026 GIKI. All rights reserved.<br>
-            Topi, Khyber Pakhtunkhwa, Pakistan
+            &copy; 2026 GIKI Institute. All rights reserved.<br>
+            <span class="text-sm">Topi, Khyber Pakhtunkhwa, Pakistan</span>
         </div>
     </div>
 </body>

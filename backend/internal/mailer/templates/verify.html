@@ -1,14 +1,17 @@
 {{template "base" .}}
 
 {{define "body"}}
-<h2>Verify your Email</h2>
+<h1>Verify your Email</h1>
 <p>Asalam-o-Alaikum <strong>{{.Name}}</strong>,</p>
 <p>Welcome to the GIKI Digital System. Please confirm your email address to activate your student account.</p>
 
-<div style="text-align: center;">
+<div style="text-align: center; margin: 32px 0;">
     <a href="{{.Link}}" class="button">Verify My Account</a>
 </div>
 
-<p>Or copy this link:<br><small>{{.Link}}</small></p>
-<p>This link expires in 24 hours.</p>
+<p class="text-muted text-sm" style="margin-top: 32px; border-top: 1px solid #E2E8F0; padding-top: 16px;">
+    Or copy this link:<br>
+    <a href="{{.Link}}" style="color: #0D9488; word-break: break-all;">{{.Link}}</a>
+</p>
+<p class="text-muted text-sm">This link expires in 24 hours.</p>
 {{end}}

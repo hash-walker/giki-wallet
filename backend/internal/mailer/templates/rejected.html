@@ -1,9 +1,12 @@
 {{template "base" .}}
 
 {{define "body"}}
-<h2>Application Status</h2>
+<h1>Application Status</h1>
 <p>Asalam-o-Alaikum <strong>{{.Name}}</strong>,</p>
 <p>Thank you for your interest in the GIKI Employee Wallet.</p>
-<p>We regret to inform you that your application has been <strong>DECLINED</strong> by the administration.</p>
-<p>If you believe this is an error, please contact the transport department.</p>
+
+<p>We regret to inform you that your application has been <strong style="color: #DC2626;">DECLINED</strong> by the
+    administration.</p>
+
+<p class="text-muted">If you believe this is an error, please contact the transport department for clarification.</p>
 {{end}}

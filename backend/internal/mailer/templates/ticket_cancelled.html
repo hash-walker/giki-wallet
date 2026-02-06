@@ -1,16 +1,21 @@
 {{template "base" .}}
 
 {{define "body"}}
-<h2 style="color: #003366; margin-top: 0;">Trip Cancelled</h2>
-<p>Dear {{ .UserName }},</p>
-<p>We regret to inform you that your trip has been cancelled by the administration.</p>
+<h1>Trip Cancelled</h1>
+<p>Dear <strong>{{ .UserName }}</strong>,</p>
+<p>We regret to inform you that your trip for <strong style="color: #0F172A;">{{ .RouteName }}</strong> has been
+    cancelled by the administration.</p>
 
-<div class="details-box"
-    style="background-color: #fff5f5; border: 1px solid #fed7d7; padding: 15px; border-radius: 8px; margin: 20px 0;">
-    <p><strong>Route:</strong> {{ .RouteName }}</p>
-    <p><strong>Ticket Code:</strong> {{ .TicketCode }}</p>
+<div style="margin: 24px 0; padding-left: 16px; border-left: 3px solid #E2E8F0;">
+    <div style="margin-bottom: 8px;">
+        <span class="text-sm text-muted">Ticket Code</span><br>
+        <span style="font-size: 16px; color: #0F172A; font-weight: 500;">{{ .TicketCode }}</span>
+    </div>
     {{ if .Reason }}
-    <p><strong>Reason:</strong> {{ .Reason }}</p>
+    <div>
+        <span class="text-sm text-muted">Reason</span><br>
+        <span style="color: #0F172A;">{{ .Reason }}</span>
+    </div>
     {{ end }}
 </div>
 
@@ -18,5 +23,9 @@
 <p>A full refund of <strong>G-Bux {{ .RefundAmount }}</strong> has been credited to your GIKI Wallet.</p>
 {{ end }}
 
-<p>We apologize for any inconvenience caused.</p>
+<p class="text-muted">We apologize for the inconvenience.</p>
+
+<div style="text-align: center; margin-top: 24px;">
+    <a href="https://giktransport.giki.edu.pk/transport/tickets" class="button">View Wallet</a>
+</div>
 {{ end }}

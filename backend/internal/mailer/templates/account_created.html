@@ -1,14 +1,27 @@
 {{template "base" .}}
 
 {{define "body"}}
-<h2>Welcome to GIKI Transport!</h2>
-<p>Dear {{.Name}},</p>
+<h1>Welcome to GIKI Transport!</h1>
+<p>Dear <strong>{{.Name}}</strong>,</p>
 <p>Your account has been created by the administrator.</p>
 <p>Here are your login credentials:</p>
-<p><strong>Email:</strong> {{.Email}}</p>
-<p><strong>Temporary Password:</strong> {{.Password}}</p>
+
+<div class="box">
+    <div style="font-weight: 600; margin-bottom: 16px; color: #0F172A; font-size: 16px;">Your Credentials</div>
+    <div style="margin-bottom: 12px; display: flex; flex-direction: column;">
+        <span class="text-sm text-muted" style="margin-bottom: 4px;">Email</span>
+        <span style="color: #0F172A; font-weight: 500;">{{.Email}}</span>
+    </div>
+    <div style="display: flex; flex-direction: column;">
+        <span class="text-sm text-muted" style="margin-bottom: 4px;">Temporary Password</span>
+        <span
+            style="font-family: Menlo, Monaco, Consolas, 'Courier New', monospace; background: #E2E8F0; padding: 8px 12px; border-radius: 6px; color: #0F172A; display: inline-block; width: fit-content;">{{.Password}}</span>
+    </div>
+</div>
+
 <p>Please log in to the portal using these credentials.</p>
-<p>
+
+<div style="text-align: center; margin-top: 24px;">
     <a href="https://giktransport.giki.edu.pk/auth/signin" class="button">Log In</a>
-</p>
+</div>
 {{end}}
