@@ -267,7 +267,7 @@ func (s *Service) HoldSeats(ctx context.Context, userID uuid.UUID, userRole stri
 		}
 
 		if userRole != "TRANSPORT_ADMIN" && userRole != "SUPER_ADMIN" {
-			if trip.BusType != userRole {
+			if !strings.EqualFold(trip.BusType, userRole) {
 				return ErrBusTypeMismatch
 			}
 
@@ -301,16 +301,23 @@ func (s *Service) HoldSeats(ctx context.Context, userID uuid.UUID, userRole stri
 			return ErrQuotaExceeded
 		}
 
-holdDuration := 3 * time.Minute
-if userRole == "TRANSPORT_ADMIN" || userRole == "SUPER_ADMIN" || userRole == "EMPLOYEE" {
-holdDuration = 7 * time.Minute
-}
-expiry := time.Now().Add(holdDuration)
+		holdDuration := 3 * time.Minute
+		if userRole == "TRANSPORT_ADMIN" || userRole == "SUPER_ADMIN" || userRole == "EMPLOYEE" {
+			holdDuration = 7 * time.Minute
+		}
+		expiry := time.Now().Add(holdDuration)
+
+		for i := 0; i < req.Count; i++ {
+			// Decrement seat
+			_, decErr := qtx.DecreaseTripSeat(ctx, req.TripID)
+			if decErr != nil {
+				if common.IsUniqueConstraintViolation(decErr) || strings.Contains(decErr.Error(), "available_seats") {
 					return ErrTripFull
 				}
-				return commonerrors.Wrap(commonerrors.ErrDatabase, deleteErr)
+				return commonerrors.Wrap(commonerrors.ErrDatabase, decErr)
 			}
 
+			// Create hold
 			hold, holdErr := qtx.CreateBlankHold(ctx, transport_db.CreateBlankHoldParams{
 				TripID:        req.TripID,
 				UserID:        userID,
@@ -357,9 +364,17 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 	err := common.WithTransaction(ctx, s.dbPool, func(tx pgx.Tx) error {
 		qtx := s.q.WithTx(tx)
 
-		var err error
-		var userWalletID, revenueWalletID uuid.UUID
+		if _, lockErr := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtext($1))", userID.String()); lockErr != nil {
+			return commonerrors.Wrap(commonerrors.ErrDatabase, lockErr)
+		}
 
+		// Load PKT location for email consistency
+		loc, err := time.LoadLocation("Asia/Karachi")
+		if err != nil {
+			loc = time.FixedZone("PKT", 5*60*60)
+		}
+
+		var userWalletID, revenueWalletID uuid.UUID
 		if isStudent {
 			userWallet, err := s.wallet.GetOrCreateWallet(ctx, tx, userID)
 			if err != nil {
@@ -373,7 +388,6 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 			}
 			revenueWalletID = revWalletID
 
-			// [HARDENING] Lock Revenue Wallet at the TOP to ensure strict Wallets -> Trips order
 			if _, err := s.wallet.GetWalletForUpdate(ctx, tx, revenueWalletID); err != nil {
 				return commonerrors.Wrap(wallet.ErrDatabase, err)
 			}
@@ -498,8 +512,8 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 				TicketCode:    finalCode,
 				PassengerName: item.PassengerName,
 				RouteName:     routeDetails.RouteName,
-				TripTime:      trip.DepartureTime.Format("Mon, 02 Jan 15:04"),
-				Price:         int(price),
+				TripTime:      trip.DepartureTime.In(loc).Format("Mon, 02 Jan 15:04"),
+				Price:         int(price / 100),
 			})
 			totalPrice += int(price)
 
@@ -529,7 +543,7 @@ func (s *Service) enqueueTicketConfirmationJob(ctx context.Context, userID uuid.
 	payload := worker.TicketConfirmedPayload{
 		Email:      user.Email,
 		UserName:   user.Name,
-		TotalPrice: totalPrice /100,
+		TotalPrice: totalPrice / 100,
 		Tickets:    tickets,
 	}
 
@@ -702,9 +716,9 @@ func (s *Service) GetUserTickets(ctx context.Context, userID uuid.UUID) ([]MyTic
 }
 
 func GenerateRandomCode() string {
-	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // Omit ambiguous characters like 0, O, 1, I
+	const charset = "0123456789"
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	b := make([]byte, 6)
+	b := make([]byte, 5)
 	for i := range b {
 		b[i] = charset[rng.Intn(len(charset))]
 	}
@@ -923,7 +937,7 @@ func (s *Service) CancelTrip(ctx context.Context, tripID uuid.UUID) error {
 					UserName:     userEmailInfo.Name,
 					TicketCode:   ticket.TicketCode,
 					RouteName:    ticket.RouteName,
-					RefundAmount: int(ticket.BasePrice),
+					RefundAmount: int(ticket.BasePrice / 100),
 					Reason:       "Administrative Cancellation",
 				})
 			}

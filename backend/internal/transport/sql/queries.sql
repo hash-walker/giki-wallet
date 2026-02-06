@@ -361,7 +361,7 @@ JOIN giki_transport.stops s_dropoff ON t.dropoff_stop_id = s_dropoff.id
 WHERE
     tr.departure_time >= sqlc.arg('start_date')
     AND tr.departure_time < sqlc.arg('end_date')
-    AND (sqlc.arg('bus_type')::text = '' OR tr.bus_type = sqlc.arg('bus_type')::text)
+    AND (sqlc.arg('bus_type')::text = '' OR UPPER(tr.bus_type) = UPPER(sqlc.arg('bus_type')::text))
     AND (sqlc.arg('status')::text = '' OR t.status = sqlc.arg('status')::text)
     AND (
         sqlc.arg('search')::text = '' OR
@@ -438,8 +438,8 @@ WHERE trip_id = $1 AND status = 'CONFIRMED';
 
 -- name: GetWeeklyTicketStats :one
 SELECT
-    COUNT(CASE WHEN tr.bus_type = 'Student' THEN 1 END) as student_count,
-    COUNT(CASE WHEN tr.bus_type = 'Employee' THEN 1 END) as employee_count,
+    COUNT(CASE WHEN UPPER(tr.bus_type) = 'STUDENT' THEN 1 END) as student_count,
+    COUNT(CASE WHEN UPPER(tr.bus_type) = 'EMPLOYEE' THEN 1 END) as employee_count,
     COUNT(*) as total_confirmed
 FROM giki_transport.tickets t
 JOIN giki_transport.trip tr ON t.trip_id = tr.id
