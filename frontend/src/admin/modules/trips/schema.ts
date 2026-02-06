@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { parse } from 'date-fns';
 
-export const createTripSchema = z.object({
+const tripFormSchema = z.object({
     routeId: z.string().uuid({ message: "Route selection is required" }),
     // UI usage: separated date and time for better UX
     date: z.date(),
@@ -21,7 +21,11 @@ export const createTripSchema = z.object({
 
     // Selected stops IDs
     selectedStopIds: z.array(z.string().uuid()).min(2, "A trip must have at least 2 stops (Origin & Destination)"),
-}).refine((data) => {
+});
+
+export type CreateTripFormValues = z.infer<typeof tripFormSchema>;
+
+export const createTripSchema = tripFormSchema.refine((data) => {
     const closeDateTime = parse(data.bookingCloseTime, 'HH:mm', data.bookingCloseDate);
     const now = new Date();
     return closeDateTime > now;
@@ -36,5 +40,3 @@ export const createTripSchema = z.object({
     message: "Booking must open before it closes",
     path: ["bookingOpenTime"],
 });
-
-export type CreateTripFormValues = z.infer<typeof createTripSchema>;

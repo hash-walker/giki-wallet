@@ -32,10 +32,15 @@ export const CapacityPricingSection = () => {
                     render={({ field }) => (
                         <Input
                             label="Base Price *"
-                            type="number"
-                            step="0.01"
+                            type="text"
+                            placeholder="300"
                             {...field}
-                            onChange={e => field.onChange(parseFloat(e.target.value))}
+                            onChange={e => {
+                                const val = e.target.value;
+                                if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                    field.onChange(val === '' ? 0 : parseFloat(val));
+                                }
+                            }}
                             error={errors.basePrice?.message}
                         />
                     )}

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, startOfWeek, endOfWeek } from 'date-fns';
 import {
@@ -14,13 +14,18 @@ import {
     Square,
     MoreVertical,
     Ban,
-    Loader2
+    Loader2,
+    Search,
+    Clock,
+    MapPin
 } from 'lucide-react';
+import { Input } from '@/shared/components/ui/Input';
+import { Select } from '@/shared/components/ui/Select';
 import { Button } from '@/shared/components/ui/button';
 import { WeekSelector } from '@/admin/shared/components/WeekSelector';
 import { useTripCreateStore } from '../store';
 import { cn } from '@/lib/utils';
-import { TripResponse } from '../types';
+import { TripResponse, Route } from '../types';
 import { DeleteTripModal } from '../components/DeleteTripModal';
 import { EditTripModal } from '../components/EditTripModal';
 import {
@@ -33,7 +38,7 @@ import { Modal } from '@/shared/components/ui/Modal';
 import { toast } from 'sonner';
 import { TripService } from '../service';
 
-const STATUS_FILTERS = [
+const DESKTOP_FILTERS = [
     { id: 'ALL', label: 'All Trips', color: 'bg-gray-100 text-gray-800' },
     { id: 'OPEN', label: 'Open', color: 'bg-green-100 text-green-800' },
     { id: 'SCHEDULED', label: 'Scheduled', color: 'bg-blue-100 text-blue-800' },
@@ -42,12 +47,20 @@ const STATUS_FILTERS = [
     { id: 'CANCELLED', label: 'Cancelled', color: 'bg-red-100 text-red-800' },
 ];
 
+const BUS_TYPE_FILTERS = [
+    { id: 'ALL', label: 'All Types' },
+    { id: 'STUDENT', label: 'Student' },
+    { id: 'EMPLOYEE', label: 'Employee' },
+];
+
 export const TripsPage = () => {
     const navigate = useNavigate();
     const {
         trips,
         isLoadingTrips,
         fetchTrips,
+        routes,
+        fetchRoutes,
         deleteTrip,
         isDeletingTrip,
         updateTripManualStatus,
@@ -62,8 +75,16 @@ export const TripsPage = () => {
     const [cancelModalOpen, setCancelModalOpen] = useState(false);
     const [tripToProcess, setTripToProcess] = useState<TripResponse | null>(null);
     const [statusFilter, setStatusFilter] = useState('ALL');
+    const [busTypeFilter, setBusTypeFilter] = useState('ALL');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedRouteId, setSelectedRouteId] = useState('ALL');
+    const [selectedTime, setSelectedTime] = useState('ALL');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isExporting, setIsExporting] = useState(false);
+
+    useEffect(() => {
+        void fetchRoutes();
+    }, [fetchRoutes]);
 
     useEffect(() => {
         const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 });
@@ -71,10 +92,32 @@ export const TripsPage = () => {
         void fetchTrips(weekStart, weekEnd);
     }, [currentWeek, fetchTrips]);
 
+    const availableTimes = useMemo(() => {
+        const times = new Set<string>();
+        trips.forEach((trip: TripResponse) => {
+            const time = format(new Date(trip.departure_time), 'HH:mm');
+            times.add(time);
+        });
+        return Array.from(times).sort();
+    }, [trips]);
+
     const filteredTrips = useMemo(() => {
-        if (statusFilter === 'ALL') return trips;
-        return trips.filter(trip => trip.status === statusFilter);
-    }, [trips, statusFilter]);
+        return trips.filter((trip: TripResponse) => {
+            const matchesStatus = statusFilter === 'ALL' || trip.status === statusFilter;
+            const matchesBusType = busTypeFilter === 'ALL' || trip.bus_type.toUpperCase() === busTypeFilter;
+            const matchesRoute = selectedRouteId === 'ALL' || trip.route_id === selectedRouteId;
+
+            const tripTime = format(new Date(trip.departure_time), 'HH:mm');
+            const matchesTime = selectedTime === 'ALL' || tripTime === selectedTime;
+
+            const matchesSearch = searchTerm === '' ||
+                trip.route_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                trip.bus_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                trip.direction.toLowerCase().includes(searchTerm.toLowerCase());
+
+            return matchesStatus && matchesBusType && matchesRoute && matchesTime && matchesSearch;
+        });
+    }, [trips, statusFilter, busTypeFilter, selectedRouteId, selectedTime, searchTerm]);
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -196,75 +239,140 @@ export const TripsPage = () => {
                 weekRange={weekRange}
             />
 
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex bg-gray-100 p-1 rounded-lg w-fit transition-all">
-                    {STATUS_FILTERS.map(filter => (
-                        <button
-                            key={filter.id}
-                            onClick={() => {
-                                setStatusFilter(filter.id);
-                                setSelectedIds(new Set());
-                            }}
-                            className={cn(
-                                "px-3 py-1.5 rounded-md text-sm font-medium transition-all",
-                                statusFilter === filter.id
-                                    ? "bg-white text-gray-900 shadow-sm"
-                                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
-                            )}
-                        >
-                            {filter.label}
-                        </button>
-                    ))}
+            <div className="flex flex-col gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm transition-all duration-300">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    {/* Secondary Filters: Search, Route, Time */}
+                    <div className="flex flex-col sm:flex-row items-center gap-3 flex-1">
+                        <div className="relative flex-1 w-full sm:max-w-xs">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <Input
+                                placeholder="Search route, type, direction..."
+                                className="pl-9 h-10 w-full bg-gray-50/50 border-gray-200 focus:bg-white transition-all"
+                                value={searchTerm}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="w-full sm:w-64">
+                            <Select
+                                value={selectedRouteId}
+                                onChange={setSelectedRouteId}
+                                options={[
+                                    { value: 'ALL', label: 'All Routes' },
+                                    ...routes.map((r: Route) => ({ value: r.route_id, label: r.route_name }))
+                                ]}
+                                placeholder="Select Route"
+                            />
+                        </div>
+
+                        <div className="w-full sm:w-48">
+                            <Select
+                                value={selectedTime}
+                                onChange={setSelectedTime}
+                                options={[
+                                    { value: 'ALL', label: 'All Times' },
+                                    ...availableTimes.map((t: string) => ({ value: t, label: format(new Date(`2000-01-01T${t}:00`), 'hh:mm a') }))
+                                ]}
+                                placeholder="Departure Time"
+                            />
+                        </div>
+                    </div>
                 </div>
 
-                {selectedIds.size > 0 && (
-                    <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-300 z-10">
-                        <span className="text-sm font-medium text-gray-600 mr-2">
-                            {selectedIds.size} selected
-                        </span>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleBatchAction('OPEN')}
-                            className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                        >
-                            <CheckCircle2 className="w-4 h-4 mr-1" />
-                            Force Open
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleBatchAction('CLOSED')}
-                            className="text-gray-600 hover:text-gray-700 hover:bg-gray-50"
-                        >
-                            <XCircle className="w-4 h-4 mr-1" />
-                            Force Close
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleBatchAction('CANCEL')}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                            <Ban className="w-4 h-4 mr-1" />
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleBatchAction('EXPORT')}
-                            disabled={isExporting}
-                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                        >
-                            {isExporting ? (
-                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                            ) : (
-                                <Download className="w-4 h-4 mr-1" />
-                            )}
-                            Export Manifests
-                        </Button>
+                <div className="h-px bg-gray-100" />
+
+                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                    <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="flex bg-gray-100 p-1 rounded-lg w-fit transition-all shadow-inner">
+                            {DESKTOP_FILTERS.map(filter => (
+                                <button
+                                    key={filter.id}
+                                    onClick={() => {
+                                        setStatusFilter(filter.id);
+                                        setSelectedIds(new Set());
+                                    }}
+                                    className={cn(
+                                        "px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200",
+                                        statusFilter === filter.id
+                                            ? "bg-white text-gray-900 shadow-sm scale-[1.02]"
+                                            : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
+                                    )}
+                                >
+                                    {filter.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="flex bg-gray-100 p-1 rounded-lg w-fit transition-all shadow-inner">
+                            {BUS_TYPE_FILTERS.map(filter => (
+                                <button
+                                    key={filter.id}
+                                    onClick={() => {
+                                        setBusTypeFilter(filter.id);
+                                        setSelectedIds(new Set());
+                                    }}
+                                    className={cn(
+                                        "px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200",
+                                        busTypeFilter === filter.id
+                                            ? "bg-white text-gray-900 shadow-sm scale-[1.02]"
+                                            : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"
+                                    )}
+                                >
+                                    {filter.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                )}
+
+                    {selectedIds.size > 0 && (
+                        <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-300 z-10">
+                            <span className="text-sm font-medium text-gray-600 mr-2">
+                                {selectedIds.size} selected
+                            </span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleBatchAction('OPEN')}
+                                className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                            >
+                                <CheckCircle2 className="w-4 h-4 mr-1" />
+                                Force Open
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleBatchAction('CLOSED')}
+                                className="text-gray-600 hover:text-gray-700 hover:bg-gray-50"
+                            >
+                                <XCircle className="w-4 h-4 mr-1" />
+                                Force Close
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleBatchAction('CANCEL')}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                                <Ban className="w-4 h-4 mr-1" />
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleBatchAction('EXPORT')}
+                                disabled={isExporting}
+                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            >
+                                {isExporting ? (
+                                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                ) : (
+                                    <Download className="w-4 h-4 mr-1" />
+                                )}
+                                Export Manifests
+                            </Button>
+                        </div>
+                    )}
+                </div>
             </div>
 
             <div className="bg-white border rounded-xl shadow-sm overflow-hidden min-h-[400px]">
@@ -352,8 +460,22 @@ export const TripsPage = () => {
                                             </td>
                                             <td className="px-6 py-4 text-gray-600">
                                                 <div className="flex flex-col">
-                                                    <span className="font-medium">{format(new Date(trip.departure_time), 'EEE, MMM d')}</span>
-                                                    <span className="text-xs text-gray-400 mt-0.5">{format(new Date(trip.departure_time), 'h:mm a')}</span>
+                                                    <span className="font-medium">
+                                                        {new Date(trip.departure_time).toLocaleDateString('en-PK', {
+                                                            timeZone: 'Asia/Karachi',
+                                                            weekday: 'short',
+                                                            month: 'short',
+                                                            day: 'numeric'
+                                                        })}
+                                                    </span>
+                                                    <span className="text-xs text-gray-400 mt-0.5">
+                                                        {new Date(trip.departure_time).toLocaleTimeString('en-PK', {
+                                                            timeZone: 'Asia/Karachi',
+                                                            hour: 'numeric',
+                                                            minute: '2-digit',
+                                                            hour12: true
+                                                        })}
+                                                    </span>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
@@ -473,7 +595,15 @@ export const TripsPage = () => {
                 <DeleteTripModal
                     isOpen={deleteModalOpen}
                     tripName={tripToProcess.route_name}
-                    departureTime={format(new Date(tripToProcess.departure_time), 'EEE, MMM d • h:mm a')}
+                    departureTime={new Date(tripToProcess.departure_time).toLocaleString('en-PK', {
+                        timeZone: 'Asia/Karachi',
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                    }).replace(',', ' •')}
                     onClose={() => {
                         setDeleteModalOpen(false);
                         setTripToProcess(null);
@@ -530,7 +660,14 @@ export const TripsPage = () => {
                                 <p className="font-bold text-gray-900">{tripToProcess.route_name}</p>
                             </div>
                             <div className="text-right text-sm text-gray-500">
-                                {format(new Date(tripToProcess.departure_time), 'MMM d, h:mm a')}
+                                {new Date(tripToProcess.departure_time).toLocaleString('en-PK', {
+                                    timeZone: 'Asia/Karachi',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                    hour12: true
+                                })}
                             </div>
                         </div>
 

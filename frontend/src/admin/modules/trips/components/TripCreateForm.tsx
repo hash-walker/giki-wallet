@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useForm, FormProvider, Controller } from 'react-hook-form';
+import { useForm, FormProvider, Controller, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { addHours, parse, format, differenceInHours } from 'date-fns';
 import { useTripCreateStore } from '../store';
@@ -39,7 +39,8 @@ export const TripCreateForm = ({ onSuccess }: { onSuccess?: () => void }) => {
             bookingOpenTime: "08:00",
             bookingCloseDate: new Date(),
             bookingCloseTime: "08:00",
-            busType: "STUDENT"
+            busType: "STUDENT",
+            direction: "OUTBOUND"
         },
     });
 
@@ -184,13 +185,17 @@ export const TripCreateForm = ({ onSuccess }: { onSuccess?: () => void }) => {
         }
     };
 
-    const onSubmit = async (values: CreateTripFormValues) => {
-        // Combine Date + Time for departure
-        const departureDateTime = parse(values.time, 'HH:mm', values.date);
+    const onSubmit: SubmitHandler<CreateTripFormValues> = async (values) => {
+        // Combine Date + Time for departure (Forcing PKT interpretation)
+        const dateStr = format(values.date, 'yyyy-MM-dd');
+        const departureDateTime = new Date(`${dateStr}T${values.time}:00+05:00`);
 
-        // Combine Date + Time for booking window
-        const bookingOpenDateTime = parse(values.bookingOpenTime, 'HH:mm', values.bookingOpenDate);
-        const bookingCloseDateTime = parse(values.bookingCloseTime, 'HH:mm', values.bookingCloseDate);
+        // Combine Date + Time for booking window (Forcing PKT interpretation)
+        const bookingOpenDateStr = format(values.bookingOpenDate, 'yyyy-MM-dd');
+        const bookingOpenDateTime = new Date(`${bookingOpenDateStr}T${values.bookingOpenTime}:00+05:00`);
+
+        const bookingCloseDateStr = format(values.bookingCloseDate, 'yyyy-MM-dd');
+        const bookingCloseDateTime = new Date(`${bookingCloseDateStr}T${values.bookingCloseTime}:00+05:00`);
 
         // Calculate offset hours (hours before departure)
         const openOffsetHours = Math.round(differenceInHours(departureDateTime, bookingOpenDateTime));
