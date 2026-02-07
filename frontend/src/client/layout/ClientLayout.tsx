@@ -1,9 +1,12 @@
 import { ReactNode, useState } from 'react';
-import { Wallet } from 'lucide-react';
+import { Wallet, MessageSquarePlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ClientNavbar, Footer } from '@/shared/components/layout';
 import { BottomNav } from '@/shared/components/layout/BottomNav';
 import { TransactionHistory } from '@/client/modules/wallet/components/TransactionHistory';
+import { FeedbackModal } from '@/client/modules/feedback/components/FeedbackModal';
+import { useFeedback } from '@/client/modules/feedback/hooks/useFeedback';
+import { Button } from '@/shared/components/ui/button';
 import { WalletProvider } from '@/context/WalletContext';
 import { useAuthStore } from '@/shared/stores/authStore';
 import { toast } from '@/lib/toast';
@@ -49,6 +52,14 @@ export const ClientLayout = ({ children }: ClientLayoutProps) => {
         toast.success('Signed out');
         navigate('/auth/sign-in', { replace: true });
     };
+
+    const {
+        isOpen: isFeedbackOpen,
+        openFeedback,
+        closeFeedback,
+        submitFeedback,
+        isPending: isFeedbackPending
+    } = useFeedback();
 
     return (
         <WalletProvider
@@ -99,6 +110,25 @@ export const ClientLayout = ({ children }: ClientLayoutProps) => {
                     isOpen={isHistoryOpen}
                     onClose={() => setIsHistoryOpen(false)}
                 />
+                <FeedbackModal
+                    isOpen={isFeedbackOpen}
+                    onClose={closeFeedback}
+                    onSubmit={submitFeedback}
+                    isPending={isFeedbackPending}
+                />
+
+                {/* Floating Feedback Trigger */}
+                {!!user && (
+                    <div className="fixed bottom-20 right-4 md:bottom-8 md:right-8 z-50">
+                        <Button
+                            onClick={openFeedback}
+                            className="rounded-full shadow-lg h-12 w-12 p-0 bg-primary hover:bg-primary/90 text-white"
+                            aria-label="Send Feedback"
+                        >
+                            <MessageSquarePlus className="h-6 w-6" />
+                        </Button>
+                    </div>
+                )}
             </div>
         </WalletProvider>
     );
