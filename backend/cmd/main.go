@@ -12,6 +12,7 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/auth"
 	"github.com/hash-walker/giki-wallet/internal/config"
 	"github.com/hash-walker/giki-wallet/internal/config_management"
+	"github.com/hash-walker/giki-wallet/internal/feedback"
 	"github.com/hash-walker/giki-wallet/internal/mailer"
 	"github.com/hash-walker/giki-wallet/internal/payment"
 	"github.com/hash-walker/giki-wallet/internal/payment/gateway"
@@ -104,7 +105,10 @@ func main() {
 	transportService := transport.NewService(pool, walletService, newWorker, loc)
 	transportHandler := transport.NewHandler(transportService, auditService)
 
-	srv := api.NewServer(userHandler, authHandler, paymentHandler, transportHandler, walletHandler, newWorker, auditService, auditHandler, configHandler)
+	feedbackService := feedback.NewService(pool)
+	feedbackHandler := feedback.NewHandler(feedbackService)
+
+	srv := api.NewServer(userHandler, authHandler, paymentHandler, transportHandler, walletHandler, newWorker, auditService, auditHandler, configHandler, feedbackHandler)
 	srv.MountRoutes()
 
 	c := cors.New(cors.Options{

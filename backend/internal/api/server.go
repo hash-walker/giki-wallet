@@ -9,6 +9,7 @@ import (
 	"github.com/hash-walker/giki-wallet/internal/common"
 	"github.com/hash-walker/giki-wallet/internal/config_management"
 	"github.com/hash-walker/giki-wallet/internal/middleware"
+	"github.com/hash-walker/giki-wallet/internal/feedback"
 	"github.com/hash-walker/giki-wallet/internal/payment"
 	"github.com/hash-walker/giki-wallet/internal/transport"
 	"github.com/hash-walker/giki-wallet/internal/user"
@@ -27,6 +28,7 @@ type Server struct {
 	Audit        *audit.Service
 	AuditHandler *audit.Handler
 	Config       *config_management.Handler
+	Feedback     *feedback.Handler
 }
 
 func NewServer(
@@ -39,6 +41,7 @@ func NewServer(
 	auditService *audit.Service,
 	auditHandler *audit.Handler,
 	configHandler *config_management.Handler,
+	feedbackHandler *feedback.Handler,
 ) *Server {
 	return &Server{
 		Router:       chi.NewRouter(),
@@ -51,6 +54,7 @@ func NewServer(
 		Audit:        auditService,
 		AuditHandler: auditHandler,
 		Config:       configHandler,
+		Feedback:     feedbackHandler,
 	}
 }
 
@@ -84,6 +88,8 @@ func (s *Server) MountRoutes() {
 	r.With(middleware.RateLimit(1, 3)).Post("/auth/reset-password", s.Auth.ResetPassword)
 	r.With(s.Auth.Authenticate).Get("/auth/me", s.Auth.Me)
 	r.With(s.Auth.Authenticate).Get("/auth/me", s.Auth.Me)
+
+	r.With(s.Auth.Authenticate).Post("/feedback", s.Feedback.CreateFeedback)
 
 	r.Route("/payment", func(r chi.Router) {
 		r.Group(func(r chi.Router) {
