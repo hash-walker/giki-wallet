@@ -333,25 +333,19 @@ func (s *Service) GetSystemWalletByName(ctx context.Context, walletName SystemWa
 
 	walletQ := s.q
 
-	sysWallet, err := walletQ.GetSystemWalletByName(ctx, wallet.GetSystemWalletByNameParams{
-		Name: common.StringToText(string(walletName)),
-		Type: common.StringToText(string(walletType)),
+	// Use atomic upsert pattern to prevent race conditions
+	sysWallet, err := walletQ.GetOrCreateSystemWalletAtomic(ctx, wallet.GetOrCreateSystemWalletAtomicParams{
+		UserID: pgtype.UUID{Valid: false}, // System wallets have no user
+		Name:   common.StringToText(string(walletName)),
+		Type:   common.StringToText(string(walletType)),
+		Status: "ACTIVE",
 	})
 
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			sysWallet, createErr := walletQ.CreateWallet(ctx, wallet.CreateWalletParams{
-				UserID:  pgtype.UUID{Valid: false},
-				Column2: common.StringToText(string(walletName)),
-				Type:    common.StringToText(string(walletType)),
-				Status:  "ACTIVE",
-			})
-			if createErr != nil {
-				return uuid.Nil, commonerrors.Wrap(ErrDatabase, createErr)
-			}
-			return sysWallet.ID, nil
+		if CheckUniqueConstraintViolation(err) {
+			return s.GetSystemWalletByName(ctx, walletName, walletType)
 		}
-		return uuid.Nil, commonerrors.Wrap(ErrSystemWalletNotFound, err)
+		return uuid.Nil, commonerrors.Wrap(ErrDatabase, err)
 	}
 
 	return sysWallet.ID, nil
