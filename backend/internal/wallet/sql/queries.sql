@@ -41,7 +41,7 @@ RETURNING *;
 SELECT balance_after
 FROM giki_wallet.ledger
 WHERE wallet_id = $1
-ORDER BY created_at DESC
+ORDER BY created_at DESC, id DESC
 LIMIT 1;
 
 -- name: GetLastLedgerHash :one
@@ -65,6 +65,14 @@ WHERE name = $1
   AND type = $2
 LIMIT 1;
 
+-- name: GetOrCreateSystemWalletAtomic :one
+INSERT INTO giki_wallet.wallets (user_id, name, type, status)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (name, type) 
+WHERE type IN ('SYS_REVENUE', 'SYS_LIABILITY')
+DO UPDATE SET status = wallets.status
+RETURNING *;
+
 -- name: GetLedgerEntriesByWallet :many
 SELECT
     l.id, l.amount, l.balance_after, l.created_at, COUNT(*) OVER() as total_count,
@@ -72,7 +80,7 @@ SELECT
 FROM giki_wallet.ledger l
          JOIN giki_wallet.transactions t ON l.transaction_id = t.id
 WHERE l.wallet_id = $1
-ORDER BY l.created_at DESC
+ORDER BY l.created_at DESC, l.id DESC
 LIMIT $2 OFFSET $3;
 
 -- name: GetAdminRevenueTransactions :many
