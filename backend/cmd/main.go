@@ -117,7 +117,7 @@ func main() {
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization", "X-Requested-With"},
 		AllowCredentials: true,
-		Debug:            true, // Enable Debugging for testing, consider disabling in production
+		Debug:            false, // Disable Debugging for production
 	})
 
 	handler := c.Handler(srv.Router)

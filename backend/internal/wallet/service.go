@@ -81,16 +81,19 @@ func (s *Service) executeDoubleEntryTransaction(
 		senderWallet = secondWallet
 	}
 
+	// get current balances (read once while wallets are locked)
+	senderBalance, err := s.getWalletBalance(ctx, walletQ, senderWalletID)
+	if err != nil {
+		return commonerrors.Wrap(ErrDatabase, err)
+	}
+	receiverBalance, err := s.getWalletBalance(ctx, walletQ, receiverWalletID)
+	if err != nil {
+		return commonerrors.Wrap(ErrDatabase, err)
+	}
+
 	// check sender balance (if not system wallet)
 	if common.TextToString(senderWallet.Type) != string(SystemWalletLiability) && common.TextToString(senderWallet.Type) != string(SystemWalletRevenue) {
-		balance, err := s.getWalletBalance(ctx, walletQ, senderWalletID)
-		if err != nil {
-			return err
-		}
-
-		balanceCheck := checkBalance(balance, amount)
-
-		if !balanceCheck {
+		if !checkBalance(senderBalance, amount) {
 			return ErrInsufficientFunds
 		}
 	}
@@ -101,16 +104,6 @@ func (s *Service) executeDoubleEntryTransaction(
 		Description: common.StringToText(description),
 	})
 
-	if err != nil {
-		return commonerrors.Wrap(ErrDatabase, err)
-	}
-
-	// get current balances
-	senderBalance, err := s.getWalletBalance(ctx, walletQ, senderWalletID)
-	if err != nil {
-		return commonerrors.Wrap(ErrDatabase, err)
-	}
-	receiverBalance, err := s.getWalletBalance(ctx, walletQ, receiverWalletID)
 	if err != nil {
 		return commonerrors.Wrap(ErrDatabase, err)
 	}

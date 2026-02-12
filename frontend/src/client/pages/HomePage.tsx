@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { WalletPage } from '@/client/modules/wallet/pages/WalletPage';
 import { ServiceTiles } from '@/client/components/ServiceTiles';
 import { useAuthStore } from '@/shared/stores/authStore';
-import { TripSummaryTile } from '../components/TripSummaryTile';
+// import { TripSummaryTile } from '../components/TripSummaryTile'; // Removed - simplified UX
 
 export const HomePage = () => {
     const navigate = useNavigate();
@@ -20,7 +20,7 @@ export const HomePage = () => {
                     <WalletPage />
                 </div>
             )}
-            <TripSummaryTile />
+            {/* TripSummaryTile removed for simplified UX - users can go directly to booking page */}
             <ServiceTiles onTransportClick={openTransport} />
         </div>
     );

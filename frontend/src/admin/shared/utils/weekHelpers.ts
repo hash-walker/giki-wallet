@@ -2,6 +2,7 @@
 
 export const getWeekStart = (date: Date = new Date()): Date => {
     const d = new Date(date);
+    d.setHours(0, 0, 0, 0); // Reset time to midnight
     const day = d.getDay();
     const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
     return new Date(d.setDate(diff));

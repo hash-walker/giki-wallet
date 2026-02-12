@@ -219,17 +219,22 @@ export const useTransportStore = create<TransportState>((set, get) => ({
             return;
         }
 
+        // Infer direction from the booking selection BEFORE try block
+        // OUTBOUND: pickup from GIKI, INBOUND: dropoff at GIKI
+        const trip = get().allTrips.find(t => t.id === selection.tripId);
+        if (!trip) {
+            toast.error('Trip not found');
+            return;
+        }
+        const gikiStop = getGIKIStopObject(trip.stops || []);
+        const direction: 'OUTBOUND' | 'INBOUND' = gikiStop && selection.pickupId === gikiStop.stop_id 
+            ? 'OUTBOUND' 
+            : 'INBOUND';
+
         set({ loading: true });
         try {
-            const trip = get().allTrips.find(t => t.id === selection.tripId);
-            if (!trip) {
-                toast.error('Trip not found');
-                return;
-            }
 
-            const gikiStop = getGIKIStopObject(trip.stops || []);
-            const direction = get().direction;
-
+            // Validate pickup/dropoff based on inferred direction
             if (direction === 'OUTBOUND' && gikiStop && selection.pickupId !== gikiStop.stop_id) {
                 toast.error('Outbound trips must pick up from GIKI');
                 set({ loading: false });
@@ -301,8 +306,9 @@ export const useTransportStore = create<TransportState>((set, get) => ({
                 }
             }
         } catch (e) {
-            const { isRoundTrip, direction, activeHolds, releaseAllHolds } = get();
+            const { isRoundTrip, activeHolds, releaseAllHolds } = get();
 
+            // Use inferred direction (not store state)
             if (isRoundTrip && direction === 'INBOUND' && activeHolds.length > 0) {
                 toast.error("Return trip is sold out", {
                     description: "You still have your Outbound seat held.",

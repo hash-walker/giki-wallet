@@ -48,7 +48,7 @@ LIMIT 1;
 SELECT row_hash
 FROM giki_wallet.ledger
 WHERE wallet_id = $1
-ORDER BY created_at DESC
+ORDER BY created_at DESC, id DESC
 LIMIT 1;
 
 -- name: GetLedgerEntriesByReference :many
