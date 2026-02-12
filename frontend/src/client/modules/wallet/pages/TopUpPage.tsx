@@ -53,6 +53,21 @@ const TopUpPage = () => {
         resetFormData();
     }, [resetFormData]);
 
+    // Scroll to top on page load (fixes mobile auto-scroll issue)
+    useEffect(() => {
+        // Clear any URL hash that might cause scroll
+        if (window.location.hash) {
+            window.history.replaceState(null, '', window.location.pathname);
+        }
+        
+        // Scroll to top after a brief delay to ensure DOM is ready
+        const timer = setTimeout(() => {
+            window.scrollTo({ top: 0, behavior: 'instant' });
+        }, 0);
+        
+        return () => clearTimeout(timer);
+    }, []);
+
     const handleCardPayment = async () => {
         if (!formData.amount) {
             toast.error('Please enter an amount');
@@ -91,38 +106,36 @@ const TopUpPage = () => {
     };
 
     return (
-        <div className="max-w-xl mx-auto pt-6 pb-20 md:pb-6">
-            <div className="flex items-center gap-4 mb-6">
-                <Button variant="ghost" size="icon" className="rounded-full" onClick={() => navigate(-1)}>
+        <div className="max-w-xl mx-auto pt-4 pb-20 md:pb-6">
+            <div className="flex items-center gap-3 mb-4">
+                <Button variant="ghost" size="icon" className="rounded-lg" onClick={() => navigate(-1)}>
                     <ArrowLeft className="w-5 h-5" />
                 </Button>
-                <h1 className="text-2xl font-bold text-gray-900">Top Up Wallet</h1>
+                <h1 className="text-xl font-bold text-gray-900">Top Up</h1>
             </div>
 
-            <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+            <div className="bg-white rounded-2xl p-4 md:p-6 border border-gray-200">
                 {/* Payment Method Selection */}
                 <PaymentMethodSelector
                     paymentMethod={formData.method === 'MWALLET' ? 'jazzcash' : 'card'}
                     onPaymentMethodChange={(method) => setMethod(method === 'jazzcash' ? 'MWALLET' : 'CARD')}
                 />
 
-                {/* Account Details Form (Shared or specific based on UX) */}
-                <div className="space-y-4 mb-6">
-                    <div className="mb-2">
-                        <Input
-                            label="Amount (RS)"
-                            type="number"
-                            min="1"
-                            step="1"
-                            value={formData.amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            placeholder="Enter amount"
-                            className="bg-gray-50 border-gray-200"
-                        />
-                        <p className="text-xs text-gray-500 mt-1 ml-1">
-                            Maximum allowed balance: <span className="font-semibold text-blue-600">RS {maxLimit}</span>
-                        </p>
-                    </div>
+                {/* Simplified Form */}
+                <div className="space-y-3 mb-4">
+                    <Input
+                        label="Amount (RS)"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={formData.amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder="Enter amount"
+                        className="bg-white border-gray-300"
+                    />
+                    <p className="text-xs text-gray-500">
+                        Max balance: RS {maxLimit}
+                    </p>
 
                     {formData.method === 'MWALLET' && (
                         <>
@@ -133,7 +146,7 @@ const TopUpPage = () => {
                                 onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, ''))}
                                 placeholder="03XX-XXXXXXX"
                                 maxLength={11}
-                                className="bg-gray-50 border-gray-200"
+                                className="bg-white border-gray-300"
                             />
 
                             <Input
@@ -143,7 +156,7 @@ const TopUpPage = () => {
                                 onChange={(e) => setCnicLastSix(e.target.value.replace(/\D/g, '').slice(0, 6))}
                                 placeholder="XXXXXX"
                                 maxLength={6}
-                                className="bg-gray-50 border-gray-200"
+                                className="bg-white border-gray-300"
                             />
                         </>
                     )}
@@ -159,15 +172,13 @@ const TopUpPage = () => {
                         currentBalance={balance}
                     />
                 ) : (
-                    <div className="space-y-6">
-                        <Button
-                            onClick={handleCardPayment}
-                            disabled={isLoading || !formData.amount}
-                            className="w-full font-semibold text-base py-6 rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all mt-4"
-                        >
-                            {isLoading ? 'Processing...' : 'Proceed to Payment Gateway'}
-                        </Button>
-                    </div>
+                    <Button
+                        onClick={handleCardPayment}
+                        disabled={isLoading || !formData.amount}
+                        className="w-full font-semibold py-4 rounded-xl"
+                    >
+                        {isLoading ? 'Processing...' : 'Proceed to Payment'}
+                    </Button>
                 )}
             </div>
         </div>

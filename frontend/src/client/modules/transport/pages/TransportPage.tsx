@@ -4,7 +4,6 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/shared/stores/authStore';
 import { useTransportStore } from '../store';
 import { useHoldTimer } from '../hooks';
-import { TransportHeader } from '../components/TransportHeader';
 import { TransportBookingModeSelector } from '../components/TransportBookingModeSelector';
 import { PendingReservationBanner } from '../components/PendingReservationBanner';
 import { AbandonBookingModal } from '../components/AbandonBookingModal';
@@ -54,12 +53,20 @@ export const TransportPage = () => {
     }, [fetchData]);
 
     useEffect(() => {
-        if (activeHolds.length > 0 && timeLeft === 0 && !tripsLoading) {
-            toast.error("Reservation expired. Please try again.");
-            fetchData(false);
-            useTransportStore.getState().resetBookingFlow();
+        // Only show expiration if timer has actually counted down (add 1s grace period)
+        // This prevents false "expired" on initial hold creation when timeLeft starts at 0
+        if (activeHolds.length > 0 && timeLeft === 0 && !tripsLoading && initialized) {
+            // Double-check holds are actually expired by checking the timestamp
+            const now = Date.now();
+            const hasExpiredHold = activeHolds.some(h => new Date(h.expires_at).getTime() < now);
+            
+            if (hasExpiredHold) {
+                toast.error("Reservation expired. Please try again.");
+                fetchData(false);
+                useTransportStore.getState().resetBookingFlow();
+            }
         }
-    }, [activeHolds.length, timeLeft, tripsLoading, fetchData]);
+    }, [activeHolds.length, timeLeft, tripsLoading, fetchData, initialized, activeHolds]);
 
     // Auto-refresh when bookings open for scheduled trips
     useEffect(() => {
@@ -185,14 +192,12 @@ export const TransportPage = () => {
         .map(h => ({ hold_id: h.id, expires_at: h.expires_at }));
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4">
             <PendingReservationBanner
                 count={activeHolds.length}
                 timeLeft={timeLeft}
                 onReleaseAll={releaseAllHolds}
             />
-
-            <TransportHeader />
 
             {/* Dynamic Selection Summary (Cart) */}
             <SelectionSummary
@@ -203,7 +208,7 @@ export const TransportPage = () => {
                 activeHolds={activeHolds}
             />
 
-            <div className="grid gap-6">
+            <div className="grid gap-4">
                 <TransportBookingModeSelector
                     direction={direction}
                     onDirectionChange={setDirection}
@@ -214,39 +219,26 @@ export const TransportPage = () => {
 
                 {/* ROUND-TRIP MODE: Show both directions side-by-side */}
                 {isRoundTrip ? (
-                    <div className="space-y-6">
-                        {/* Round Trip Mode Banner */}
-                        <div className="bg-gradient-to-r from-blue-50 via-purple-50 to-blue-50 border-2 border-blue-200 rounded-2xl p-4 shadow-sm">
-                            <div className="flex items-center justify-center gap-3">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs font-bold">
-                                        ↔
-                                    </div>
-                                    <span className="text-lg font-black text-blue-900 uppercase tracking-wide">
-                                        Round Trip Mode
-                                    </span>
-                                </div>
-                                <div className="hidden sm:block text-xs text-blue-600 font-medium bg-blue-100 px-3 py-1 rounded-full">
-                                    Select both trips to continue
-                                </div>
+                    <div className="space-y-4">
+                        {/* Simplified Round Trip Banner */}
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5">
+                            <div className="flex items-center justify-center gap-2 text-sm font-semibold text-blue-900">
+                                ↔ Round Trip • Select both
                             </div>
                         </div>
 
                         {/* Outbound Section */}
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-3 px-2">
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2 px-2">
                                 <div className={cn(
-                                    "w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm",
-                                    outboundSelection ? "bg-green-500 text-white" : "bg-gray-200 text-gray-600"
+                                    "w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold",
+                                    outboundSelection ? "bg-green-500 text-white" : "bg-gray-300 text-gray-600"
                                 )}>
                                     {outboundSelection ? '✓' : '1'}
                                 </div>
-                                <h2 className="text-xl font-bold text-gray-900">
-                                     Going From GIKI
+                                <h2 className="text-base font-semibold text-gray-900">
+                                    🚌 From GIKI
                                 </h2>
-                                {outboundSelection && (
-                                    <span className="text-sm text-green-600 font-semibold">Selected ✓</span>
-                                )}
                             </div>
                             <RouteGrid
                                 direction="OUTBOUND"
@@ -254,28 +246,25 @@ export const TransportPage = () => {
                             />
                         </div>
 
-                        {/* Divider */}
-                        <div className="flex items-center gap-4 px-2">
-                            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent" />
-                            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Then</span>
-                            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent" />
+                        {/* Simple Divider */}
+                        <div className="flex items-center gap-2 px-2">
+                            <div className="flex-1 h-px bg-gray-200" />
+                            <span className="text-xs text-gray-400">Then</span>
+                            <div className="flex-1 h-px bg-gray-200" />
                         </div>
 
                         {/* Return Section */}
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-3 px-2">
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2 px-2">
                                 <div className={cn(
-                                    "w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm",
-                                    returnSelection ? "bg-green-500 text-white" : "bg-gray-200 text-gray-600"
+                                    "w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold",
+                                    returnSelection ? "bg-green-500 text-white" : "bg-gray-300 text-gray-600"
                                 )}>
                                     {returnSelection ? '✓' : '2'}
                                 </div>
-                                <h2 className="text-xl font-bold text-gray-900">
-                                     Coming Back to GIKI
+                                <h2 className="text-base font-semibold text-gray-900">
+                                    🏠 To GIKI
                                 </h2>
-                                {returnSelection && (
-                                    <span className="text-sm text-green-600 font-semibold">Selected ✓</span>
-                                )}
                             </div>
                             <RouteGrid
                                 direction="INBOUND"
@@ -285,9 +274,9 @@ export const TransportPage = () => {
                     </div>
                 ) : (
                     /* SINGLE-TRIP MODE: Show only selected direction */
-                    <div className="space-y-4">
-                        <h2 className="text-xl font-bold text-gray-900 px-2">
-                            {direction === 'OUTBOUND' ? '🚌 Going From GIKI' : '🏠 Coming Back to GIKI'}
+                    <div className="space-y-3">
+                        <h2 className="text-base font-semibold text-gray-900 px-2">
+                            {direction === 'OUTBOUND' ? ' From GIKI' : ' To GIKI'}
                         </h2>
                         
                         <RouteGrid
@@ -298,17 +287,17 @@ export const TransportPage = () => {
                 )}
 
                 {activeHolds.length > 0 && (
-                    <div className="pt-4 flex flex-col items-center gap-3 sticky bottom-6 z-10">
-                        {/* Progress Indicator for Round Trip */}
+                    <div className="pt-3 flex flex-col items-center gap-2 sticky bottom-6 z-10">
+                        {/* Compact Progress Indicator for Round Trip */}
                         {isRoundTrip && (
-                            <div className="bg-white border-2 border-gray-200 rounded-full px-4 py-2 shadow-lg">
-                                <div className="flex items-center gap-2 text-xs font-bold">
+                            <div className="bg-white border border-gray-200 rounded-full px-3 py-1 shadow-sm">
+                                <div className="flex items-center gap-1.5 text-xs">
                                     <span className={outboundSelection ? "text-green-600" : "text-gray-400"}>
-                                        {outboundSelection ? "✓" : "○"} Outbound
+                                        {outboundSelection ? "✓" : "○"}
                                     </span>
                                     <span className="text-gray-300">•</span>
                                     <span className={returnSelection ? "text-green-600" : "text-gray-400"}>
-                                        {returnSelection ? "✓" : "○"} Return
+                                        {returnSelection ? "✓" : "○"}
                                     </span>
                                 </div>
                             </div>
@@ -316,10 +305,10 @@ export const TransportPage = () => {
                         
                         <button
                             className={cn(
-                                "px-10 py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl transition-all duration-300 active:scale-95",
+                                "px-8 py-3 rounded-xl font-semibold text-sm shadow-lg transition-all",
                                 (isRoundTrip && outboundSelection && returnSelection) || (!isRoundTrip && (outboundSelection || returnSelection))
-                                    ? "bg-slate-900 text-white hover:bg-slate-800 scale-105"
-                                    : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                                    ? "bg-gray-900 text-white hover:bg-gray-800"
+                                    : "bg-gray-200 text-gray-400 cursor-not-allowed"
                             )}
                             disabled={!useTransportStore.getState().canProceed()}
                             onClick={() => {
@@ -333,8 +322,8 @@ export const TransportPage = () => {
                             }}
                         >
                             {isRoundTrip
-                                ? (outboundSelection && returnSelection ? "Finalize Round Trip 🎫" : "Select Both Trips to Continue")
-                                : "Continue to Booking"}
+                                ? (outboundSelection && returnSelection ? "Confirm Booking" : "Select Both Trips")
+                                : "Continue"}
                         </button>
                     </div>
                 )}

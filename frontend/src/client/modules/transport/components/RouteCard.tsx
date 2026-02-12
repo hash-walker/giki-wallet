@@ -161,7 +161,7 @@ export const RouteCard = ({
                                 <label
                                     key={trip.id}
                                     className={cn(
-                                        "flex items-center justify-between p-3 border-2 rounded-xl cursor-pointer transition-all",
+                                        "flex items-center justify-between gap-2 p-2 sm:p-3 border-2 rounded-xl cursor-pointer transition-all",
                                         selectedTripId === trip.id 
                                             ? "border-primary bg-primary/5" 
                                             : "border-gray-200 hover:border-gray-300 hover:bg-gray-50",
@@ -170,7 +170,7 @@ export const RouteCard = ({
                                         tripCancelled && "bg-red-50 border-red-200"
                                     )}
                                 >
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-shrink">
                                         <input
                                             type="radio"
                                             name={`trip-${routeId}`}
@@ -193,29 +193,29 @@ export const RouteCard = ({
                                             </span>
                                         </div>
                                     </div>
-                                    <div className="flex flex-col items-end gap-1">
+                                    <div className="flex flex-col items-end gap-1 min-w-0 flex-shrink-0">
                                         {tripCancelled ? (
-                                            <span className="text-xs text-red-700 font-bold uppercase">CANCELLED</span>
+                                            <span className="text-xs text-red-700 font-bold uppercase whitespace-nowrap">CANCELLED</span>
                                         ) : tripScheduled ? (
                                             <>
-                                                <div className="flex items-center gap-1.5 bg-blue-100 px-2 py-1 rounded-md">
-                                                    <Lock className="w-3 h-3 text-blue-700" />
-                                                    <span className="text-xs text-blue-700 font-bold uppercase">
+                                                <div className="flex items-center gap-1 bg-blue-100 px-1.5 py-0.5 rounded-md">
+                                                    <Lock className="w-3 h-3 text-blue-700 flex-shrink-0" />
+                                                    <span className="text-[10px] text-blue-700 font-bold uppercase whitespace-nowrap">
                                                         Locked
                                                     </span>
                                                 </div>
-                                                <span className="text-[10px] text-blue-600 font-semibold">
+                                                <span className="text-[10px] text-blue-600 font-semibold whitespace-nowrap">
                                                     {getTimeRemaining(trip.booking_opens_at)}
                                                 </span>
-                                                <span className="text-[9px] text-gray-500">
+                                                <span className="text-[9px] text-gray-500 whitespace-nowrap">
                                                     @ {formatTime12(trip.booking_opens_at)}
                                                 </span>
                                             </>
                                         ) : tripFull ? (
-                                            <span className="text-xs text-red-600 font-bold">FULL</span>
+                                            <span className="text-xs text-red-600 font-bold whitespace-nowrap">FULL</span>
                                         ) : (
                                             <div className="flex items-center gap-1.5">
-                                                <Users className="w-3.5 h-3.5 text-green-600" />
+                                                <Users className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
                                                 <span className="font-bold text-sm text-gray-900">
                                                     {trip.available_seats}
                                                 </span>

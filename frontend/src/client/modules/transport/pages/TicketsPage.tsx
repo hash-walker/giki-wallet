@@ -40,37 +40,29 @@ export const TicketsPage = () => {
     }, [myTickets]);
 
     return (
-        <div className="space-y-8 max-w-5xl mx-auto pb-20 px-4 md:px-0">
-            {/* Header */}
-            <div className="flex flex-col gap-2 mb-8">
-                <h1 className="text-3xl font-black tracking-tight text-slate-900 uppercase">My Tickets</h1>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Manage active reservations</p>
-            </div>
+        <div className="space-y-4 max-w-5xl mx-auto pb-20 px-4 md:px-0">
+            {/* Simplified Header */}
+            <h1 className="text-xl font-bold text-gray-900 mb-4">My Tickets</h1>
 
             {/* Active Holds Section */}
             {activeHolds.length > 0 && (
-                <div className="space-y-4">
-                    <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                <div className="space-y-3 mb-4">
+                    <h2 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
                         Active Reservations
                     </h2>
-                    <div className="grid gap-4">
+                    <div className="space-y-2">
                         {activeHolds.map(hold => (
-                            <div key={hold.id} className="bg-orange-50 p-5 rounded-xl border border-orange-100 flex items-center justify-between">
+                            <div key={hold.id} className="bg-orange-50 p-3 rounded-lg border border-orange-200 flex items-center justify-between">
                                 <div>
-                                    <p className="font-bold text-orange-900 text-lg">{hold.route_name}</p>
-                                    <p className="text-sm text-orange-800/80 mt-1">
-                                        Expires at {formatDateTime(hold.expires_at)}
+                                    <p className="font-semibold text-orange-900">{hold.route_name}</p>
+                                    <p className="text-xs text-orange-700 mt-1">
+                                        Expires {formatDateTime(hold.expires_at)}
                                     </p>
-                                    <div className="flex gap-2 mt-2">
-                                        <span className="px-2 py-0.5 bg-white/50 rounded text-xs text-orange-800 font-medium">
-                                            {hold.direction}
-                                        </span>
-                                    </div>
                                 </div>
                                 <button
                                     onClick={() => releaseAllHolds()}
-                                    className="px-4 py-2 bg-white text-orange-700 text-sm font-semibold rounded-lg shadow-sm hover:bg-orange-100 border border-orange-200 transition"
+                                    className="px-3 py-1.5 bg-white text-orange-700 text-xs font-medium rounded-md hover:bg-orange-100 border border-orange-300 transition"
                                 >
                                     Release
                                 </button>
@@ -81,24 +73,24 @@ export const TicketsPage = () => {
             )}
 
             {/* Confirmed Tickets Section */}
-            <div className="space-y-4">
+            <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-gray-900">Your Schedule</h2>
-                    {loading && <span className="text-xs text-gray-400 font-medium animate-pulse">Syncing...</span>}
+                    <h2 className="text-sm font-medium text-gray-700">Your Schedule</h2>
+                    {loading && <span className="text-xs text-gray-400">Syncing...</span>}
                 </div>
 
                 {loading && upcomingTickets.length === 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {[1, 2, 3].map((i) => (
                             <TicketCardSkeleton key={i} />
                         ))}
                     </div>
                 ) : upcomingTickets.length === 0 ? (
-                    <div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                        <p className="text-gray-500">No upcoming trips scheduled.</p>
+                    <div className="text-center py-8 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                        <p className="text-sm text-gray-500">No upcoming trips.</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {upcomingTickets.map(ticket => (
                             <TicketCard key={ticket.ticket_id} ticket={ticket} />
                         ))}

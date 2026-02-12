@@ -23,35 +23,22 @@ export function TransportBookingModeSelector({
 
     const disabledRoundTrip = !canBookRoundTrip;
     return (
-        <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div>
-                    <h2 className="text-lg font-bold text-slate-900">Direction</h2>
-                    <p className="text-xs text-slate-500">Where are you starting from?</p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-6">
-                    {/* Round Trip Toggle - Highlighted when active */}
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                    {/* Round Trip Toggle - Compact */}
                     <div className={cn(
-                        "flex items-center gap-3 px-4 py-2 rounded-xl transition-all duration-300",
+                        "flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all",
                         isRoundTrip 
-                            ? "bg-blue-100 border-2 border-blue-300 shadow-md" 
-                            : "bg-slate-50 border border-slate-100"
+                            ? "bg-blue-100 border border-blue-300" 
+                            : "bg-gray-100 border border-gray-200"
                     )}>
-                        <div className="flex flex-col">
-                            <span className={cn(
-                                "text-xs font-bold",
-                                isRoundTrip ? "text-blue-900" : "text-slate-700"
-                            )}>
-                                Round Trip {isRoundTrip && "✓"}
-                            </span>
-                            <span className={cn(
-                                "text-[10px]",
-                                isRoundTrip ? "text-blue-600" : "text-slate-400"
-                            )}>
-                                Book both ways
-                            </span>
-                        </div>
+                        <span className={cn(
+                            "text-xs font-medium",
+                            isRoundTrip ? "text-blue-900" : "text-gray-700"
+                        )}>
+                            Round Trip {isRoundTrip && "✓"}
+                        </span>
                         <div title={disabledRoundTrip ? "Insufficient quota for Round Trip (Requires 1 Outbound + 1 Inbound)" : undefined}>
                             <Switch
                                 checked={isRoundTrip}
@@ -63,16 +50,16 @@ export function TransportBookingModeSelector({
 
                     {/* Hide direction toggle when in round-trip mode (both sections are visible) */}
                     {!isRoundTrip && (
-                        <div className="flex bg-slate-100 p-1 rounded-xl">
+                        <div className="flex bg-gray-100 p-0.5 rounded-lg">
                             <button
                                 onClick={() => onDirectionChange('OUTBOUND')}
-                                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${direction === 'OUTBOUND' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${direction === 'OUTBOUND' ? 'bg-white text-primary' : 'text-gray-600 hover:text-gray-900'}`}
                             >
                                 From GIKI
                             </button>
                             <button
                                 onClick={() => onDirectionChange('INBOUND')}
-                                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${direction === 'INBOUND' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${direction === 'INBOUND' ? 'bg-white text-primary' : 'text-gray-600 hover:text-gray-900'}`}
                             >
                                 To GIKI
                             </button>
