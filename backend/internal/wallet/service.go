@@ -106,8 +106,14 @@ func (s *Service) executeDoubleEntryTransaction(
 	}
 
 	// get current balances
-	senderBalance, _ := s.getWalletBalance(ctx, walletQ, senderWalletID)
-	receiverBalance, _ := s.getWalletBalance(ctx, walletQ, receiverWalletID)
+	senderBalance, err := s.getWalletBalance(ctx, walletQ, senderWalletID)
+	if err != nil {
+		return commonerrors.Wrap(ErrDatabase, err)
+	}
+	receiverBalance, err := s.getWalletBalance(ctx, walletQ, receiverWalletID)
+	if err != nil {
+		return commonerrors.Wrap(ErrDatabase, err)
+	}
 
 	debitHash := s.CalculateRowHash(
 		senderWalletID,

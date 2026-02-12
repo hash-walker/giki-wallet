@@ -106,13 +106,25 @@ export const TripSummaryTile = () => {
                     <Users className="w-3 h-3 text-accent" />
                     <span className="text-[10px] font-black text-slate-900">{trip.available_seats} / {trip.total_capacity}</span>
                 </div>
-                <span className={cn(
-                    "text-[8px] font-black uppercase tracking-widest",
-                    trip.status === 'OPEN' ? "text-accent" :
-                        trip.available_seats === 0 ? "text-destructive" : "text-slate-400"
-                )}>
-                    {trip.status}
-                </span>
+                {trip.status === 'SCHEDULED' ? (
+                    <div className="flex flex-col items-end gap-0.5">
+                        <span className="text-[7px] font-bold text-primary/60 uppercase tracking-wider flex items-center gap-0.5">
+                            <Clock className="w-2 h-2" />
+                            Opens
+                        </span>
+                        <span className="text-[9px] font-black text-primary uppercase tracking-tight">
+                            {formatTime(trip.booking_opens_at)}
+                        </span>
+                    </div>
+                ) : (
+                    <span className={cn(
+                        "text-[8px] font-black uppercase tracking-widest",
+                        trip.status === 'OPEN' ? "text-accent" :
+                            trip.available_seats === 0 ? "text-destructive" : "text-slate-400"
+                    )}>
+                        {trip.status}
+                    </span>
+                )}
             </div>
         </div>
     );

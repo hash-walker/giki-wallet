@@ -451,6 +451,12 @@ export const TripsPage = () => {
                                                     )}>
                                                         {trip.status}
                                                     </span>
+                                                    {trip.status === 'SCHEDULED' && (
+                                                        <span className="text-[9px] text-blue-600 font-medium bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 w-fit flex items-center gap-1">
+                                                            <Clock className="w-2.5 h-2.5" />
+                                                            Opens {formatInTimeZone(new Date(trip.booking_opens_at), 'Asia/Karachi', 'MMM d, hh:mm a')}
+                                                        </span>
+                                                    )}
                                                     {trip.manual_status && (
                                                         <span className="text-[9px] text-gray-400 font-medium bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 w-fit">
                                                             OVERRIDE: {trip.manual_status}

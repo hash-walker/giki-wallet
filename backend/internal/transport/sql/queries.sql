@@ -66,9 +66,9 @@ SELECT
     -- Dynamic Status Calculation
     CASE
         WHEN t.manual_status = 'CANCELLED' THEN 'CANCELLED'
+        WHEN t.available_seats <= 0 THEN 'FULL'
         WHEN t.manual_status = 'CLOSED' THEN 'CLOSED'
         WHEN t.manual_status = 'OPEN' THEN 'OPEN'
-        WHEN t.available_seats <= 0 THEN 'FULL'
         WHEN NOW() >= (t.departure_time - (t.booking_close_offset_hours * INTERVAL '1 hour')) THEN 'CLOSED'
         WHEN NOW() < (t.departure_time - (t.booking_open_offset_hours * INTERVAL '1 hour')) THEN 'SCHEDULED'
         ELSE 'OPEN'
@@ -125,9 +125,9 @@ SELECT
     t.*,
     CASE
         WHEN t.manual_status = 'CANCELLED' THEN 'CANCELLED'
+        WHEN t.available_seats <= 0 THEN 'FULL'
         WHEN t.manual_status = 'CLOSED' THEN 'CLOSED'
         WHEN t.manual_status = 'OPEN' THEN 'OPEN'
-        WHEN t.available_seats <= 0 THEN 'FULL'
         WHEN NOW() >= (t.departure_time - (t.booking_close_offset_hours * INTERVAL '1 hour')) THEN 'CLOSED'
         WHEN NOW() < (t.departure_time - (t.booking_open_offset_hours * INTERVAL '1 hour')) THEN 'SCHEDULED'
         ELSE 'OPEN'
@@ -154,25 +154,29 @@ WHERE user_role = $1 AND direction = $2;
 
 
 -- name: GetWeeklyTicketCountByDirection :one
--- Counts CONFIRMED tickets + ACTIVE HOLDS for the last 7 days for a specific direction.
+-- Counts CONFIRMED tickets + ACTIVE HOLDS for the current calendar week (Mon-Sun) for a specific direction.
 SELECT COUNT(*) FROM (
-       -- Part 1: Confirmed Tickets
+       -- Part 1: Confirmed Tickets (trips departing this calendar week)
        SELECT t.id
        FROM giki_transport.tickets t
                 JOIN giki_transport.trip tr ON t.trip_id = tr.id
        WHERE t.user_id = sqlc.arg(user_id)
          AND t.status = 'CONFIRMED'
-         AND tr.departure_time > NOW() - INTERVAL '7 days'
+         AND tr.departure_time >= date_trunc('week', NOW())
+         AND tr.departure_time <  date_trunc('week', NOW()) + INTERVAL '7 days'
          AND tr.direction = sqlc.arg(direction)
 
        UNION ALL
 
-       -- Part 2: Active Holds
+       -- Part 2: Active Holds (for trips departing this calendar week)
        SELECT h.id
        FROM giki_transport.trip_holds h
                 JOIN giki_transport.trip tr ON h.trip_id = tr.id
        WHERE h.user_id = sqlc.arg(user_id)
          AND tr.direction = sqlc.arg(direction)
+         AND h.expires_at > NOW()
+         AND tr.departure_time >= date_trunc('week', NOW())
+         AND tr.departure_time <  date_trunc('week', NOW()) + INTERVAL '7 days'
 ) as total_count;
 
 
@@ -230,6 +234,9 @@ WHERE id = $1 AND available_seats < total_capacity;
 SELECT id, trip_id FROM giki_transport.trip_holds
 WHERE expires_at < NOW()
 FOR UPDATE SKIP LOCKED LIMIT 50;
+
+-- name: GetHoldForUpdate :one
+SELECT * FROM giki_transport.trip_holds WHERE id = $1 FOR UPDATE;
 
 -- name: GetRouteDetailsForTrip :one
 SELECT r.name as route_name, tr.direction

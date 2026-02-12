@@ -395,9 +395,14 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 		holds := make([]transport_db.GikiTransportTripHold, len(items))
 		uniqueTripIDs := make(map[uuid.UUID]struct{})
 		for i, item := range items {
-			hold, err := qtx.GetHold(ctx, item.HoldID)
+			// Use FOR UPDATE to lock holds first (consistent lock order with reaper to prevent deadlocks)
+			hold, err := qtx.GetHoldForUpdate(ctx, item.HoldID)
 			if err != nil {
 				return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+			}
+			// Verify hold belongs to requesting user
+			if hold.UserID != userID {
+				return commonerrors.ErrUnauthorized
 			}
 			holds[i] = hold
 			uniqueTripIDs[hold.TripID] = struct{}{}

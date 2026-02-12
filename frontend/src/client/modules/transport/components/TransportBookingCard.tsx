@@ -4,10 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import { Select } from '@/shared/components/ui/Select';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/lib/utils';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Clock } from 'lucide-react';
 import { useAuthStore } from '@/shared/stores/authStore';
 import { useTransportStore } from '../store';
-import { getGIKIStopObject, formatTime, formatDate } from '../utils';
+import { getGIKIStopObject, formatTime, formatDate, formatTime12 } from '../utils';
 import type { Trip } from '../validators';
 import { toast } from 'sonner';
 import type { BookingSelection } from '../validators';
@@ -363,12 +363,22 @@ export const TransportBookingCard = ({
                                 maxTickets={maxTickets}
                             />
                             <Button
-                                className="flex-1 font-semibold"
+                                className="flex-1 font-semibold text-xs sm:text-sm"
                                 disabled={isFull || isScheduled}
                                 variant={isFull ? "secondary" : "default"}
                                 onClick={handleBook}
                             >
-                                {isFull ? "Full" : (isScheduled ? "Scheduled" : "Book")}
+                                {isFull ? "Full" : (isScheduled ? (
+                                    <span className="flex flex-col items-center gap-0.5 leading-tight">
+                                        <span className="flex items-center gap-1 text-[10px] opacity-80">
+                                            <Clock className="w-3 h-3" />
+                                            Opens
+                                        </span>
+                                        <span className="font-bold">
+                                            {formatTime12(currentTrip.booking_opens_at)}
+                                        </span>
+                                    </span>
+                                ) : "Book")}
                             </Button>
                         </div>
                     </div>
@@ -456,12 +466,22 @@ export const TransportBookingCard = ({
 
                 <div className="w-[16%]">
                     <Button
-                        className="w-full font-semibold shadow-sm"
+                        className="w-full font-semibold shadow-sm text-xs"
                         disabled={!hasCompleteSelection || isFull || isScheduled}
                         variant={!hasCompleteSelection || isFull || isHeld ? "secondary" : "default"}
                         onClick={handleBook}
                     >
-                        {isHeld ? "Reserved" : (isFull ? "Waitlist" : (isScheduled ? "Scheduled" : "Book Now"))}
+                        {isHeld ? "Reserved" : (isFull ? "Waitlist" : (isScheduled ? (
+                            <span className="flex flex-col items-center gap-0.5 leading-tight">
+                                <span className="flex items-center gap-1 text-[10px] opacity-80">
+                                    <Clock className="w-3 h-3" />
+                                    Opens
+                                </span>
+                                <span className="font-bold">
+                                    {formatTime12(currentTrip.booking_opens_at)}
+                                </span>
+                            </span>
+                        ) : "Book Now"))}
                     </Button>
                 </div>
             </div>
