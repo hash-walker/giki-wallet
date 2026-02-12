@@ -27,7 +27,7 @@ export function useHoldTimer(activeHolds: ActiveHold[]) {
             setTimeLeft(diff);
         };
 
-        tick(); // Initial tick
+        tick(); // Initial tick - calculate immediately
         const interval = setInterval(tick, 1000);
 
         return () => clearInterval(interval);
