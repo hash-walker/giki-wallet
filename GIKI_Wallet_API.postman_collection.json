@@ -1,0 +1,1605 @@
+{
+	"info": {
+		"_postman_id": "giki-wallet-api-collection",
+		"name": "GIKI Wallet API",
+		"description": "Complete API documentation for the GIKI Wallet & Transport Booking System.\n\n## Authentication\nMost endpoints require a Bearer token in the `Authorization` header. After login, use the `access_token` from the response.\n\n## Base URL\nSet the `{{base_url}}` variable to your server (e.g. `https://yourdomain.com` or `http://localhost:8080`).\n\n## Response Format\nAll successful responses return JSON. Errors follow the format:\n```json\n{\n  \"error\": \"error message\"\n}\n```",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{access_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "refresh_token",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Health",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": ["{{base_url}}"],
+							"path": ["health"]
+						},
+						"description": "Simple health check endpoint. Returns 200 if the server is running.\n\n**Auth:** None"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "\"OK\"",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Auth",
+			"description": "Authentication endpoints: register, login, logout, token refresh, email verification, and password reset.",
+			"item": [
+				{
+					"name": "Register",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var json = pm.response.json();",
+									"    if (json.access_token) pm.collectionVariables.set('access_token', json.access_token);",
+									"    if (json.refresh_token) pm.collectionVariables.set('refresh_token', json.refresh_token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@giki.edu.pk\",\n  \"user_type\": \"STUDENT\",\n  \"reg_id\": \"2021001\",\n  \"batch_year\": 2021,\n  \"password\": \"SecurePass123!\",\n  \"phone_number\": \"03001234567\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "register"]
+						},
+						"description": "Register a new user account.\n\n**Auth:** None\n\n**Fields:**\n- `name` (string, required)\n- `email` (string, required) — must be a valid email\n- `user_type` (string, required) — `STUDENT` or `EMPLOYEE`\n- `reg_id` (string, optional) — required for students\n- `batch_year` (int, optional) — required for students\n- `employee_id` (string, optional) — required for employees\n- `password` (string, required)\n- `phone_number` (string, required)"
+					},
+					"response": [
+						{
+							"name": "201 Created",
+							"status": "Created",
+							"code": 201,
+							"body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"name\": \"John Doe\",\n  \"email\": \"john@giki.edu.pk\",\n  \"user_type\": \"STUDENT\",\n  \"access_token\": \"eyJhbGciOiJIUzI1NiIs...\",\n  \"refresh_token\": \"eyJhbGciOiJIUzI1NiIs...\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Sign In",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var json = pm.response.json();",
+									"    if (json.auth && json.auth.access_token) {",
+									"        pm.collectionVariables.set('access_token', json.auth.access_token);",
+									"        pm.collectionVariables.set('refresh_token', json.auth.refresh_token);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"john@giki.edu.pk\",\n  \"password\": \"SecurePass123!\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/signin",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "signin"]
+						},
+						"description": "Authenticate and receive access + refresh tokens.\n\n**Auth:** None\n**Rate Limit:** 1 req/s, 5 burst\n\n**Fields:**\n- `email` (string, required)\n- `password` (string, required)"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"name\": \"John Doe\",\n  \"email\": \"john@giki.edu.pk\",\n  \"phone_number\": \"03001234567\",\n  \"user_type\": \"STUDENT\",\n  \"created_at\": \"2025-01-15T10:30:00Z\",\n  \"auth\": {\n    \"access_token\": \"eyJhbGciOiJIUzI1NiIs...\",\n    \"refresh_token\": \"eyJhbGciOiJIUzI1NiIs...\",\n    \"expires_at\": 900000000000\n  }\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Refresh Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var json = pm.response.json();",
+									"    if (json.auth && json.auth.access_token) {",
+									"        pm.collectionVariables.set('access_token', json.auth.access_token);",
+									"        pm.collectionVariables.set('refresh_token', json.auth.refresh_token);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/refresh",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "refresh"]
+						},
+						"description": "Exchange a refresh token for a new access + refresh token pair.\n\n**Auth:** None\n\n**Fields:**\n- `refresh_token` (string, required)"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"name\": \"John Doe\",\n  \"email\": \"john@giki.edu.pk\",\n  \"phone_number\": \"03001234567\",\n  \"user_type\": \"STUDENT\",\n  \"auth\": {\n    \"access_token\": \"new-access-token...\",\n    \"refresh_token\": \"new-refresh-token...\",\n    \"expires_at\": 900000000000\n  }\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Sign Out",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/auth/signout",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "signout"]
+						},
+						"description": "Logout and invalidate the session/cookies.\n\n**Auth:** None (clears cookies)"
+					},
+					"response": [
+						{
+							"name": "204 No Content",
+							"status": "No Content",
+							"code": 204,
+							"body": "",
+							"header": []
+						}
+					]
+				},
+				{
+					"name": "Verify Email",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/auth/verify?token=verification-token-here",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "verify"],
+							"query": [
+								{ "key": "token", "value": "verification-token-here", "description": "Email verification token from the email link" }
+							]
+						},
+						"description": "Verify user email address using the token sent via email.\n\n**Auth:** None\n\n**Query Params:**\n- `token` (string, required) — verification token from email"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"name\": \"John Doe\",\n  \"email\": \"john@giki.edu.pk\",\n  \"auth\": {\n    \"access_token\": \"eyJhbGciOiJIUzI1NiIs...\",\n    \"refresh_token\": \"eyJhbGciOiJIUzI1NiIs...\"\n  }\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Forgot Password",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"john@giki.edu.pk\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/forgot-password",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "forgot-password"]
+						},
+						"description": "Request a password reset email.\n\n**Auth:** None\n**Rate Limit:** 1 req/s, 3 burst\n\n**Fields:**\n- `email` (string, required)"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"message\": \"Password reset link sent to your email\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Reset Password",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"token\": \"reset-token-from-email\",\n  \"password\": \"NewSecurePass123!\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/reset-password",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "reset-password"]
+						},
+						"description": "Reset password using the token from the password reset email.\n\n**Auth:** None\n**Rate Limit:** 1 req/s, 3 burst\n\n**Fields:**\n- `token` (string, required) — from password reset email\n- `password` (string, required) — new password"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"message\": \"Password has been reset successfully\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Get Current User (Me)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/auth/me",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "me"]
+						},
+						"description": "Get the currently authenticated user's profile.\n\n**Auth:** Bearer token required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"name\": \"John Doe\",\n  \"email\": \"john@giki.edu.pk\",\n  \"phone_number\": \"03001234567\",\n  \"user_type\": \"STUDENT\",\n  \"created_at\": \"2025-01-15T10:30:00Z\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Wallet",
+			"description": "Wallet balance and transaction history for the authenticated user.",
+			"item": [
+				{
+					"name": "Get Balance",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/wallet/balance",
+							"host": ["{{base_url}}"],
+							"path": ["wallet", "balance"]
+						},
+						"description": "Get the authenticated user's wallet balance.\n\n**Auth:** Bearer token required\n\n**Response:**\n- `balance` (float64) — balance in Rupees\n- `currency` (string) — always `PKR`"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"balance\": 1500.00,\n  \"currency\": \"PKR\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Get Transaction History",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/wallet/history",
+							"host": ["{{base_url}}"],
+							"path": ["wallet", "history"]
+						},
+						"description": "Get the authenticated user's wallet transaction history.\n\n**Auth:** Bearer token required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"data\": [\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"amount\": 500.00,\n      \"balance_after\": 1500.00,\n      \"type\": \"TOPUP\",\n      \"reference_id\": \"T20250115abc\",\n      \"description\": \"JazzCash top-up\",\n      \"created_at\": \"2025-01-15T10:30:00Z\"\n    }\n  ],\n  \"total_count\": 1,\n  \"page\": 1,\n  \"page_size\": 20\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Payment",
+			"description": "Top-up wallet via JazzCash (M-Wallet) or Card payments.",
+			"item": [
+				{
+					"name": "Top Up (Initiate Payment)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"idempotency_key\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"amount\": 500,\n  \"method\": \"MWALLET\",\n  \"phone_number\": \"03001234567\",\n  \"cnic_last6\": \"123456\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/payment/topup",
+							"host": ["{{base_url}}"],
+							"path": ["payment", "topup"]
+						},
+						"description": "Initiate a wallet top-up payment.\n\n**Auth:** Bearer token required\n\n**Fields:**\n- `idempotency_key` (UUID, required) — unique key to prevent duplicate payments\n- `amount` (float64, required) — amount in Rupees\n- `method` (string, required) — `MWALLET` (JazzCash) or `CARD`\n- `phone_number` (string, required for MWALLET) — JazzCash account number\n- `cnic_last6` (string, required for MWALLET) — last 6 digits of CNIC\n\n**Behavior:**\n- If a previous PENDING transaction exists, the backend checks its status first and returns it.\n- For MWALLET: returns PENDING status → poll `/payment/status/{txnRefNo}` for updates.\n- For CARD: returns a `redirect` URL → redirect the user to that URL for card payment."
+					},
+					"response": [
+						{
+							"name": "202 Accepted (PENDING - JazzCash)",
+							"status": "Accepted",
+							"code": 202,
+							"body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"txn_ref_no\": \"T20250115abc123\",\n  \"status\": \"PENDING\",\n  \"message\": \"Payment request sent to JazzCash\",\n  \"paymentMethod\": \"MWALLET\",\n  \"amount\": 500\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						},
+						{
+							"name": "200 OK (SUCCESS)",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"txn_ref_no\": \"T20250115abc123\",\n  \"status\": \"SUCCESS\",\n  \"message\": \"Payment successful\",\n  \"paymentMethod\": \"MWALLET\",\n  \"amount\": 500\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						},
+						{
+							"name": "200 OK (FAILED - Previous payment failed)",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"txn_ref_no\": \"T20250115abc123\",\n  \"status\": \"FAILED\",\n  \"message\": \"Transaction has timed out. Please try again.\",\n  \"paymentMethod\": \"MWALLET\",\n  \"amount\": 500\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						},
+						{
+							"name": "200 OK (CARD - Redirect)",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"txn_ref_no\": \"T20250115abc123\",\n  \"status\": \"PENDING\",\n  \"paymentMethod\": \"CARD\",\n  \"redirect\": \"/payment/page/T20250115abc123\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Check Payment Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/payment/status/:txnRefNo",
+							"host": ["{{base_url}}"],
+							"path": ["payment", "status", ":txnRefNo"],
+							"variable": [
+								{ "key": "txnRefNo", "value": "T20250115abc123", "description": "Transaction reference number" }
+							]
+						},
+						"description": "Poll the status of a payment transaction. Use this after initiating a JazzCash (MWALLET) payment.\n\n**Auth:** Bearer token required\n\n**Path Params:**\n- `txnRefNo` (string, required) — transaction reference number from TopUp response\n\n**Polling Strategy:**\nPoll every 1-2 seconds until status is `SUCCESS` or `FAILED`. Timeout after ~100 seconds."
+					},
+					"response": [
+						{
+							"name": "200 OK (PENDING)",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"txn_ref_no\": \"T20250115abc123\",\n  \"status\": \"PENDING\",\n  \"message\": \"Waiting for payment confirmation\",\n  \"paymentMethod\": \"MWALLET\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						},
+						{
+							"name": "200 OK (SUCCESS)",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"txn_ref_no\": \"T20250115abc123\",\n  \"status\": \"SUCCESS\",\n  \"message\": \"Payment successful\",\n  \"paymentMethod\": \"MWALLET\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						},
+						{
+							"name": "200 OK (FAILED)",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"txn_ref_no\": \"T20250115abc123\",\n  \"status\": \"FAILED\",\n  \"message\": \"Transaction declined by user\",\n  \"paymentMethod\": \"MWALLET\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Get Max Top-Up Limit",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/payment/limit",
+							"host": ["{{base_url}}"],
+							"path": ["payment", "limit"]
+						},
+						"description": "Get the maximum allowed top-up amount.\n\n**Auth:** Bearer token required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"max_limit_paisa\": 1000000\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Transport",
+			"description": "Transport booking system: browse trips, hold seats, confirm bookings, manage tickets.",
+			"item": [
+				{
+					"name": "Get Weekly Trips",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/transport/weekly-summary?start_date=2025-02-10T00:00:00Z&end_date=2025-02-17T00:00:00Z",
+							"host": ["{{base_url}}"],
+							"path": ["transport", "weekly-summary"],
+							"query": [
+								{ "key": "start_date", "value": "2025-02-10T00:00:00Z", "description": "ISO8601. Defaults to start of current week" },
+								{ "key": "end_date", "value": "2025-02-17T00:00:00Z", "description": "ISO8601. Defaults to start_date + 7 days" }
+							]
+						},
+						"description": "Get all trips for the week with stops and seat availability.\n\n**Auth:** None (public)\n\n**Query Params:**\n- `start_date` (ISO8601, optional) — defaults to start of current week\n- `end_date` (ISO8601, optional) — defaults to start_date + 7 days"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "[\n  {\n    \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"route_id\": \"660e8400-e29b-41d4-a716-446655440000\",\n    \"route_name\": \"Islamabad Express\",\n    \"direction\": \"OUTBOUND\",\n    \"bus_type\": \"AC\",\n    \"departure_time\": \"2025-02-10T18:00:00Z\",\n    \"booking_opens_at\": \"2025-02-10T12:00:00Z\",\n    \"booking_closes_at\": \"2025-02-10T17:00:00Z\",\n    \"status\": \"OPEN\",\n    \"manual_status\": null,\n    \"available_seats\": 25,\n    \"total_capacity\": 40,\n    \"base_price\": 350.00,\n    \"stops\": [\n      {\n        \"stop_id\": \"770e8400-e29b-41d4-a716-446655440000\",\n        \"stop_name\": \"GIKI Main Gate\",\n        \"sequence\": 1\n      },\n      {\n        \"stop_id\": \"880e8400-e29b-41d4-a716-446655440000\",\n        \"stop_name\": \"Islamabad Faizabad\",\n        \"sequence\": 2\n      }\n    ]\n  }\n]",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "List Routes",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/transport/routes",
+							"host": ["{{base_url}}"],
+							"path": ["transport", "routes"]
+						},
+						"description": "Get all available transport routes.\n\n**Auth:** None (public)"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "[\n  {\n    \"route_id\": \"660e8400-e29b-41d4-a716-446655440000\",\n    \"route_name\": \"Islamabad Express\"\n  },\n  {\n    \"route_id\": \"770e8400-e29b-41d4-a716-446655440000\",\n    \"route_name\": \"Peshawar Route\"\n  }\n]",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Get Booking Quota",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/transport/quota",
+							"host": ["{{base_url}}"],
+							"path": ["transport", "quota"]
+						},
+						"description": "Get the user's remaining booking quota for this week.\n\n**Auth:** Bearer token required\n\n**Response:**\nEach direction has a `limit`, `used`, and `remaining` count."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"outbound\": {\n    \"limit\": 3,\n    \"used\": 1,\n    \"remaining\": 2\n  },\n  \"inbound\": {\n    \"limit\": 3,\n    \"used\": 0,\n    \"remaining\": 3\n  }\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Hold Seats",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"trip_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"count\": 2,\n  \"pickup_stop_id\": \"770e8400-e29b-41d4-a716-446655440000\",\n  \"dropoff_stop_id\": \"880e8400-e29b-41d4-a716-446655440000\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/transport/holds",
+							"host": ["{{base_url}}"],
+							"path": ["transport", "holds"]
+						},
+						"description": "Hold seats on a trip temporarily (reservation). Holds expire after a set time.\n\n**Auth:** Bearer token required\n\n**Fields:**\n- `trip_id` (UUID, required) — trip to hold seats on\n- `count` (int, required) — number of seats (1-3)\n- `pickup_stop_id` (UUID, required) — pickup stop\n- `dropoff_stop_id` (UUID, required) — dropoff stop\n\n**Important:** Must confirm with `/transport/confirm` before the hold expires."
+					},
+					"response": [
+						{
+							"name": "201 Created",
+							"status": "Created",
+							"code": 201,
+							"body": "{\n  \"holds\": [\n    {\n      \"hold_id\": \"aaa-bbb-ccc-ddd\",\n      \"expires_at\": \"2025-02-10T18:05:00Z\"\n    },\n    {\n      \"hold_id\": \"eee-fff-ggg-hhh\",\n      \"expires_at\": \"2025-02-10T18:05:00Z\"\n    }\n  ]\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Get Active Holds",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/transport/holds/active",
+							"host": ["{{base_url}}"],
+							"path": ["transport", "holds", "active"]
+						},
+						"description": "Get all active (unexpired) holds for the current user.\n\n**Auth:** Bearer token required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "[\n  {\n    \"id\": \"aaa-bbb-ccc-ddd\",\n    \"trip_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"expires_at\": \"2025-02-10T18:05:00Z\",\n    \"direction\": \"OUTBOUND\",\n    \"route_name\": \"Islamabad Express\"\n  }\n]",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Release All Active Holds",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/transport/holds/active",
+							"host": ["{{base_url}}"],
+							"path": ["transport", "holds", "active"]
+						},
+						"description": "Release all active holds for the current user. Frees the reserved seats.\n\n**Auth:** Bearer token required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"status\": \"RELEASED\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Confirm Batch Booking",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"confirmations\": [\n    {\n      \"hold_id\": \"aaa-bbb-ccc-ddd\",\n      \"passenger_name\": \"John Doe\",\n      \"passenger_relation\": \"SELF\"\n    },\n    {\n      \"hold_id\": \"eee-fff-ggg-hhh\",\n      \"passenger_name\": \"Jane Doe\",\n      \"passenger_relation\": \"SPOUSE\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/transport/confirm",
+							"host": ["{{base_url}}"],
+							"path": ["transport", "confirm"]
+						},
+						"description": "Confirm held seats and issue tickets. Deducts wallet balance.\n\n**Auth:** Bearer token required\n\n**Fields:**\n- `confirmations` (array, required)\n  - `hold_id` (UUID, required) — from HoldSeats response\n  - `passenger_name` (string, required)\n  - `passenger_relation` (string, required) — `SELF`, `SPOUSE`, or `CHILD`\n\n**Important:** Must be called before holds expire. Wallet must have sufficient balance."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"tickets\": [\n    {\n      \"ticket_id\": \"tkt-aaa-bbb-ccc\",\n      \"status\": \"CONFIRMED\"\n    },\n    {\n      \"ticket_id\": \"tkt-ddd-eee-fff\",\n      \"status\": \"CONFIRMED\"\n    }\n  ]\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Get User Tickets",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/transport/tickets",
+							"host": ["{{base_url}}"],
+							"path": ["transport", "tickets"]
+						},
+						"description": "Get all tickets for the authenticated user.\n\n**Auth:** Bearer token required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "[\n  {\n    \"ticket_id\": \"tkt-aaa-bbb-ccc\",\n    \"ticket_code\": \"ISB-20250210-001\",\n    \"serial_no\": 1,\n    \"status\": \"CONFIRMED\",\n    \"passenger_name\": \"John Doe\",\n    \"passenger_relation\": \"SELF\",\n    \"is_self\": true,\n    \"route_name\": \"Islamabad Express\",\n    \"direction\": \"OUTBOUND\",\n    \"relevant_location\": \"Islamabad Faizabad\",\n    \"pickup_location\": \"GIKI Main Gate\",\n    \"dropoff_location\": \"Islamabad Faizabad\",\n    \"departure_time\": \"2025-02-10T18:00:00Z\",\n    \"bus_type\": \"AC\",\n    \"price\": 350.00,\n    \"is_cancellable\": true\n  }\n]",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Cancel Ticket",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/transport/tickets/:ticket_id",
+							"host": ["{{base_url}}"],
+							"path": ["transport", "tickets", ":ticket_id"],
+							"variable": [
+								{ "key": "ticket_id", "value": "tkt-aaa-bbb-ccc", "description": "UUID of the ticket to cancel" }
+							]
+						},
+						"description": "Cancel a confirmed ticket and receive a wallet refund.\n\n**Auth:** Bearer token required\n\n**Path Params:**\n- `ticket_id` (UUID, required)\n\n**Note:** Only cancellable tickets (where `is_cancellable` is true) can be cancelled."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"status\": \"CANCELLED\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Feedback",
+			"description": "User feedback submission.",
+			"item": [
+				{
+					"name": "Create Feedback",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"rating\": 5,\n  \"comment\": \"Great service! Very convenient.\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/feedback",
+							"host": ["{{base_url}}"],
+							"path": ["feedback"]
+						},
+						"description": "Submit feedback for the platform.\n\n**Auth:** Bearer token required\n\n**Fields:**\n- `rating` (int, required) — 1 to 5\n- `comment` (string, required)"
+					},
+					"response": [
+						{
+							"name": "201 Created",
+							"status": "Created",
+							"code": 201,
+							"body": "{\n  \"id\": 1,\n  \"user_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"rating\": 5,\n  \"comment\": \"Great service! Very convenient.\",\n  \"created_at\": \"2025-02-10T10:30:00Z\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Admin - Users",
+			"description": "Admin endpoints for user management. Requires admin role (SUPER_ADMIN, TRANSPORT_ADMIN, or FINANCE_ADMIN).",
+			"item": [
+				{
+					"name": "List Users",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/users?page=1&page_size=20&search=john&user_type=STUDENT&filter_status=active",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "users"],
+							"query": [
+								{ "key": "page", "value": "1", "description": "Page number (default: 1)" },
+								{ "key": "page_size", "value": "20", "description": "Items per page (default: 20)" },
+								{ "key": "search", "value": "john", "description": "Search by name or email" },
+								{ "key": "user_type", "value": "STUDENT", "description": "Filter: STUDENT or EMPLOYEE" },
+								{ "key": "filter_status", "value": "active", "description": "Filter: active or inactive" }
+							]
+						},
+						"description": "List all users with pagination and filters.\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"data\": [\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"name\": \"John Doe\",\n      \"email\": \"john@giki.edu.pk\",\n      \"phone_number\": \"03001234567\",\n      \"is_active\": true,\n      \"is_verified\": true,\n      \"user_type\": \"STUDENT\",\n      \"created_at\": \"2025-01-15T10:30:00Z\",\n      \"updated_at\": \"2025-01-15T10:30:00Z\"\n    }\n  ],\n  \"total_count\": 1,\n  \"page\": 1,\n  \"page_size\": 20\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Create User (Admin)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Jane Smith\",\n  \"email\": \"jane@giki.edu.pk\",\n  \"user_type\": \"EMPLOYEE\",\n  \"employee_id\": \"EMP001\",\n  \"password\": \"TempPass123!\",\n  \"phone_number\": \"03009876543\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/users",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "users"]
+						},
+						"description": "Admin create a new user account.\n\n**Auth:** Admin role required\n\n**Fields:** Same as Register endpoint."
+					},
+					"response": [
+						{
+							"name": "201 Created",
+							"status": "Created",
+							"code": 201,
+							"body": "{\n  \"id\": \"660e8400-e29b-41d4-a716-446655440000\",\n  \"name\": \"Jane Smith\",\n  \"email\": \"jane@giki.edu.pk\",\n  \"phone_number\": \"03009876543\",\n  \"is_active\": true,\n  \"is_verified\": false,\n  \"user_type\": \"EMPLOYEE\",\n  \"created_at\": \"2025-02-10T10:30:00Z\",\n  \"updated_at\": \"2025-02-10T10:30:00Z\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Update User",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Jane Smith Updated\",\n  \"email\": \"jane@giki.edu.pk\",\n  \"user_type\": \"EMPLOYEE\",\n  \"phone_number\": \"03009876543\",\n  \"password\": \"NewPass123!\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/users/:user_id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "users", ":user_id"],
+							"variable": [
+								{ "key": "user_id", "value": "660e8400-e29b-41d4-a716-446655440000" }
+							]
+						},
+						"description": "Update a user's profile.\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"id\": \"660e8400-e29b-41d4-a716-446655440000\",\n  \"name\": \"Jane Smith Updated\",\n  \"email\": \"jane@giki.edu.pk\",\n  \"is_active\": true,\n  \"user_type\": \"EMPLOYEE\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Delete User",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/users/:user_id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "users", ":user_id"],
+							"variable": [
+								{ "key": "user_id", "value": "660e8400-e29b-41d4-a716-446655440000" }
+							]
+						},
+						"description": "Delete a user account.\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"message\": \"User deleted successfully\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Update User Status",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"is_active\": false\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/users/:user_id/status",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "users", ":user_id", "status"],
+							"variable": [
+								{ "key": "user_id", "value": "660e8400-e29b-41d4-a716-446655440000" }
+							]
+						},
+						"description": "Activate or deactivate a user.\n\n**Auth:** Admin role required\n\n**Fields:**\n- `is_active` (bool, required)"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"id\": \"660e8400-e29b-41d4-a716-446655440000\",\n  \"name\": \"Jane Smith\",\n  \"is_active\": false\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Approve Employee",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/users/:user_id/approve",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "users", ":user_id", "approve"],
+							"variable": [
+								{ "key": "user_id", "value": "660e8400-e29b-41d4-a716-446655440000" }
+							]
+						},
+						"description": "Approve an employee registration request.\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"id\": \"660e8400-e29b-41d4-a716-446655440000\",\n  \"name\": \"Jane Smith\",\n  \"is_active\": true,\n  \"user_type\": \"EMPLOYEE\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Reject Employee",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/users/:user_id/reject",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "users", ":user_id", "reject"],
+							"variable": [
+								{ "key": "user_id", "value": "660e8400-e29b-41d4-a716-446655440000" }
+							]
+						},
+						"description": "Reject an employee registration request.\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "null",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Admin - Transport",
+			"description": "Admin transport management: trips, routes, tickets, exports.",
+			"item": [
+				{
+					"name": "List Routes (Admin)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/routes",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "routes"]
+						},
+						"description": "List all routes.\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "[\n  {\n    \"route_id\": \"660e8400-e29b-41d4-a716-446655440000\",\n    \"route_name\": \"Islamabad Express\"\n  }\n]",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Get Route Template",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/routes/:route_id/template",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "routes", ":route_id", "template"],
+							"variable": [
+								{ "key": "route_id", "value": "660e8400-e29b-41d4-a716-446655440000" }
+							]
+						},
+						"description": "Get route template with stops, rules, and quick slots.\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"route_id\": \"660e8400-e29b-41d4-a716-446655440000\",\n  \"route_name\": \"Islamabad Express\",\n  \"rules\": {\n    \"open_hours_before\": 6,\n    \"close_hours_before\": 1\n  },\n  \"stops\": [\n    {\n      \"stop_id\": \"770e8400-e29b-41d4-a716-446655440000\",\n      \"name\": \"GIKI Main Gate\",\n      \"sequence\": 1,\n      \"is_active\": true\n    }\n  ],\n  \"quick_slots\": [\n    {\n      \"slot_id\": \"880e8400-e29b-41d4-a716-446655440000\",\n      \"day_of_week\": \"Friday\",\n      \"departure_time\": \"18:00\"\n    }\n  ]\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Get Weekly Trips (Admin)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/trips?start_date=2025-02-10T00:00:00Z&end_date=2025-02-17T00:00:00Z",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "trips"],
+							"query": [
+								{ "key": "start_date", "value": "2025-02-10T00:00:00Z" },
+								{ "key": "end_date", "value": "2025-02-17T00:00:00Z" }
+							]
+						},
+						"description": "Get weekly trips (admin view).\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "[\n  {\n    \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"route_name\": \"Islamabad Express\",\n    \"direction\": \"OUTBOUND\",\n    \"departure_time\": \"2025-02-10T18:00:00Z\",\n    \"status\": \"OPEN\",\n    \"available_seats\": 25,\n    \"total_capacity\": 40,\n    \"stops\": []\n  }\n]",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Create Trip",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"route_id\": \"660e8400-e29b-41d4-a716-446655440000\",\n  \"departure_time\": \"2025-02-14T18:00:00Z\",\n  \"booking_open_offset_hours\": 6,\n  \"booking_close_offset_hours\": 1,\n  \"total_capacity\": 40,\n  \"base_price\": 350.00,\n  \"bus_type\": \"AC\",\n  \"direction\": \"OUTBOUND\",\n  \"stops\": [\n    { \"stop_id\": \"770e8400-e29b-41d4-a716-446655440000\" },\n    { \"stop_id\": \"880e8400-e29b-41d4-a716-446655440000\" }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/trips",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "trips"]
+						},
+						"description": "Create a new trip.\n\n**Auth:** Admin role required\n\n**Fields:**\n- `route_id` (UUID, required)\n- `departure_time` (ISO8601, required)\n- `booking_open_offset_hours` (int, required) — hours before departure to open booking\n- `booking_close_offset_hours` (int, required) — hours before departure to close booking\n- `total_capacity` (int, required)\n- `base_price` (float64, required) — price in Rupees\n- `bus_type` (string, required) — e.g. `AC`, `NON-AC`\n- `direction` (string, required) — `OUTBOUND` or `INBOUND`\n- `stops` (array, required) — array of `{ stop_id: UUID }`"
+					},
+					"response": [
+						{
+							"name": "201 Created",
+							"status": "Created",
+							"code": 201,
+							"body": "{\n  \"trip_id\": \"990e8400-e29b-41d4-a716-446655440000\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Update Trip",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"route_id\": \"660e8400-e29b-41d4-a716-446655440000\",\n  \"departure_time\": \"2025-02-14T19:00:00Z\",\n  \"booking_open_offset_hours\": 6,\n  \"booking_close_offset_hours\": 1,\n  \"total_capacity\": 50,\n  \"base_price\": 400.00,\n  \"bus_type\": \"AC\",\n  \"direction\": \"OUTBOUND\",\n  \"stops\": [\n    { \"stop_id\": \"770e8400-e29b-41d4-a716-446655440000\" }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/trips/:trip_id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "trips", ":trip_id"],
+							"variable": [
+								{ "key": "trip_id", "value": "990e8400-e29b-41d4-a716-446655440000" }
+							]
+						},
+						"description": "Update an existing trip.\n\n**Auth:** Admin role required\n\n**Fields:** Same as Create Trip."
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"status\": \"updated\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Delete Trip",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/trips/:trip_id",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "trips", ":trip_id"],
+							"variable": [
+								{ "key": "trip_id", "value": "990e8400-e29b-41d4-a716-446655440000" }
+							]
+						},
+						"description": "Delete a trip.\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"status\": \"deleted\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Update Trip Manual Status",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"manual_status\": \"CLOSED\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/trips/:id/status",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "trips", ":id", "status"],
+							"variable": [
+								{ "key": "id", "value": "990e8400-e29b-41d4-a716-446655440000" }
+							]
+						},
+						"description": "Manually override trip status.\n\n**Auth:** Admin role required\n\n**Fields:**\n- `manual_status` (string, required) — `OPEN`, `CLOSED`, or `null` to clear override"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"message\": \"Trip status updated successfully\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Batch Update Trip Manual Status",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"trip_ids\": [\n    \"990e8400-e29b-41d4-a716-446655440000\",\n    \"aa0e8400-e29b-41d4-a716-446655440000\"\n  ],\n  \"manual_status\": \"CLOSED\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/trips/batch-status",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "trips", "batch-status"]
+						},
+						"description": "Batch update manual status for multiple trips at once.\n\n**Auth:** Admin role required\n\n**Fields:**\n- `trip_ids` (string[], required)\n- `manual_status` (string, required) — `OPEN` or `CLOSED`"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"message\": \"Batch status updated successfully\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Cancel Trip",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/trips/:id/cancel",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "trips", ":id", "cancel"],
+							"variable": [
+								{ "key": "id", "value": "990e8400-e29b-41d4-a716-446655440000" }
+							]
+						},
+						"description": "Cancel a trip. All confirmed tickets are auto-refunded to users' wallets.\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"message\": \"Trip cancelled and all tickets refunded\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Get Admin Tickets",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/tickets?page=1&page_size=20&start_date=2025-02-10T00:00:00Z&end_date=2025-02-17T00:00:00Z&bus_type=AC&status=CONFIRMED&search=john",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "tickets"],
+							"query": [
+								{ "key": "page", "value": "1" },
+								{ "key": "page_size", "value": "20" },
+								{ "key": "start_date", "value": "2025-02-10T00:00:00Z" },
+								{ "key": "end_date", "value": "2025-02-17T00:00:00Z" },
+								{ "key": "bus_type", "value": "AC", "description": "Filter by bus type. Use 'all' to clear" },
+								{ "key": "status", "value": "CONFIRMED", "description": "CONFIRMED, CANCELLED, etc. Use 'all' to clear" },
+								{ "key": "search", "value": "john", "description": "Search by passenger name, user name, or ticket code" }
+							]
+						},
+						"description": "Get all tickets with filters and pagination (admin view).\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"data\": [\n    {\n      \"ticket_id\": \"tkt-aaa-bbb-ccc\",\n      \"serial_no\": 1,\n      \"ticket_code\": \"ISB-20250210-001\",\n      \"passenger_name\": \"John Doe\",\n      \"passenger_relation\": \"SELF\",\n      \"status\": \"CONFIRMED\",\n      \"booking_time\": \"2025-02-10T12:30:00Z\",\n      \"status_updated_at\": null,\n      \"user_name\": \"John Doe\",\n      \"user_email\": \"john@giki.edu.pk\",\n      \"trip_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"departure_time\": \"2025-02-10T18:00:00Z\",\n      \"bus_type\": \"AC\",\n      \"direction\": \"OUTBOUND\",\n      \"route_name\": \"Islamabad Express\",\n      \"pickup_location\": \"GIKI Main Gate\",\n      \"dropoff_location\": \"Islamabad Faizabad\",\n      \"price\": 350\n    }\n  ],\n  \"total_count\": 1,\n  \"page\": 1,\n  \"page_size\": 20,\n  \"stats\": {\n    \"student_count\": 15,\n    \"employee_count\": 3,\n    \"total_confirmed\": 18\n  }\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Get Transport Revenue Transactions",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/transport/transactions?page=1&page_size=20",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "transport", "transactions"],
+							"query": [
+								{ "key": "page", "value": "1" },
+								{ "key": "page_size", "value": "20" }
+							]
+						},
+						"description": "Get transport revenue ledger transactions.\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"data\": [\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"amount\": 350.00,\n      \"balance_after\": 5250.00,\n      \"type\": \"TRANSPORT_BOOKING\",\n      \"reference_id\": \"tkt-aaa-bbb-ccc\",\n      \"description\": \"Booking payment\",\n      \"created_at\": \"2025-02-10T12:30:00Z\"\n    }\n  ],\n  \"total_count\": 1,\n  \"page\": 1,\n  \"page_size\": 20\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Export Trips (ZIP)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/transport/trips/export?trip_ids=550e8400-e29b-41d4-a716-446655440000,660e8400-e29b-41d4-a716-446655440000",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "transport", "trips", "export"],
+							"query": [
+								{ "key": "trip_ids", "value": "550e8400-e29b-41d4-a716-446655440000,660e8400-e29b-41d4-a716-446655440000", "description": "Comma-separated trip UUIDs" }
+							]
+						},
+						"description": "Export trip data as a ZIP file.\n\n**Auth:** Admin role required\n\n**Query Params:**\n- `trip_ids` (string, required) — comma-separated UUIDs\n\n**Response:** Binary ZIP file download"
+					},
+					"response": [
+						{
+							"name": "200 OK (ZIP file)",
+							"status": "OK",
+							"code": 200,
+							"body": "(binary ZIP file)",
+							"header": [
+								{ "key": "Content-Type", "value": "application/zip" },
+								{ "key": "Content-Disposition", "value": "attachment; filename=trips_export.zip" }
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Admin - Finance",
+			"description": "Admin financial reporting: liability, revenue, and transaction management.",
+			"item": [
+				{
+					"name": "Get Liability Balance",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/finance/liability",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "finance", "liability"]
+						},
+						"description": "Get total platform liability balance (sum of all user wallets).\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"balance\": 125000.00,\n  \"currency\": \"PKR\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Get Revenue Balance",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/finance/revenue",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "finance", "revenue"]
+						},
+						"description": "Get total transport revenue balance.\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"balance\": 45000.00,\n  \"currency\": \"PKR\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Get Revenue Period Volume",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/finance/revenue/period?start_date=2025-02-01T00:00:00Z&end_date=2025-02-28T23:59:59Z",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "finance", "revenue", "period"],
+							"query": [
+								{ "key": "start_date", "value": "2025-02-01T00:00:00Z", "description": "Period start (ISO8601)" },
+								{ "key": "end_date", "value": "2025-02-28T23:59:59Z", "description": "Period end (ISO8601)" }
+							]
+						},
+						"description": "Get total revenue volume for a specific time period.\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"volume\": 12500.00,\n  \"currency\": \"PKR\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Get Admin Transactions",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/finance/transactions?page=1&page_size=20&start_date=2025-02-01T00:00:00Z&end_date=2025-02-28T23:59:59Z&search=john",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "finance", "transactions"],
+							"query": [
+								{ "key": "page", "value": "1" },
+								{ "key": "page_size", "value": "20" },
+								{ "key": "start_date", "value": "2025-02-01T00:00:00Z" },
+								{ "key": "end_date", "value": "2025-02-28T23:59:59Z" },
+								{ "key": "search", "value": "john" }
+							]
+						},
+						"description": "Get all wallet transactions across all users (admin view).\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"data\": [\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"amount\": 500.00,\n      \"balance_after\": 1500.00,\n      \"type\": \"TOPUP\",\n      \"reference_id\": \"T20250115abc\",\n      \"description\": \"JazzCash top-up\",\n      \"created_at\": \"2025-01-15T10:30:00Z\"\n    }\n  ],\n  \"meta\": {\n    \"page\": 1,\n    \"page_size\": 20,\n    \"total_records\": 150,\n    \"weekly_stats\": {}\n  }\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Admin - Gateway Transactions",
+			"description": "Admin endpoints for managing payment gateway (JazzCash) transactions.",
+			"item": [
+				{
+					"name": "List Gateway Transactions",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/transactions/gateway?page=1&page_size=20&start_date=2025-02-01T00:00:00Z&end_date=2025-02-28T23:59:59Z&status=SUCCESS&payment_method=MWALLET&search=john",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "transactions", "gateway"],
+							"query": [
+								{ "key": "page", "value": "1" },
+								{ "key": "page_size", "value": "20" },
+								{ "key": "start_date", "value": "2025-02-01T00:00:00Z" },
+								{ "key": "end_date", "value": "2025-02-28T23:59:59Z" },
+								{ "key": "status", "value": "SUCCESS", "description": "PENDING, SUCCESS, FAILED, UNKNOWN" },
+								{ "key": "payment_method", "value": "MWALLET", "description": "MWALLET or CARD" },
+								{ "key": "search", "value": "john", "description": "Search by user name, email, or txn ref" }
+							]
+						},
+						"description": "List all payment gateway transactions with filters.\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"data\": [\n    {\n      \"txn_ref_no\": \"T20250115abc123\",\n      \"user_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"user_name\": \"John Doe\",\n      \"user_email\": \"john@giki.edu.pk\",\n      \"amount\": \"50000\",\n      \"status\": \"SUCCESS\",\n      \"payment_method\": \"MWALLET\",\n      \"created_at\": \"2025-02-10T10:30:00Z\",\n      \"updated_at\": \"2025-02-10T10:31:00Z\",\n      \"bill_ref_id\": \"BRF123\",\n      \"gateway_message\": \"Transaction successful\",\n      \"gateway_status_code\": \"000\"\n    }\n  ],\n  \"total_count\": 1,\n  \"total_amount\": \"50000\",\n  \"page\": 1,\n  \"page_size\": 20\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Export Gateway Transactions (CSV)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/transactions/gateway/export?start_date=2025-02-01T00:00:00Z&end_date=2025-02-28T23:59:59Z",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "transactions", "gateway", "export"],
+							"query": [
+								{ "key": "start_date", "value": "2025-02-01T00:00:00Z" },
+								{ "key": "end_date", "value": "2025-02-28T23:59:59Z" }
+							]
+						},
+						"description": "Export gateway transactions as CSV.\n\n**Auth:** Admin role required\n\n**Response:** CSV file download"
+					},
+					"response": [
+						{
+							"name": "200 OK (CSV file)",
+							"status": "OK",
+							"code": 200,
+							"body": "(CSV file)",
+							"header": [
+								{ "key": "Content-Type", "value": "text/csv" },
+								{ "key": "Content-Disposition", "value": "attachment; filename=gateway_transactions.csv" }
+							]
+						}
+					]
+				},
+				{
+					"name": "Get Transaction Audit Logs",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/transactions/gateway/:txnRefNo/logs",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "transactions", "gateway", ":txnRefNo", "logs"],
+							"variable": [
+								{ "key": "txnRefNo", "value": "T20250115abc123" }
+							]
+						},
+						"description": "Get audit logs for a specific gateway transaction.\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "[\n  {\n    \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"event_type\": \"TOPUP_REQUEST\",\n    \"raw_payload\": {},\n    \"txn_ref_no\": \"T20250115abc123\",\n    \"gateway_ref\": null,\n    \"user_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"processed\": true,\n    \"processed_at\": \"2025-02-10T10:30:01Z\",\n    \"process_error\": null,\n    \"retry_count\": 0,\n    \"received_at\": \"2025-02-10T10:30:00Z\"\n  }\n]",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Verify Gateway Transaction",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/transactions/gateway/:txnRefNo/verify",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "transactions", "gateway", ":txnRefNo", "verify"],
+							"variable": [
+								{ "key": "txnRefNo", "value": "T20250115abc123" }
+							]
+						},
+						"description": "Re-verify a transaction status with JazzCash gateway. Useful for resolving stuck/unknown transactions.\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"txn_ref_no\": \"T20250115abc123\",\n  \"status\": \"SUCCESS\",\n  \"amount\": \"50000\",\n  \"gateway_message\": \"Transaction successful\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Admin - Settings",
+			"description": "System configuration management.",
+			"item": [
+				{
+					"name": "List System Configs",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/settings",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "settings"]
+						},
+						"description": "List all system configuration key-value pairs.\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "[\n  {\n    \"key\": \"max_topup_amount\",\n    \"value\": \"10000\",\n    \"description\": \"Maximum top-up amount in paisa\",\n    \"updated_at\": \"2025-01-15T10:30:00Z\"\n  }\n]",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				},
+				{
+					"name": "Update System Config",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"value\": \"15000\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/admin/settings/:key",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "settings", ":key"],
+							"variable": [
+								{ "key": "key", "value": "max_topup_amount" }
+							]
+						},
+						"description": "Update a system configuration value.\n\n**Auth:** Admin role required\n\n**Fields:**\n- `value` (string, required)"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"message\": \"Config updated successfully\"\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Admin - Audit Logs",
+			"description": "Security event and audit log viewing.",
+			"item": [
+				{
+					"name": "List Security Events",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/admin/audit-logs?page=1&page_size=20",
+							"host": ["{{base_url}}"],
+							"path": ["admin", "audit-logs"],
+							"query": [
+								{ "key": "page", "value": "1" },
+								{ "key": "page_size", "value": "20" }
+							]
+						},
+						"description": "List security/audit events with pagination.\n\n**Auth:** Admin role required"
+					},
+					"response": [
+						{
+							"name": "200 OK",
+							"status": "OK",
+							"code": 200,
+							"body": "{\n  \"data\": [\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"actor_id\": \"660e8400-e29b-41d4-a716-446655440000\",\n      \"action\": \"USER_LOGIN\",\n      \"target_id\": null,\n      \"details\": {},\n      \"ip_address\": \"192.168.1.1\",\n      \"user_agent\": \"Mozilla/5.0...\",\n      \"status\": \"SUCCESS\",\n      \"created_at\": \"2025-02-10T10:30:00Z\"\n    }\n  ],\n  \"meta\": {\n    \"current_page\": 1,\n    \"page_size\": 20,\n    \"total_items\": 150,\n    \"total_pages\": 8\n  }\n}",
+							"header": [{ "key": "Content-Type", "value": "application/json" }]
+						}
+					]
+				}
+			]
+		}
+	]
+}
