@@ -531,7 +531,8 @@ func (s *Service) ConfirmBatch(ctx context.Context, userID uuid.UUID, userRole s
 		return nil, err
 	}
 
-	_ = s.enqueueTicketConfirmationJob(ctx, userID, emailDetails, totalPrice)
+	bgCtx := context.Background()
+	_ = s.enqueueTicketConfirmationJob(bgCtx, userID, emailDetails, totalPrice)
 
 	return &ConfirmBatchResponse{Tickets: tickets}, nil
 }
@@ -668,28 +669,43 @@ func (s *Service) CancelTicketWithRole(ctx context.Context, requestingUserID uui
 			refundAmount := ticket.BasePrice
 
 			if refundAmount > 0 {
-				userWallet, err := s.wallet.GetOrCreateWallet(ctx, tx, ticket.UserID)
-				if err != nil {
-					return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+				// SAFETY CHECK: Verify that a corresponding TRANSPORT_BOOKING debit exists
+				// before issuing a refund. This prevents crediting money that was never debited
+				// (e.g., due to race conditions or partial failures).
+				debitExists, verifyErr := s.wallet.VerifyBookingDebitExists(ctx, ticketID.String())
+				if verifyErr != nil {
+					return commonerrors.Wrap(commonerrors.ErrDatabase, verifyErr)
 				}
 
-				revenueWalletID, err := s.wallet.GetSystemWalletByName(ctx, wallet.TransportSystemWallet, wallet.SystemWalletRevenue)
-				if err != nil {
-					return commonerrors.Wrap(commonerrors.ErrDatabase, err)
-				}
+				if !debitExists {
+					middleware.LogAppError(
+						fmt.Errorf("ALERT: cancel requested for ticket %s but no TRANSPORT_BOOKING debit found, skipping refund", ticketID),
+						"cancel-ticket-no-debit",
+					)
+				} else {
+					userWallet, err := s.wallet.GetOrCreateWallet(ctx, tx, ticket.UserID)
+					if err != nil {
+						return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+					}
 
-				err = s.wallet.ExecuteTransaction(
-					ctx,
-					tx,
-					revenueWalletID,
-					userWallet.ID,
-					int64(refundAmount),
-					"REFUND",
-					ticketID.String(),
-					"Trip cancellation refund",
-				)
-				if err != nil {
-					return ErrRefundFailed
+					revenueWalletID, err := s.wallet.GetSystemWalletByName(ctx, wallet.TransportSystemWallet, wallet.SystemWalletRevenue)
+					if err != nil {
+						return commonerrors.Wrap(commonerrors.ErrDatabase, err)
+					}
+
+					err = s.wallet.ExecuteTransaction(
+						ctx,
+						tx,
+						revenueWalletID,
+						userWallet.ID,
+						int64(refundAmount),
+						"REFUND",
+						ticketID.String(),
+						"Trip cancellation refund",
+					)
+					if err != nil {
+						return ErrRefundFailed
+					}
 				}
 			}
 		}
@@ -915,15 +931,23 @@ func (s *Service) CancelTrip(ctx context.Context, tripID uuid.UUID) error {
 		}
 
 		for _, ticket := range tickets {
-			err := s.wallet.RefundTicket(
-				ctx, tx,
-				ticket.UserID,
-				int64(ticket.BasePrice),
-				ticket.TicketID.String(),
-				fmt.Sprintf("Refund for cancelled trip %s", ticket.RouteName),
-			)
-			if err != nil {
-				return commonerrors.Wrap(ErrRefundFailed, err)
+			// Safety: only refund if a debit was actually recorded for this ticket
+			debitExists, verifyErr := s.wallet.VerifyBookingDebitExists(ctx, ticket.TicketID.String())
+			if verifyErr != nil {
+				return commonerrors.Wrap(commonerrors.ErrDatabase, verifyErr)
+			}
+
+			if debitExists {
+				err := s.wallet.RefundTicket(
+					ctx, tx,
+					ticket.UserID,
+					int64(ticket.BasePrice),
+					ticket.TicketID.String(),
+					fmt.Sprintf("Refund for cancelled trip %s", ticket.RouteName),
+				)
+				if err != nil {
+					return commonerrors.Wrap(ErrRefundFailed, err)
+				}
 			}
 
 			userEmailInfo, err := s.q.GetUserEmailAndName(ctx, ticket.UserID)

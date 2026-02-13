@@ -188,6 +188,22 @@ func (s *Service) RefundTicket(ctx context.Context, tx pgx.Tx, userID uuid.UUID,
 	// 3. Execute Transaction
 	return s.ExecuteTransaction(ctx, tx, transportWalletID, userWallet.ID, amount, "REFUND", referenceID, description)
 }
+
+// VerifyBookingDebitExists checks that a TRANSPORT_BOOKING transaction exists for the given ticket ID.
+// This is a safety check before issuing refunds to prevent crediting money that was never debited.
+func (s *Service) VerifyBookingDebitExists(ctx context.Context, ticketID string) (bool, error) {
+	_, err := s.q.GetTransactionHeaderByTypeAndRef(ctx, wallet.GetTransactionHeaderByTypeAndRefParams{
+		Type:        "TRANSPORT_BOOKING",
+		ReferenceID: ticketID,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, commonerrors.Wrap(ErrDatabase, err)
+	}
+	return true, nil
+}
 func (s *Service) GetOrCreateWallet(ctx context.Context, tx pgx.Tx, userID uuid.UUID) (wallet.GikiWalletWallet, error) {
 	walletQ := s.q
 	if tx != nil {
