@@ -96,9 +96,10 @@ export const RouteCard = ({
     // Check if trip is held
     const isHeld = selectedTrip ? activeHolds.some(h => h.trip_id === selectedTrip.id) : false;
     
-    // Check if trip is full or scheduled
+    // Check if trip is full, scheduled, or closed
     const isFull = selectedTrip ? (selectedTrip.available_seats <= 0 || selectedTrip.status === 'FULL') : false;
     const isScheduled = selectedTrip?.status === 'SCHEDULED';
+    const isClosed = selectedTrip?.status === 'CLOSED';
 
     // Calculate max tickets
     const quotaRemaining = quota?.remaining ?? 3;
@@ -113,7 +114,7 @@ export const RouteCard = ({
         onBook(selectedTripId, selectedStopId, ticketCount);
     };
 
-    const canBook = selectedTripId && selectedStopId && !isFull && !isScheduled;
+    const canBook = selectedTripId && selectedStopId && !isFull && !isScheduled && !isClosed;
 
     return (
         <div className={cn(
@@ -155,7 +156,8 @@ export const RouteCard = ({
                             const tripFull = trip.available_seats <= 0 || trip.status === 'FULL';
                             const tripScheduled = trip.status === 'SCHEDULED';
                             const tripCancelled = trip.status === 'CANCELLED';
-                            const isDisabled = tripFull || tripScheduled || tripCancelled;
+                            const tripClosed = trip.status === 'CLOSED';
+                            const isDisabled = tripFull || tripScheduled || tripCancelled || tripClosed;
                             
                             return (
                                 <label
@@ -196,6 +198,8 @@ export const RouteCard = ({
                                     <div className="flex flex-col items-end gap-1 min-w-0 flex-shrink-0">
                                         {tripCancelled ? (
                                             <span className="text-xs text-red-700 font-bold uppercase whitespace-nowrap">CANCELLED</span>
+                                        ) : tripClosed ? (
+                                            <span className="text-xs text-gray-500 font-bold uppercase whitespace-nowrap">CLOSED</span>
                                         ) : tripScheduled ? (
                                             <>
                                                 <div className="flex items-center gap-1 bg-blue-100 px-1.5 py-0.5 rounded-md">
@@ -286,7 +290,7 @@ export const RouteCard = ({
                 disabled={!canBook}
                 onClick={handleBook}
             >
-                {isHeld ? 'Reserved' : (isFull ? 'Fully Booked' : (isScheduled ? 'Not Open Yet' : (isRoundTrip ? 'Select Trip' : 'Book Now →')))}
+                {isHeld ? 'Reserved' : isClosed ? 'Closed' : (isFull ? 'Fully Booked' : (isScheduled ? 'Not Open Yet' : (isRoundTrip ? 'Select Trip' : 'Book Now →')))}
             </Button>
         </div>
     );

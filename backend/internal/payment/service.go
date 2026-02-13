@@ -121,11 +121,21 @@ func (s *Service) InitiatePayment(ctx context.Context, payload TopUpRequest) (*T
 		response, err := s.checkTransactionStatus(ctx, transaction)
 
 		if err != nil {
-		} else if response.Status != PaymentStatusFailed {
-			return response, nil
+			return &TopUpResult{
+				ID:            transaction.ID,
+				TxnRefNo:      transaction.TxnRefNo,
+				Status:        PaymentStatusPending,
+				Message:       "You have a pending payment. Please wait or try again later.",
+				PaymentMethod: PaymentMethod(transaction.PaymentMethod),
+				Amount:        float64(transaction.Amount),
+			}, nil
 		}
+		
+		return response, nil
 
 	} else if !errors.Is(err, pgx.ErrNoRows) {
+		// Unexpected database error
+		return nil, commonerrors.Wrap(ErrDatabaseQuery, err)
 	}
 
 	amountPaisa := common.AmountToLowestUnit(payload.Amount)
