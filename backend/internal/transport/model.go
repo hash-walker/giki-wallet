@@ -29,8 +29,8 @@ type RouteTemplateResponse struct {
 }
 
 type RuleSet struct {
-	OpenHoursBefore  int `json:"open_hours_before"`
-	CloseHoursBefore int `json:"close_hours_before"`
+	OpenMinutesBefore  int `json:"open_minutes_before"`
+	CloseMinutesBefore int `json:"close_minutes_before"`
 }
 
 type StopItem struct {
@@ -47,15 +47,15 @@ type QuickSlotItem struct {
 }
 
 type CreateTripRequest struct {
-	RouteID                 uuid.UUID         `json:"route_id"`
-	DepartureTime           time.Time         `json:"departure_time"`
-	BookingOpenOffsetHours  int32             `json:"booking_open_offset_hours"`
-	BookingCloseOffsetHours int32             `json:"booking_close_offset_hours"`
-	TotalCapacity           int               `json:"total_capacity"`
-	BasePrice               float64           `json:"base_price"`
-	BusType                 string            `json:"bus_type"`
-	Direction               string            `json:"direction"`
-	Stops                   []TripStopRequest `json:"stops"`
+	RouteID                  uuid.UUID         `json:"route_id"`
+	DepartureTime            time.Time         `json:"departure_time"`
+	BookingOpenOffsetMinutes int32             `json:"booking_open_offset_minutes"`
+	BookingCloseOffsetMinutes int32            `json:"booking_close_offset_minutes"`
+	TotalCapacity            int               `json:"total_capacity"`
+	BasePrice                float64           `json:"base_price"`
+	BusType                  string            `json:"bus_type"`
+	Direction                string            `json:"direction"`
+	Stops                    []TripStopRequest `json:"stops"`
 }
 
 type TripStopRequest struct {
@@ -308,8 +308,8 @@ func mapDBRouteTemplateToRouteTemplate(rows []transport_db.GetRouteStopsDetailsR
 		RouteID:   firstRow.RouteID,
 		RouteName: firstRow.RouteName,
 		Rules: RuleSet{
-			OpenHoursBefore:  common.Int4ToInt(firstRow.DefaultBookingOpenOffsetHours),
-			CloseHoursBefore: common.Int4ToInt(firstRow.DefaultBookingCloseOffsetHours),
+			OpenMinutesBefore:  common.Int4ToInt(firstRow.DefaultBookingOpenOffsetMinutes),
+			CloseMinutesBefore: common.Int4ToInt(firstRow.DefaultBookingCloseOffsetMinutes),
 		},
 		Stops:      make([]StopItem, 0, len(rows)),
 		QuickSlots: make([]QuickSlotItem, 0, len(rows)),

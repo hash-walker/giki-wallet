@@ -39,7 +39,7 @@ WHERE id = $1;
 UPDATE giki_transport.trip
 SET status = 'OPEN', updated_at = NOW()
 WHERE status = 'SCHEDULED'
-  AND NOW() >= (departure_time - (booking_open_offset_hours * INTERVAL '1 hour'));
+  AND NOW() >= (departure_time - (booking_open_offset_minutes * INTERVAL '1 minute'));
 
 -- name: AutoCloseTrips :exec
 -- Moves OPEN -> CLOSED
@@ -48,7 +48,7 @@ UPDATE giki_transport.trip
 SET status = 'CLOSED', updated_at = NOW()
 WHERE status = 'OPEN'
   AND (
-    NOW() >= (departure_time - (booking_close_offset_hours * INTERVAL '1 hour'))
+    NOW() >= (departure_time - (booking_close_offset_minutes * INTERVAL '1 minute'))
         OR available_seats <= 0
 );
 -- name: GetJobStats :one

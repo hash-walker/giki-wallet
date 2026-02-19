@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useForm, FormProvider, Controller, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { addHours, parse, format, differenceInHours } from 'date-fns';
+import { addMinutes, parse, format, differenceInMinutes } from 'date-fns';
 import { fromZonedTime, formatInTimeZone } from 'date-fns-tz';
 import { useTripCreateStore } from '../store';
 import { createTripSchema, CreateTripFormValues } from '../schema';
@@ -64,13 +64,13 @@ export const TripCreateForm = ({ onSuccess }: { onSuccess?: () => void }) => {
         const currentTime = methods.getValues('time') || '08:00';
         const departureDateTime = parse(currentTime, 'HH:mm', currentDate);
 
-        // Booking opens X hours before departure
-        const bookingOpenDateTime = addHours(departureDateTime, -tmpl.rules.open_hours_before);
+        // Booking opens X minutes before departure
+        const bookingOpenDateTime = addMinutes(departureDateTime, -tmpl.rules.open_minutes_before);
         setValue('bookingOpenDate', bookingOpenDateTime);
         setValue('bookingOpenTime', formatInTimeZone(bookingOpenDateTime, 'Asia/Karachi', 'HH:mm'));
 
-        // Booking closes X hours before departure
-        const bookingCloseDateTime = addHours(departureDateTime, -tmpl.rules.close_hours_before);
+        // Booking closes X minutes before departure
+        const bookingCloseDateTime = addMinutes(departureDateTime, -tmpl.rules.close_minutes_before);
         setValue('bookingCloseDate', bookingCloseDateTime);
         setValue('bookingCloseTime', formatInTimeZone(bookingCloseDateTime, 'Asia/Karachi', 'HH:mm'));
 
@@ -138,11 +138,11 @@ export const TripCreateForm = ({ onSuccess }: { onSuccess?: () => void }) => {
         const sourceOpen = new Date(sourceTrip.booking_opens_at);
         const sourceClose = new Date(sourceTrip.booking_closes_at);
 
-        const openOffset = differenceInHours(sourceDeparture, sourceOpen);
-        const closeOffset = differenceInHours(sourceDeparture, sourceClose);
+        const openOffset = differenceInMinutes(sourceDeparture, sourceOpen);
+        const closeOffset = differenceInMinutes(sourceDeparture, sourceClose);
 
-        const newOpen = addHours(departure, -openOffset);
-        const newClose = addHours(departure, -closeOffset);
+        const newOpen = addMinutes(departure, -openOffset);
+        const newClose = addMinutes(departure, -closeOffset);
 
         setValue('bookingOpenDate', newOpen);
         setValue('bookingOpenTime', format(newOpen, 'HH:mm'));
@@ -198,9 +198,9 @@ export const TripCreateForm = ({ onSuccess }: { onSuccess?: () => void }) => {
         const bookingCloseDateStr = format(values.bookingCloseDate, 'yyyy-MM-dd');
         const bookingCloseDateTime = fromZonedTime(`${bookingCloseDateStr} ${values.bookingCloseTime}`, 'Asia/Karachi');
 
-        // Calculate offset hours (hours before departure)
-        const openOffsetHours = Math.round(differenceInHours(departureDateTime, bookingOpenDateTime));
-        const closeOffsetHours = Math.round(differenceInHours(departureDateTime, bookingCloseDateTime));
+        // Calculate offset in minutes (minutes before departure) — no rounding needed
+        const openOffsetMinutes = differenceInMinutes(departureDateTime, bookingOpenDateTime);
+        const closeOffsetMinutes = differenceInMinutes(departureDateTime, bookingCloseDateTime);
 
 
 
@@ -219,8 +219,8 @@ export const TripCreateForm = ({ onSuccess }: { onSuccess?: () => void }) => {
         const payload = {
             route_id: values.routeId,
             departure_time: departureDateTime.toISOString(),
-            booking_open_offset_hours: openOffsetHours,
-            booking_close_offset_hours: closeOffsetHours,
+            booking_open_offset_minutes: openOffsetMinutes,
+            booking_close_offset_minutes: closeOffsetMinutes,
             total_capacity: values.totalCapacity,
             base_price: values.basePrice,
             bus_type: values.busType,

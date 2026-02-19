@@ -11,8 +11,8 @@ ORDER BY name ASC;
 SELECT
 
     r.id as route_id, r.name as route_name,
-    r.default_booking_open_offset_hours,
-    r.default_booking_close_offset_hours,
+    r.default_booking_open_offset_minutes,
+    r.default_booking_close_offset_minutes,
 
     s.id as stop_id, s.address as stop_name,
 
@@ -36,8 +36,8 @@ ORDER BY day_of_week ASC, departure_time ASC;
 INSERT INTO giki_transport.trip(
     route_id,
     departure_time,
-    booking_open_offset_hours,
-    booking_close_offset_hours,
+    booking_open_offset_minutes,
+    booking_close_offset_minutes,
     total_capacity,
     available_seats,
     base_price,
@@ -60,8 +60,8 @@ SELECT
     t.direction,
     t.bus_type,
     t.departure_time,
-    (t.departure_time - (t.booking_open_offset_hours * INTERVAL '1 hour'))::TIMESTAMPTZ as booking_opens_at,
-    (t.departure_time - (t.booking_close_offset_hours * INTERVAL '1 hour'))::TIMESTAMPTZ as booking_closes_at,
+    (t.departure_time - (t.booking_open_offset_minutes * INTERVAL '1 minute'))::TIMESTAMPTZ as booking_opens_at,
+    (t.departure_time - (t.booking_close_offset_minutes * INTERVAL '1 minute'))::TIMESTAMPTZ as booking_closes_at,
     
     -- Dynamic Status Calculation
     CASE
@@ -69,8 +69,8 @@ SELECT
         WHEN t.available_seats <= 0 THEN 'FULL'
         WHEN t.manual_status = 'CLOSED' THEN 'CLOSED'
         WHEN t.manual_status = 'OPEN' THEN 'OPEN'
-        WHEN NOW() >= (t.departure_time - (t.booking_close_offset_hours * INTERVAL '1 hour')) THEN 'CLOSED'
-        WHEN NOW() < (t.departure_time - (t.booking_open_offset_hours * INTERVAL '1 hour')) THEN 'SCHEDULED'
+        WHEN NOW() >= (t.departure_time - (t.booking_close_offset_minutes * INTERVAL '1 minute')) THEN 'CLOSED'
+        WHEN NOW() < (t.departure_time - (t.booking_open_offset_minutes * INTERVAL '1 minute')) THEN 'SCHEDULED'
         ELSE 'OPEN'
     END as status,
     
@@ -105,8 +105,8 @@ ORDER BY t.departure_time ASC;
 UPDATE giki_transport.trip
 SET
     departure_time = $2,
-    booking_open_offset_hours = $3,
-    booking_close_offset_hours = $4,
+    booking_open_offset_minutes = $3,
+    booking_close_offset_minutes = $4,
     total_capacity = $5,
     -- Adjust available seats by the difference in capacity (if any), ensuring it doesn't go below 0
     available_seats = GREATEST(0, available_seats + ($5 - total_capacity)),
@@ -128,8 +128,8 @@ SELECT
         WHEN t.available_seats <= 0 THEN 'FULL'
         WHEN t.manual_status = 'CLOSED' THEN 'CLOSED'
         WHEN t.manual_status = 'OPEN' THEN 'OPEN'
-        WHEN NOW() >= (t.departure_time - (t.booking_close_offset_hours * INTERVAL '1 hour')) THEN 'CLOSED'
-        WHEN NOW() < (t.departure_time - (t.booking_open_offset_hours * INTERVAL '1 hour')) THEN 'SCHEDULED'
+        WHEN NOW() >= (t.departure_time - (t.booking_close_offset_minutes * INTERVAL '1 minute')) THEN 'CLOSED'
+        WHEN NOW() < (t.departure_time - (t.booking_open_offset_minutes * INTERVAL '1 minute')) THEN 'SCHEDULED'
         ELSE 'OPEN'
     END::TEXT as computed_status
 FROM giki_transport.trip t
@@ -252,7 +252,7 @@ FROM giki_transport.tickets t
 WHERE t.id = $1
   AND t.status = 'CONFIRMED'
   -- LOGIC: Allow cancel ONLY IF Current Time < (Departure - Close Offset)
-  AND NOW() < (tr.departure_time - (tr.booking_close_offset_hours * INTERVAL '1 hour'));
+  AND NOW() < (tr.departure_time - (tr.booking_close_offset_minutes * INTERVAL '1 minute'));
 
 -- name: SetTicketCancelled :exec
 UPDATE giki_transport.tickets
@@ -301,7 +301,7 @@ SELECT
     (
         t.status = 'CONFIRMED' AND
         tr.status != 'CANCELLED' AND
-        NOW() < (tr.departure_time - (tr.booking_close_offset_hours * INTERVAL '1 hour'))
+        NOW() < (tr.departure_time - (tr.booking_close_offset_minutes * INTERVAL '1 minute'))
         )::BOOLEAN AS is_cancellable
 
 FROM giki_transport.tickets t

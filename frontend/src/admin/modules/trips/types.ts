@@ -8,8 +8,8 @@ export interface RouteTemplateResponse {
     route_id: string; // UUID
     route_name: string;
     rules: {
-        open_hours_before: number;
-        close_hours_before: number;
+        open_minutes_before: number;
+        close_minutes_before: number;
     };
     stops: StopItem[];
     quick_slots: QuickSlotItem[];
@@ -35,8 +35,8 @@ export interface TripStopRequest {
 export interface CreateTripRequest {
     route_id: string;
     departure_time: string; // ISO String
-    booking_open_offset_hours: number;
-    booking_close_offset_hours: number;
+    booking_open_offset_minutes: number;
+    booking_close_offset_minutes: number;
     total_capacity: number;
     base_price: number;
     bus_type: string;

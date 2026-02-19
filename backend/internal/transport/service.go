@@ -105,7 +105,7 @@ func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.U
 		return uuid.Nil, commonerrors.ErrInvalidInput
 	}
 
-	if req.BookingOpenOffsetHours <= req.BookingCloseOffsetHours {
+	if req.BookingOpenOffsetMinutes <= req.BookingCloseOffsetMinutes {
 		return uuid.Nil, commonerrors.New(commonerrors.ErrInvalidInput.Code, commonerrors.ErrInvalidInput.StatusCode, "booking open offset must be greater than close offset")
 	}
 
@@ -117,15 +117,15 @@ func (s *Service) CreateTrip(ctx context.Context, req CreateTripRequest) (uuid.U
 
 		var createErr error
 		tripID, createErr = qtx.CreateTrip(ctx, transport_db.CreateTripParams{
-			RouteID:                 req.RouteID,
-			DepartureTime:           req.DepartureTime,
-			BookingOpenOffsetHours:  req.BookingOpenOffsetHours,
-			BookingCloseOffsetHours: req.BookingCloseOffsetHours,
-			TotalCapacity:           int32(req.TotalCapacity),
-			AvailableSeats:          int32(req.TotalCapacity),
-			BasePrice:               basePrice,
-			BusType:                 req.BusType,
-			Direction:               req.Direction,
+			RouteID:                  req.RouteID,
+			DepartureTime:            req.DepartureTime,
+			BookingOpenOffsetMinutes:  req.BookingOpenOffsetMinutes,
+			BookingCloseOffsetMinutes: req.BookingCloseOffsetMinutes,
+			TotalCapacity:            int32(req.TotalCapacity),
+			AvailableSeats:           int32(req.TotalCapacity),
+			BasePrice:                basePrice,
+			BusType:                  req.BusType,
+			Direction:                req.Direction,
 		})
 
 		if createErr != nil {
@@ -160,7 +160,7 @@ func (s *Service) UpdateTrip(ctx context.Context, tripID uuid.UUID, req CreateTr
 	if req.BasePrice < 0 {
 		return commonerrors.ErrInvalidInput
 	}
-	if req.BookingOpenOffsetHours <= req.BookingCloseOffsetHours {
+	if req.BookingOpenOffsetMinutes <= req.BookingCloseOffsetMinutes {
 		return commonerrors.New(commonerrors.ErrInvalidInput.Code, commonerrors.ErrInvalidInput.StatusCode, "booking open offset must be greater than close offset")
 	}
 
@@ -175,13 +175,13 @@ func (s *Service) UpdateTrip(ctx context.Context, tripID uuid.UUID, req CreateTr
 	}
 
 	err = s.q.UpdateTrip(ctx, transport_db.UpdateTripParams{
-		ID:                      tripID,
-		DepartureTime:           req.DepartureTime,
-		BookingOpenOffsetHours:  req.BookingOpenOffsetHours,
-		BookingCloseOffsetHours: req.BookingCloseOffsetHours,
-		TotalCapacity:           int32(req.TotalCapacity),
-		BasePrice:               common.AmountToLowestUnit(req.BasePrice),
-		BusType:                 req.BusType,
+		ID:                       tripID,
+		DepartureTime:            req.DepartureTime,
+		BookingOpenOffsetMinutes:  req.BookingOpenOffsetMinutes,
+		BookingCloseOffsetMinutes: req.BookingCloseOffsetMinutes,
+		TotalCapacity:            int32(req.TotalCapacity),
+		BasePrice:                common.AmountToLowestUnit(req.BasePrice),
+		BusType:                  req.BusType,
 	})
 
 	if err != nil {
