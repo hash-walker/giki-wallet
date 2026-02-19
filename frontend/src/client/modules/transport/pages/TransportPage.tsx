@@ -236,8 +236,8 @@ export const TransportPage = () => {
                                 )}>
                                     {outboundSelection ? '✓' : '1'}
                                 </div>
-                                <h2 className="text-base font-semibold text-gray-900">
-                                    🚌 From GIKI
+                                <h2 className="text-2xl font-bold text-gray-900">
+                                     From GIKI
                                 </h2>
                             </div>
                             <RouteGrid
@@ -262,8 +262,8 @@ export const TransportPage = () => {
                                 )}>
                                     {returnSelection ? '✓' : '2'}
                                 </div>
-                                <h2 className="text-base font-semibold text-gray-900">
-                                    🏠 To GIKI
+                                <h2 className="text-2xl font-bold text-gray-900">
+                                     To GIKI
                                 </h2>
                             </div>
                             <RouteGrid
@@ -275,7 +275,7 @@ export const TransportPage = () => {
                 ) : (
                     /* SINGLE-TRIP MODE: Show only selected direction */
                     <div className="space-y-3">
-                        <h2 className="text-base font-semibold text-gray-900 px-2">
+                        <h2 className="text-2xl font-bold text-gray-900 px-2">
                             {direction === 'OUTBOUND' ? ' From GIKI' : ' To GIKI'}
                         </h2>
                         
