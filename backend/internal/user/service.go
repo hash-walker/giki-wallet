@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -205,6 +206,13 @@ func (s *Service) validateRegistration(req RegisterRequest) error {
 	isGikiEmail := strings.HasSuffix(req.Email, "@giki.edu.pk")
 	if !isGikiEmail && userType != auth.RoleEmployee {
 		return ErrEmailRestricted
+	}
+
+	// Prevent students from signing up as employees
+	// Support patterns: uXXXX, gcsXXXX, gcvXXXX, geeXXXX, gemXXXX
+	studentPattern := regexp.MustCompile(`^(u|gcs|gcv|gee|gem)[0-9]+@giki\.edu\.pk$`)
+	if userType == auth.RoleEmployee && studentPattern.MatchString(strings.ToLower(req.Email)) {
+		return ErrStudentEmailAsEmployee
 	}
 
 	if userType == auth.RoleStudent && req.RegID == "" {

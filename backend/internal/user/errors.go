@@ -26,4 +26,6 @@ var (
 	ErrInvalidRegID    = errors.New("INVALID_REG_ID", http.StatusBadRequest, "Invalid registration ID format")
 	ErrNotAnEmployee   = errors.New("NOT_AN_EMPLOYEE", http.StatusBadRequest, "User is not an employee")
 	ErrAlreadyVerified = errors.New("ALREADY_VERIFIED", http.StatusBadRequest, "User is already verified")
+
+	ErrStudentEmailAsEmployee = errors.New("STUDENT_EMAIL_AS_EMPLOYEE", http.StatusBadRequest, "Student emails must register as Student, not Employee")
 )

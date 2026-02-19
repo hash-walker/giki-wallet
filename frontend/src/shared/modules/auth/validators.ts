@@ -43,7 +43,17 @@ export const signUpSchema = z
                 ctx.addIssue({
                     code: 'custom',
                     path: ['email'],
-                    message: 'Student email must look like u2022661@giki.edu.pk',
+                    message: 'Student email must look like u2021000@giki.edu.pk or gcs2400@giki.edu.pk',
+                });
+            }
+        }
+
+        if (data.userType === 'EMPLOYEE') {
+            if (extractStudentRegIdFromEmail(data.email) !== null) {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['userType'],
+                    message: 'Please signup as a student (Graduate students use student signup)',
                 });
             }
         }
